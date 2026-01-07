@@ -46,17 +46,39 @@ struct PermissionsView: View {
                 }
                 .padding(.horizontal, 40)
 
-                // Open System Settings button
-                Button(action: requestPermissions) {
-                    Text("Open System Settings")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(accentColor)
-                        .cornerRadius(8)
+                // Buttons row
+                HStack(spacing: 12) {
+                    // Try Again button
+                    Button(action: {
+                        appState.checkAllPermissions()
+                    }) {
+                        Text("Try Again")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(accentColor)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.white)
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(accentColor.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    // Open System Settings button
+                    Button(action: requestPermissions) {
+                        Text("Open System Settings")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 10)
+                            .background(accentColor)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 40)
 
                 Spacer()
             }
@@ -74,11 +96,13 @@ struct PermissionsView: View {
         // Request permissions immediately
         requestPermissions()
 
-        // Check immediately
-        appState.checkAllPermissions()
+        // Add a small delay before first check (macOS TCC caching issue)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            appState.checkAllPermissions()
+        }
 
-        // Poll every 0.5 seconds
-        checkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+        // Poll more frequently initially to catch permission updates quickly
+        checkTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
             appState.checkAllPermissions()
 
             // Auto-advance when both permissions granted
