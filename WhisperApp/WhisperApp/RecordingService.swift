@@ -89,8 +89,13 @@ class RecordingService: ObservableObject {
     func startRecording() {
         logToFile("🎤 startRecording called")
 
-        guard transcriber?.isLoaded == true else {
-            logToFile("❌ Model not loaded yet")
+        // Check AppState.isModelLoaded (authoritative source during model switches)
+        // Also verify transcriber exists and has a valid whisperKit instance
+        guard AppState.shared.isModelLoaded,
+              let transcriber = transcriber,
+              transcriber.isLoaded,
+              transcriber.whisperKitInstance != nil else {
+            logToFile("❌ Model not loaded yet or switching")
             AppState.shared.errorMessage = "Model still loading..."
             // Play error sound to notify user
             NSSound(named: "Basso")?.play()

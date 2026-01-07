@@ -292,9 +292,20 @@ class TranscriberService: ObservableObject {
     }
 
     func unloadModel() {
+        transcribeLog("🗑️ Unloading model...")
+
+        // Cancel any pending load operation
+        currentLoadingTask?.cancel()
+        currentLoadingTask = nil
+        currentLoadOperationId = nil
+
+        // Clear the whisperKit instance
         whisperKit = nil
         isLoaded = false
+        loadingProgress = 0.0
         currentModelName = ""
+
+        transcribeLog("✅ Model unloaded")
     }
 }
 

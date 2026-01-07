@@ -53,6 +53,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Create menu
         let menu = NSMenu()
+        menu.delegate = self
 
         // Language selection submenu
         let languageMenu = NSMenu()
@@ -63,10 +64,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ("auto", "🌐 Auto-detect")
         ]
 
+        let currentLanguage = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto"
         for (code, name) in languages {
             let item = NSMenuItem(title: name, action: #selector(selectLanguage(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = code
+            item.state = (code == currentLanguage) ? .on : .off
             languageMenu.addItem(item)
         }
 
@@ -86,10 +89,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ("large-v3", "Large - Best")
         ]
 
+        let currentModel = UserDefaults.standard.string(forKey: "selectedModel") ?? "tiny"
         for (id, name) in models {
             let item = NSMenuItem(title: name, action: #selector(selectModel(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = id
+            item.state = (id == currentModel) ? .on : .off
             modelMenu.addItem(item)
         }
 
@@ -180,6 +185,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func selectLanguage(_ sender: NSMenuItem) {
         guard let langCode = sender.representedObject as? String else { return }
+
+        // Update checkmarks in language menu
+        if let languageMenu = sender.menu {
+            for item in languageMenu.items {
+                item.state = (item.representedObject as? String == langCode) ? .on : .off
+            }
+        }
+
         Task { @MainActor in
             AppState.shared.selectedLanguage = langCode
         }
@@ -187,10 +200,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func selectModel(_ sender: NSMenuItem) {
         guard let modelId = sender.representedObject as? String else { return }
-        Task { @MainActor in
-            AppState.shared.selectedModel = modelId
+
+        // Update checkmarks in model menu
+        if let modelMenu = sender.menu {
+            for item in modelMenu.items {
+                item.state = (item.representedObject as? String == modelId) ? .on : .off
+            }
         }
-        NotificationCenter.default.post(name: .reloadModel, object: modelId)
+
+        Task { @MainActor in
+            // Don't switch if already on this model
+            guard modelId != AppState.shared.selectedModel else { return }
+
+            AppState.shared.selectedModel = modelId
+            NotificationCenter.default.post(name: .reloadModel, object: modelId)
+        }
     }
 
     @objc func openSettings() {
@@ -242,6 +266,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         downloadProgress = 0.01
 
         Task { @MainActor in
+            // Immediately mark as not loaded to prevent recording during switch
+            AppState.shared.isModelLoaded = false
+
+            // Unload the old model first to free memory and prevent conflicts
+            self.transcriber?.unloadModel()
+
             // Reuse existing transcriber to properly cancel previous loads
             if self.transcriber == nil {
                 let transcriber = TranscriberService()
@@ -249,7 +279,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 RecordingService.shared.setTranscriber(transcriber)
             }
 
-            AppState.shared.isModelLoaded = false
             await self.transcriber?.loadModel(name: modelName)
             AppState.shared.isModelLoaded = true
             NotificationCenter.default.post(name: .modelLoaded, object: nil)
@@ -463,4 +492,30 @@ extension Notification.Name {
     static let audioLevelChanged = Notification.Name("audioLevelChanged")
     static let modelLoaded = Notification.Name("modelLoaded")
     static let modelDownloadProgress = Notification.Name("modelDownloadProgress")
+}
+
+// MARK: - NSMenuDelegate
+extension AppDelegate: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        // Update checkmarks when menu opens to ensure they reflect current state
+        let currentLanguage = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto"
+        let currentModel = UserDefaults.standard.string(forKey: "selectedModel") ?? "tiny"
+
+        for item in menu.items {
+            if let submenu = item.submenu {
+                // Language submenu
+                if item.title == "Language" {
+                    for langItem in submenu.items {
+                        langItem.state = (langItem.representedObject as? String == currentLanguage) ? .on : .off
+                    }
+                }
+                // Model submenu
+                if item.title == "Model" {
+                    for modelItem in submenu.items {
+                        modelItem.state = (modelItem.representedObject as? String == currentModel) ? .on : .off
+                    }
+                }
+            }
+        }
+    }
 }
