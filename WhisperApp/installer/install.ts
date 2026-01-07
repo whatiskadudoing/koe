@@ -19,35 +19,8 @@ const enc = new TextEncoder();
 const write = (s: string) => Deno.stdout.writeSync(enc.encode(s));
 
 // ============================================================================
-// WAVEFORM - Spectrum analyzer style (like CAVA)
+// MINI WAVE ANIMATION
 // ============================================================================
-
-function waveform(t: number, numBars = 20): string {
-  const out: string[] = [];
-  const bars = " ▁▂▃▄▅▆▇█";
-
-  for (let i = 0; i < numBars; i++) {
-    // Multiple frequencies for realistic audio spectrum look
-    const f1 = Math.sin(t * 3.0 + i * 0.5) * 0.4;
-    const f2 = Math.sin(t * 5.0 + i * 0.3) * 0.3;
-    const f3 = Math.sin(t * 2.0 + i * 0.8) * 0.3;
-    const f4 = Math.cos(t * 4.0 + i * 0.4) * 0.2;
-
-    // Combine and normalize (0 to 1)
-    const val = Math.abs(f1 + f2 + f3 + f4);
-    const normalized = Math.min(1, val * 1.5);
-
-    // Map to bar character
-    const idx = Math.floor(normalized * 8);
-    const char = bars[idx];
-
-    // Color: gradient from accent to purple
-    const color = i < numBars / 2 ? c.accent : c.purple;
-    out.push(color(char));
-  }
-
-  return out.join("");
-}
 
 function miniWave(t: number): string {
   const bars = " ▁▂▃▄▅▆▇█";
@@ -56,10 +29,15 @@ function miniWave(t: number): string {
   for (let i = 0; i < 5; i++) {
     const v = Math.abs(Math.sin(t * 4 + i * 1.2));
     const idx = Math.floor(v * 8);
-    out.push(c.accent(bars[idx]));
+    const color = i % 2 === 0 ? c.accent : c.purple;
+    out.push(color(bars[idx]));
   }
 
   return out.join(" ");
+}
+
+function staticWave(): string {
+  return `${c.accent("▃")} ${c.purple("▅")} ${c.accent("▇")} ${c.purple("▅")} ${c.accent("▃")}`;
 }
 
 // ============================================================================
@@ -70,17 +48,18 @@ async function intro(): Promise<void> {
   write("\x1b[?25l");
   const start = Date.now();
 
-  while (Date.now() - start < 2500) {
+  while (Date.now() - start < 2000) {
     const t = (Date.now() - start) / 1000;
     console.clear();
     console.log(`
 
-        ${waveform(t, 45)}
+
 
                   ${c.accent("声")}  ${c.white("Koe")}
                   ${miniWave(t)}
 
              ${c.dim("Voice to Text")}
+
 
 `);
     await new Promise(r => setTimeout(r, 50));
@@ -120,10 +99,11 @@ async function main(): Promise<void> {
 
     console.clear();
     console.log(`
-        ${c.accent("▁▂▃▄▅▆▇█")}${c.purple("▇▆▅▄▃▂▁")}${c.accent("▁▂▃▄▅▆▇█")}${c.purple("▇▆▅▄▃▂▁")}${c.accent("▁▂▃▄▅▆▇")}
+
+
 
                   ${c.accent("声")}  ${c.white("Koe")}
-                  ${c.accent("▃")} ${c.purple("▅")} ${c.accent("▇")} ${c.purple("▅")} ${c.accent("▃")}
+                  ${staticWave()}
 
              ${c.dim("Voice to Text")}
 `);
