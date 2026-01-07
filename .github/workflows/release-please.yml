@@ -79,22 +79,13 @@ jobs:
           cd dist
           zip -r Koe-macos-arm64.zip Koe.app
 
-      - name: Build Installers
+      - name: Build Installer
         run: |
           cd WhisperApp/installer
-
-          # ARM64 (Apple Silicon)
           deno compile \
             --target aarch64-apple-darwin \
             --allow-read --allow-write --allow-net --allow-run --allow-env \
-            --output koe-installer-macos-arm64 \
-            install.ts
-
-          # x86_64 (Intel)
-          deno compile \
-            --target x86_64-apple-darwin \
-            --allow-read --allow-write --allow-net --allow-run --allow-env \
-            --output koe-installer-macos-x64 \
+            --output koe-installer \
             install.ts
 
       - name: Upload Release Assets
@@ -103,5 +94,4 @@ jobs:
         run: |
           gh release upload ${{ needs.release-please.outputs.tag_name }} \
             WhisperApp/dist/Koe-macos-arm64.zip \
-            WhisperApp/installer/koe-installer-macos-arm64 \
-            WhisperApp/installer/koe-installer-macos-x64
+            WhisperApp/installer/koe-installer

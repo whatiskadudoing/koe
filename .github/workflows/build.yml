@@ -77,29 +77,18 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Build Installer (ARM64)
+      - name: Build Installer
         run: |
           cd WhisperApp/installer
           deno compile \
             --target aarch64-apple-darwin \
             --allow-read --allow-write --allow-net --allow-run --allow-env \
-            --output koe-installer-arm64 \
+            --output koe-installer \
             install.ts
 
-      - name: Build Installer (x86_64)
-        run: |
-          cd WhisperApp/installer
-          deno compile \
-            --target x86_64-apple-darwin \
-            --allow-read --allow-write --allow-net --allow-run --allow-env \
-            --output koe-installer-x64 \
-            install.ts
-
-      - name: Upload Installer Artifacts
+      - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
-          name: Koe-Installer
-          path: |
-            WhisperApp/installer/koe-installer-arm64
-            WhisperApp/installer/koe-installer-x64
+          name: koe-installer
+          path: WhisperApp/installer/koe-installer
           retention-days: 7

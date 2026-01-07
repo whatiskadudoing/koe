@@ -82,31 +82,20 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Build Installers
+      - name: Build Installer
         run: |
           cd WhisperApp/installer
-
-          # ARM64 (Apple Silicon)
           deno compile \
             --target aarch64-apple-darwin \
             --allow-read --allow-write --allow-net --allow-run --allow-env \
-            --output koe-installer-macos-arm64 \
+            --output koe-installer \
             install.ts
 
-          # x86_64 (Intel)
-          deno compile \
-            --target x86_64-apple-darwin \
-            --allow-read --allow-write --allow-net --allow-run --allow-env \
-            --output koe-installer-macos-x64 \
-            install.ts
-
-      - name: Upload Installer Artifacts
+      - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
-          name: Koe-Installers
-          path: |
-            WhisperApp/installer/koe-installer-macos-arm64
-            WhisperApp/installer/koe-installer-macos-x64
+          name: koe-installer
+          path: WhisperApp/installer/koe-installer
           retention-days: 1
 
   release:
@@ -121,54 +110,31 @@ jobs:
           name: Koe-App
           path: artifacts/app
 
-      - name: Download Installer Artifacts
+      - name: Download Installer
         uses: actions/download-artifact@v4
         with:
-          name: Koe-Installers
+          name: koe-installer
           path: artifacts/installer
-
-      - name: List Artifacts
-        run: |
-          echo "=== App ==="
-          ls -la artifacts/app/
-          echo "=== Installer ==="
-          ls -la artifacts/installer/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/app/Koe-macos-arm64.zip
-            artifacts/installer/koe-installer-macos-arm64
-            artifacts/installer/koe-installer-macos-x64
+            artifacts/installer/koe-installer
           generate_release_notes: true
           body: |
             ## Koe 声 - Voice to Text
 
-            ### Downloads
+            ### Install (Apple Silicon)
 
-            | File | Description |
-            |------|-------------|
-            | `Koe-macos-arm64.zip` | Koe app for Apple Silicon Macs |
-            | `koe-installer-macos-arm64` | Terminal installer for Apple Silicon |
-            | `koe-installer-macos-x64` | Terminal installer for Intel Macs |
-
-            ### Installation
-
-            **Option 1: Download the app directly**
-            1. Download `Koe-macos-arm64.zip`
-            2. Unzip and move `Koe.app` to Applications
-            3. Open Koe and grant accessibility permissions
-
-            **Option 2: Use the terminal installer**
             ```bash
-            # Apple Silicon
-            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/koe-installer-macos-arm64 -o koe-installer
-            chmod +x koe-installer
-            ./koe-installer
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/koe-installer -o koe && chmod +x koe && ./koe
             ```
 
+            Or download `Koe-macos-arm64.zip` and move to Applications.
+
             ### Usage
-            Hold **⌥ Space** anywhere to start recording, release to transcribe.
+            Hold **⌥ Space** anywhere to transcribe.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
