@@ -1,60 +1,104 @@
 # Koe 声
 
-**Local voice-to-text dictation for macOS**
+### Speak. It types. That's it.
 
-Koe is a lightweight, privacy-focused dictation app that converts speech to text using on-device AI. Your voice never leaves your Mac.
+The open-source dictation app for macOS that actually respects you. No cloud. No subscription. No BS.
 
-## Install
+Your voice hits your Mac's neural engine and becomes text—instantly, privately, completely offline. Powered by [WhisperKit](https://github.com/argmaxinc/WhisperKit), the same tech behind the best speech recognition on the planet.
+
+<p align="center">
+  <strong>⌥ Option + Space → Speak → Done</strong>
+</p>
+
+---
+
+## Get Started
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/whatiskadudoing/koe/main/install.sh | bash
 ```
 
-That's it. Open Koe from `/Applications` and start dictating with `Option+Space`.
+One command. No Homebrew dependencies. No Xcode. Just paste and go.
+
+---
+
+## Why Koe?
+
+| What you get | What you don't |
+|--------------|----------------|
+| On-device AI transcription | Cloud uploads |
+| Works without internet | Monthly fees |
+| Universal text insertion | Account creation |
+| Multi-language support | Data collection |
+| Open source, forever | Vendor lock-in |
 
 ---
 
 ## Features
 
-- **100% Local Processing** - All transcription happens on-device using [WhisperKit](https://github.com/argmaxinc/WhisperKit). No cloud, no subscriptions, no data collection.
-- **Global Hotkey** - Trigger dictation from anywhere with `Option+Space`.
-- **System-Wide** - Transcribed text auto-inserts at your cursor in any application.
-- **Multi-Language** - Supports English, Spanish, Portuguese, and more.
-- **Transcription History** - Access recent transcriptions from the menu bar.
+- **Instant Dictation** — `Option+Space` from any app, anywhere
+- **Smart Insertion** — Text appears right at your cursor
+- **Recording Modes** — Hold-to-record or toggle on/off
+- **Multi-Language** — English, Spanish, Portuguese, and growing
+- **History** — Recent transcriptions in your menu bar
+- **Lightweight** — Lives quietly in your menu bar, uses minimal resources
+
+---
 
 ## Requirements
 
 - macOS 14.0+ (Sonoma or later)
-- Apple Silicon Mac (M1/M2/M3/M4)
+- Apple Silicon (M1/M2/M3/M4)
 
-## Usage
+---
 
-1. Press `Option+Space`
-2. Speak
-3. Release - text appears at your cursor
+## Roadmap
 
-### Recording Modes
+Koe is just getting started. Here's what's coming:
 
-| Mode | Behavior |
-|------|----------|
-| **Hold** | Record while holding the hotkey |
-| **Toggle** | Press to start, press again to stop |
+- [ ] Custom hotkey configuration
+- [ ] More language models
+- [ ] Clipboard mode (copy instead of paste)
+- [ ] Audio file transcription
+- [ ] Meeting notes & summaries
+- [ ] ...and whatever you suggest
+
+**Have an idea?** [Open an issue](../../issues/new) — we build this together.
+
+---
+
+## Contributing
+
+Koe is open source because the best tools are built in the open.
+
+- **Found a bug?** [Report it](../../issues/new?template=bug_report.md)
+- **Want a feature?** [Request it](../../issues/new?template=feature_request.md)
+- **Want to contribute?** PRs are welcome — check out [CONTRIBUTING.md](CONTRIBUTING.md)
+
+Every issue gets read. Every idea gets considered.
+
+---
 
 ## Privacy
 
-Koe processes everything locally:
+We don't just talk about privacy — we architected for it:
 
-- No internet connection required
-- No telemetry or analytics
-- No account required
-- Audio is never stored or transmitted
+- **Zero network calls** — Works in airplane mode
+- **Zero telemetry** — No analytics, no tracking, nothing
+- **Zero storage** — Audio is processed and discarded
+- **Zero accounts** — Download, install, use
+
+Your voice is yours. Period.
+
+---
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT — use it, fork it, ship it.
 
 ---
 
 <p align="center">
-  <sub>声 (koe) - voice</sub>
+  <strong>声 (koe)</strong> — voice<br>
+  <sub>Built for people who think different about privacy.</sub>
 </p>
