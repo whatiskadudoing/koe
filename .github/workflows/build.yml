@@ -25,21 +25,44 @@ jobs:
           cd WhisperApp
           swift build -c release
 
-      - name: Package App
+      - name: Create App Bundle
         run: |
           cd WhisperApp
-          mkdir -p dist
-          cp -r .build/release/Koe.app dist/ 2>/dev/null || \
-          cp -r .build/arm64-apple-macosx/release/Koe.app dist/ 2>/dev/null || \
-          echo "App bundle location may vary"
+
+          # Find the executable
+          EXECUTABLE=$(find .build -name "Koe" -type f -path "*release*" | grep -v dSYM | head -1)
+          echo "Found executable: $EXECUTABLE"
+
+          # Create .app bundle structure
+          mkdir -p dist/Koe.app/Contents/MacOS
+          mkdir -p dist/Koe.app/Contents/Resources
+
+          # Copy executable
+          cp "$EXECUTABLE" dist/Koe.app/Contents/MacOS/Koe
+
+          # Copy Info.plist
+          cp WhisperApp/Info.plist dist/Koe.app/Contents/Info.plist
+
+          # Add CFBundleExecutable to Info.plist
+          /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Koe" dist/Koe.app/Contents/Info.plist 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Koe" dist/Koe.app/Contents/Info.plist
+
+          # Create PkgInfo
+          echo -n "APPL????" > dist/Koe.app/Contents/PkgInfo
+
+          # Make executable
+          chmod +x dist/Koe.app/Contents/MacOS/Koe
+
+          echo "App bundle created:"
+          ls -la dist/
+          ls -la dist/Koe.app/Contents/
 
       - name: Upload App Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Koe-App-arm64
-          path: WhisperApp/dist/*.app
+          path: WhisperApp/dist/Koe.app
           retention-days: 7
-          if-no-files-found: warn
 
   build-installer:
     name: Build Installer

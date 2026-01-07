@@ -27,20 +27,40 @@ jobs:
           cd WhisperApp
           swift build -c release
 
-      - name: Package App
+      - name: Create App Bundle
         run: |
           cd WhisperApp
-          mkdir -p dist
 
-          # Find and copy the app bundle
-          APP_PATH=$(find .build -name "Koe.app" -type d | head -1)
-          if [ -n "$APP_PATH" ]; then
-            cp -r "$APP_PATH" dist/
-          fi
+          # Find the executable
+          EXECUTABLE=$(find .build -name "Koe" -type f -path "*release*" | grep -v dSYM | head -1)
+          echo "Found executable: $EXECUTABLE"
+
+          # Create .app bundle structure
+          mkdir -p dist/Koe.app/Contents/MacOS
+          mkdir -p dist/Koe.app/Contents/Resources
+
+          # Copy executable
+          cp "$EXECUTABLE" dist/Koe.app/Contents/MacOS/Koe
+
+          # Copy Info.plist
+          cp WhisperApp/Info.plist dist/Koe.app/Contents/Info.plist
+
+          # Add CFBundleExecutable to Info.plist
+          /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Koe" dist/Koe.app/Contents/Info.plist 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Koe" dist/Koe.app/Contents/Info.plist
+
+          # Create PkgInfo
+          echo -n "APPL????" > dist/Koe.app/Contents/PkgInfo
+
+          # Make executable
+          chmod +x dist/Koe.app/Contents/MacOS/Koe
 
           # Create ZIP for release
           cd dist
           zip -r Koe-macos-arm64.zip Koe.app
+
+          echo "App bundle created and zipped"
+          ls -la
 
       - name: Upload App Artifact
         uses: actions/upload-artifact@v4
