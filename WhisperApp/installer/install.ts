@@ -73,7 +73,11 @@ async function intro(): Promise<void> {
 
 function bar(p: number): string {
   const w = 25, f = Math.round(w * p), e = w - f;
-  return c.accent("█".repeat(f)) + c.dim("░".repeat(e)) + c.dim(` ${Math.round(p * 100)}%`);
+  // Use raw ANSI codes - Cliffy colors don't work well with repeat()
+  const accentCode = "\x1b[38;2;102;126;234m";
+  const dimCode = "\x1b[38;2;113;128;150m";
+  const reset = "\x1b[0m";
+  return `${accentCode}${"█".repeat(f)}${dimCode}${"░".repeat(e)} ${Math.round(p * 100)}%${reset}`;
 }
 
 async function step(msg: string, ms: number): Promise<void> {
