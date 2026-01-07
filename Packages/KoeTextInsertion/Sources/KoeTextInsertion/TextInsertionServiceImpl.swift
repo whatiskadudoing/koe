@@ -101,7 +101,7 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
         let oldContents = pasteboard.string(forType: .string)
 
         // For very large text, split into chunks to avoid overwhelming the target app
-        let chunkSize = 2000
+        let chunkSize = 4000
         let chunks: [String]
 
         if text.count > chunkSize {
@@ -121,6 +121,9 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
                 success = false
                 break
             }
+
+            // Small delay to ensure clipboard is ready
+            Thread.sleep(forTimeInterval: 0.05)
 
             // Use AppleScript to paste - more reliable than CGEvents
             let script = """
@@ -142,24 +145,24 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
                 break
             }
 
-            // Scale delay based on chunk size - give target app time to process
-            // Base delay of 100ms + 50ms per 500 characters
-            let baseDelay = 0.1
-            let additionalDelay = Double(chunk.count) / 500.0 * 0.05
-            let totalDelay = min(baseDelay + additionalDelay, 0.5) // Cap at 500ms per chunk
+            // Wait for paste to complete - scale with chunk size
+            // Base 200ms + 100ms per 1000 characters
+            let baseDelay = 0.2
+            let additionalDelay = Double(chunk.count) / 1000.0 * 0.1
+            let totalDelay = baseDelay + additionalDelay
 
             Thread.sleep(forTimeInterval: totalDelay)
 
-            // Add extra delay between chunks to let target app settle
+            // Add extra delay between chunks
             if index < chunks.count - 1 {
-                Thread.sleep(forTimeInterval: 0.15)
+                Thread.sleep(forTimeInterval: 0.2)
             }
         }
 
-        // Restore old clipboard after a delay
-        Thread.sleep(forTimeInterval: 0.3)
-        pasteboard.clearContents()
+        // Restore old clipboard after a delay (only if there was old content)
         if let old = oldContents {
+            Thread.sleep(forTimeInterval: 0.5)
+            pasteboard.clearContents()
             pasteboard.setString(old, forType: .string)
         }
 
