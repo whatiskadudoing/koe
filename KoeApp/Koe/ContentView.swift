@@ -4,7 +4,6 @@ import KoeDomain
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(RecordingCoordinator.self) private var coordinator
-    @State private var showWelcome = true
 
     var body: some View {
         ZStack {
@@ -12,78 +11,91 @@ struct ContentView: View {
             Color(nsColor: NSColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0))
                 .ignoresSafeArea()
 
-            if showWelcome {
+            // State machine - show appropriate view based on readiness state
+            switch appState.appReadinessState {
+            case .welcome:
                 WelcomeView()
                     .transition(.opacity)
                     .zIndex(1)
-            }
 
-            VStack(spacing: 0) {
-                // Settings button at top right
-                HStack {
-                    Spacer()
-                    SettingsButton()
-                }
+            case .needsPermissions:
+                PermissionsView()
+                    .transition(.opacity)
+                    .zIndex(1)
 
-                // Top spacing
-                Spacer()
-                    .frame(height: 20)
+            case .loading:
+                LoadingView()
+                    .transition(.opacity)
+                    .zIndex(1)
 
-                // Main content area
-                VStack(spacing: 32) {
-                    // Mic button
-                    MicButton(
-                        state: appState.recordingState,
-                        audioLevel: coordinator.audioLevel,
-                        onTap: {
-                            Task { @MainActor in
-                                if appState.recordingState == .idle {
-                                    let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
-                                    let langCode = appState.selectedLanguage
-                                    let language = Language.all.first { $0.code == langCode } ?? .auto
-                                    await coordinator.startRecording(mode: mode, language: language)
-                                } else if appState.recordingState == .recording {
-                                    let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
-                                    let langCode = appState.selectedLanguage
-                                    let language = Language.all.first { $0.code == langCode } ?? .auto
-                                    await coordinator.stopRecording(mode: mode, language: language)
-                                }
-                            }
-                        }
-                    )
-
-                    // Status text
-                    StatusText(state: appState.recordingState)
-
-                    // Hotkey hint
-                    HotkeyHint()
-
-                    // Mode toggle
-                    ModeToggle()
-
-                    // Transcription display
-                    if !appState.currentTranscription.isEmpty {
-                        TranscriptionCard(text: appState.currentTranscription)
-                    }
-                }
-                .padding(.horizontal, 32)
-
-                Spacer()
-
-                // Bottom section - history preview
-                if !appState.transcriptionHistory.isEmpty {
-                    HistoryPreview(entries: appState.transcriptionHistory)
-                        .padding(.bottom, 24)
-                }
+            case .ready:
+                mainUI
+                    .transition(.opacity)
+                    .zIndex(0)
             }
         }
         .frame(minWidth: 380, minHeight: 520)
-        .onAppear {
-            // Dismiss welcome screen after 2.5 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                withAnimation(.easeOut(duration: 0.5)) {
-                    showWelcome = false
+    }
+
+    // MARK: - Main UI
+
+    private var mainUI: some View {
+        VStack(spacing: 0) {
+            // Settings button at top right
+            HStack {
+                Spacer()
+                SettingsButton()
+            }
+
+            // Top spacing
+            Spacer()
+                .frame(height: 20)
+
+            // Main content area
+            VStack(spacing: 32) {
+                // Mic button
+                MicButton(
+                    state: appState.recordingState,
+                    audioLevel: coordinator.audioLevel,
+                    onTap: {
+                        Task { @MainActor in
+                            if appState.recordingState == .idle {
+                                let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
+                                let langCode = appState.selectedLanguage
+                                let language = Language.all.first { $0.code == langCode } ?? .auto
+                                await coordinator.startRecording(mode: mode, language: language)
+                            } else if appState.recordingState == .recording {
+                                let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
+                                let langCode = appState.selectedLanguage
+                                let language = Language.all.first { $0.code == langCode } ?? .auto
+                                await coordinator.stopRecording(mode: mode, language: language)
+                            }
+                        }
+                    }
+                )
+
+                // Status text
+                StatusText(state: appState.recordingState)
+
+                // Hotkey hint
+                HotkeyHint()
+
+                // Mode toggle
+                ModeToggle()
+
+                // Transcription display
+                if !appState.currentTranscription.isEmpty {
+                    TranscriptionCard(text: appState.currentTranscription)
                 }
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
+
+            // Bottom section - history preview
+            if !appState.transcriptionHistory.isEmpty {
+                HistoryPreview(entries: appState.transcriptionHistory)
+                    .padding(.bottom, 24)
             }
         }
     }
@@ -92,6 +104,7 @@ struct ContentView: View {
 // MARK: - Welcome View
 
 struct WelcomeView: View {
+    @Environment(AppState.self) private var appState
     @State private var animationPhase: CGFloat = 0
     @State private var contentOpacity: Double = 0
     @State private var contentScale: Double = 0.95
@@ -134,6 +147,13 @@ struct WelcomeView: View {
             // Start continuous waveform animation
             withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
                 animationPhase = .pi * 2
+            }
+
+            // Advance to next state after 2.5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                withAnimation(.easeOut(duration: 0.5)) {
+                    appState.advanceReadinessState()
+                }
             }
         }
     }
@@ -201,6 +221,7 @@ struct SettingsButton: View {
 // MARK: - Mic Button
 
 struct MicButton: View {
+    @Environment(AppState.self) private var appState
     let state: RecordingState
     let audioLevel: Float
     let onTap: () -> Void
@@ -212,7 +233,14 @@ struct MicButton: View {
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
 
     var body: some View {
-        Button(action: onTap) {
+        Button(action: {
+            // Prevent recording before app is fully ready
+            guard appState.appReadinessState == .ready else {
+                NSSound(named: "Basso")?.play()
+                return
+            }
+            onTap()
+        }) {
             ZStack {
                 // Outer ring - audio visualization
                 if state == .recording {

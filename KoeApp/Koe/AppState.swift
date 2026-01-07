@@ -1,4 +1,6 @@
 import SwiftUI
+import AVFoundation
+import ApplicationServices
 import KoeDomain
 
 @Observable
@@ -21,6 +23,11 @@ public final class AppState {
     // Model state
     public var isModelLoaded: Bool = false
     public var modelLoadingProgress: Double = 0.0
+
+    // Readiness state
+    public var appReadinessState: AppReadinessState = .welcome
+    public var hasMicrophonePermission: Bool = false
+    public var hasAccessibilityPermission: Bool = false
 
     // History
     public var transcriptionHistory: [Transcription] = []
@@ -76,8 +83,51 @@ public final class AppState {
         TranscriptionMode(rawValue: transcriptionMode) ?? .vad
     }
 
+    public var hasAllPermissions: Bool {
+        hasMicrophonePermission && hasAccessibilityPermission
+    }
+
     private init() {
         loadHistory()
+    }
+
+    // MARK: - Permission Management
+
+    public func checkMicrophonePermission() {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        hasMicrophonePermission = (status == .authorized)
+    }
+
+    public func checkAccessibilityPermission() {
+        hasAccessibilityPermission = AXIsProcessTrusted()
+    }
+
+    public func checkAllPermissions() {
+        checkMicrophonePermission()
+        checkAccessibilityPermission()
+    }
+
+    public func advanceReadinessState() {
+        switch appReadinessState {
+        case .welcome:
+            checkAllPermissions()
+            appReadinessState = hasAllPermissions ? .loading : .needsPermissions
+
+        case .needsPermissions:
+            checkAllPermissions()
+            if hasAllPermissions {
+                appReadinessState = .loading
+            }
+
+        case .loading:
+            if isModelLoaded {
+                appReadinessState = .ready
+                NotificationCenter.default.post(name: .appReady, object: nil)
+            }
+
+        case .ready:
+            break
+        }
     }
 
     // MARK: - History Management

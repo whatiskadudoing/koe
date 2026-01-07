@@ -55,11 +55,6 @@ public final class RecordingCoordinator {
         self.textInserter = textInserter
         self.vadProcessor = vadProcessor
         self.hotkeyManager = hotkeyManager
-
-        // Request accessibility permission on init
-        if !textInserter.hasPermission() {
-            textInserter.requestPermission()
-        }
     }
 
     // MARK: - Hotkey Setup
@@ -90,6 +85,16 @@ public final class RecordingCoordinator {
 
     public func unregisterHotkey() {
         hotkeyManager.unregister()
+    }
+
+    // MARK: - Deferred Initialization
+
+    /// Called when app reaches .ready state to finish initialization
+    public func initializeWhenReady() {
+        // Request accessibility permission when ready
+        if !textInserter.hasPermission() {
+            textInserter.requestPermission()
+        }
     }
 
     // MARK: - Model Loading

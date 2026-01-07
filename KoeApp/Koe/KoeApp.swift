@@ -56,7 +56,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
-        setupGlobalHotkey()
         loadModel()
     }
 
@@ -185,6 +184,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        // Observe app ready state
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppReady),
+            name: .appReady,
+            object: nil
+        )
+
         // Start with loading animation (blue waveform)
         menuBarState = .loading
         downloadProgress = 0.0
@@ -196,6 +203,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let progress = notification.object as? Float {
             downloadProgress = progress
         }
+    }
+
+    @objc func handleAppReady() {
+        setupGlobalHotkey()
+        coordinator.initializeWhenReady()
     }
 
     @objc func selectLanguage(_ sender: NSMenuItem) {
@@ -481,6 +493,7 @@ extension Notification.Name {
     static let audioLevelChanged = Notification.Name("audioLevelChanged")
     static let modelLoaded = Notification.Name("modelLoaded")
     static let modelDownloadProgress = Notification.Name("modelDownloadProgress")
+    static let appReady = Notification.Name("appReady")
 }
 
 // MARK: - NSMenuDelegate
