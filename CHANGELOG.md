@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.4](https://github.com/whatiskadudoing/koe/compare/v1.4.3...v1.4.4) (2026-01-07)
+
+
+### Bug Fixes
+
+* handle large transcripts with chunked clipboard paste ([#16](https://github.com/whatiskadudoing/koe/issues/16)) ([ac6044f](https://github.com/whatiskadudoing/koe/commit/ac6044fa7e161b1084b7c19258a59e516b2d903f)), closes [#15](https://github.com/whatiskadudoing/koe/issues/15)
+
 ## [1.4.3](https://github.com/whatiskadudoing/koe/compare/v1.4.2...v1.4.3) (2026-01-07)
 
 
