@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
@@ -10,13 +10,14 @@ let package = Package(
         .executable(name: "WhisperApp", targets: ["WhisperApp"])
     ],
     dependencies: [
-        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.9.0"),
-        .package(url: "https://github.com/soffes/HotKey.git", from: "0.2.0")
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0"),
+        .package(url: "https://github.com/soffes/HotKey.git", from: "0.2.1"),
+        .package(path: "../Packages/KoeDomain")
     ],
     targets: [
         .executableTarget(
             name: "WhisperApp",
-            dependencies: ["WhisperKit", "HotKey"],
+            dependencies: ["WhisperKit", "HotKey", "KoeDomain"],
             path: "WhisperApp"
         )
     ]
