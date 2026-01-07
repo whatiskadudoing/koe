@@ -19,6 +19,7 @@ struct PermissionsView: View {
     @State private var contentOpacity = 0.0
     @State private var contentOffset: CGFloat = 20
     @State private var isRequestingPermission = false
+    @State private var wasWaitingForAccessibility = false
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
@@ -133,7 +134,23 @@ struct PermissionsView: View {
             // When app gains focus (e.g., user returns from System Settings),
             // force a permission check as AXIsProcessTrusted() cache may have been updated
             Task { @MainActor in
+                let hadAccessibilityBefore = appState.hasAccessibilityPermission
                 appState.checkAllPermissions()
+
+                // If user was on accessibility step and permission might have been granted,
+                // relaunch the app to ensure the new permission takes effect
+                if wasWaitingForAccessibility && !hadAccessibilityBefore {
+                    // Give a moment for the system to update, then relaunch
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    appState.checkAllPermissions()
+
+                    if appState.hasAccessibilityPermission {
+                        // Permission granted - relaunch to ensure it takes effect
+                        relaunchApp()
+                        return
+                    }
+                }
+
                 withAnimation(.easeInOut(duration: 0.3)) {
                     updateStep()
                 }
@@ -179,6 +196,7 @@ struct PermissionsView: View {
 
     private func requestAccessibilityPermission() {
         isRequestingPermission = true
+        wasWaitingForAccessibility = true
 
         // Just open System Settings - user can toggle Koe in the list
         // No need to call requestPermission() which shows an extra dialog
@@ -188,6 +206,27 @@ struct PermissionsView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             isRequestingPermission = false
+        }
+    }
+
+    private func relaunchApp() {
+        // Get the path to the current app bundle
+        let bundlePath = Bundle.main.bundlePath
+
+        // Use /usr/bin/open to relaunch the app
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = ["-n", bundlePath]
+
+        do {
+            try task.run()
+            // Give the new instance time to start, then quit this one
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NSApplication.shared.terminate(nil)
+            }
+        } catch {
+            // If relaunch fails, just continue - user can manually restart
+            print("Failed to relaunch: \(error)")
         }
     }
 

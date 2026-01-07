@@ -53,10 +53,11 @@ jobs:
           # Make executable
           chmod +x dist/Koe.app/Contents/MacOS/Koe
 
-          # Ad-hoc sign with correct bundle identifier (required for accessibility permissions)
-          codesign --force --deep --sign - --identifier "com.koe.voice" dist/Koe.app
+          # Ad-hoc sign with correct bundle identifier and entitlements
+          codesign --force --deep --sign - --identifier "com.koe.voice" --entitlements Koe.entitlements dist/Koe.app
           echo "App signed with identifier: com.koe.voice"
           codesign -dv dist/Koe.app 2>&1
+          codesign -d --entitlements :- dist/Koe.app 2>&1
 
           echo "App bundle created:"
           ls -la dist/
