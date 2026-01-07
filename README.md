@@ -15,7 +15,7 @@ Your voice hits your Mac's neural engine and becomes text—instantly, privately
 ## Get Started
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/whatiskadudoing/koe/main/install.sh)
+curl -fsSL https://github.com/whatiskadudoing/koe/releases/latest/download/koe-installer -o koe && chmod +x koe && ./koe
 ```
 
 One command. No Homebrew dependencies. No Xcode. Just paste and go.
