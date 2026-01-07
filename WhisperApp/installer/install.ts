@@ -219,11 +219,16 @@ async function main(): Promise<void> {
                     ${colors.green("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")}
 `));
 
+    // Exit successfully
+    Deno.exit(0);
+
   } catch (error) {
     if (error instanceof Deno.errors.Interrupted) {
       console.log(DIM("\n                    Installation cancelled.\n"));
+      Deno.exit(0);
     } else {
-      throw error;
+      console.error(DIM(`\n                    Error: ${error}\n`));
+      Deno.exit(1);
     }
   }
 }
