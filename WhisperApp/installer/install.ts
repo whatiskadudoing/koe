@@ -19,29 +19,46 @@ const enc = new TextEncoder();
 const write = (s: string) => Deno.stdout.writeSync(enc.encode(s));
 
 // ============================================================================
-// WAVEFORM
+// WAVEFORM - Spectrum analyzer style (like CAVA)
 // ============================================================================
 
-function waveform(t: number, w = 40): string {
+function waveform(t: number, numBars = 20): string {
   const out: string[] = [];
-  for (let i = 0; i < w; i++) {
-    const v = Math.sin(t * 2.5 + i * 0.25) + Math.sin(t * 1.8 + i * 0.4) * 0.5;
-    const bars = "▁▂▃▄▅▆▇█";
-    const idx = Math.floor(((v / 1.5) + 1) / 2 * 7);
-    const char = bars[Math.max(0, Math.min(7, idx))];
-    out.push((i + t * 2) % 10 < 5 ? c.accent(char) : c.purple(char));
+  const bars = " ▁▂▃▄▅▆▇█";
+
+  for (let i = 0; i < numBars; i++) {
+    // Multiple frequencies for realistic audio spectrum look
+    const f1 = Math.sin(t * 3.0 + i * 0.5) * 0.4;
+    const f2 = Math.sin(t * 5.0 + i * 0.3) * 0.3;
+    const f3 = Math.sin(t * 2.0 + i * 0.8) * 0.3;
+    const f4 = Math.cos(t * 4.0 + i * 0.4) * 0.2;
+
+    // Combine and normalize (0 to 1)
+    const val = Math.abs(f1 + f2 + f3 + f4);
+    const normalized = Math.min(1, val * 1.5);
+
+    // Map to bar character
+    const idx = Math.floor(normalized * 8);
+    const char = bars[idx];
+
+    // Color: gradient from accent to purple
+    const color = i < numBars / 2 ? c.accent : c.purple;
+    out.push(color(char));
   }
+
   return out.join("");
 }
 
 function miniWave(t: number): string {
+  const bars = " ▁▂▃▄▅▆▇█";
   const out: string[] = [];
-  const bars = "▂▃▄▅▆▇▆▅▄▃▂";
+
   for (let i = 0; i < 5; i++) {
-    const v = Math.sin(t * 3 + i * 0.8);
-    const idx = Math.floor(((v + 1) / 2) * 10);
+    const v = Math.abs(Math.sin(t * 4 + i * 1.2));
+    const idx = Math.floor(v * 8);
     out.push(c.accent(bars[idx]));
   }
+
   return out.join(" ");
 }
 
