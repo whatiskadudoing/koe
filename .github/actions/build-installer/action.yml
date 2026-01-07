@@ -1,0 +1,34 @@
+name: 'Build Koe Installer'
+description: 'Build Deno-based installer for Koe'
+inputs:
+  lint:
+    description: 'Whether to run lint checks'
+    required: false
+    default: 'false'
+outputs:
+  installer-path:
+    description: 'Path to the built installer'
+    value: ${{ steps.build.outputs.installer-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Lint Installer
+      if: ${{ inputs.lint == 'true' }}
+      shell: bash
+      run: |
+        cd installer
+        deno lint
+        deno fmt --check
+
+    - name: Build Installer
+      id: build
+      shell: bash
+      run: |
+        cd installer
+        deno compile \
+          --target aarch64-apple-darwin \
+          --allow-read --allow-write --allow-net --allow-run --allow-env \
+          --output koe-installer \
+          mod.ts
+        echo "installer-path=installer/koe-installer" >> $GITHUB_OUTPUT
