@@ -24,12 +24,12 @@ jobs:
 
       - name: Build App (Release)
         run: |
-          cd WhisperApp/WhisperApp
+          cd KoeApp
           swift build -c release
 
       - name: Create App Bundle
         run: |
-          cd WhisperApp/WhisperApp
+          cd KoeApp
 
           # Find the executable
           EXECUTABLE=$(find .build -name "Koe" -type f -path "*release*" | grep -v dSYM | head -1)
@@ -43,7 +43,7 @@ jobs:
           cp "$EXECUTABLE" dist/Koe.app/Contents/MacOS/Koe
 
           # Copy Info.plist
-          cp WhisperApp/Info.plist dist/Koe.app/Contents/Info.plist
+          cp Koe/Info.plist dist/Koe.app/Contents/Info.plist
 
           # Add CFBundleExecutable to Info.plist
           /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Koe" dist/Koe.app/Contents/Info.plist 2>/dev/null || \
@@ -66,7 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Koe-App
-          path: WhisperApp/WhisperApp/dist/Koe-macos-arm64.zip
+          path: KoeApp/dist/Koe-macos-arm64.zip
           retention-days: 1
 
   build-installer:
@@ -84,7 +84,7 @@ jobs:
 
       - name: Build Installer
         run: |
-          cd WhisperApp/installer
+          cd installer
           deno compile \
             --target aarch64-apple-darwin \
             --allow-read --allow-write --allow-net --allow-run --allow-env \
@@ -95,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: koe-installer
-          path: WhisperApp/installer/koe-installer
+          path: installer/koe-installer
           retention-days: 1
 
   release:

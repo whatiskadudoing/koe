@@ -36,7 +36,7 @@ let package = Package(
                 "KoeStorage",
                 "KoeUI"
             ],
-            path: "WhisperApp"
+            path: "Koe"
         )
     ]
 )
