@@ -31,6 +31,9 @@ One command. No Homebrew dependencies. No Xcode. Just paste and go.
 | Universal text insertion | Account creation |
 | Multi-language support | Data collection |
 | Open source, forever | Vendor lock-in |
+| Zero headache setup | Complex configuration |
+
+**Works everywhere** — Slack, Notion, VS Code, Terminal, your email, that random app you love. If it accepts text, Koe works with it. No plugins, no integrations to configure. Just your voice, anywhere.
 
 ---
 
