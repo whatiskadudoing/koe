@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.11](https://github.com/whatiskadudoing/koe/compare/v1.4.10...v1.4.11) (2026-01-07)
+
+
+### Bug Fixes
+
+* add stable designated requirement for TCC recognition ([fd28786](https://github.com/whatiskadudoing/koe/commit/fd2878668e5cdd5503d53110f06baa62ea3f4ff6))
+
 ## [1.4.10](https://github.com/whatiskadudoing/koe/compare/v1.4.9...v1.4.10) (2026-01-07)
 
 
