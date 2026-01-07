@@ -1,15 +1,25 @@
 import SwiftUI
 import KoeDomain
+import KoeAudio
+import KoeTranscription
+import KoeHotkey
+import KoeTextInsertion
+import KoeStorage
+import KoeUI
+import KoeCore
 
 @main
-struct WhisperApp: App {
+struct KoeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var appState = AppState.shared
+    // Use the shared coordinator instance
+    @State private var coordinator = RecordingCoordinator.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(appState)
+                .environment(coordinator)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
@@ -18,6 +28,7 @@ struct WhisperApp: App {
         Settings {
             SettingsView()
                 .environment(appState)
+                .environment(coordinator)
         }
     }
 }
@@ -29,23 +40,28 @@ enum MenuBarState {
     case processing // Orange - transcribing
 }
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
-    private var transcriber: TranscriberService?
     private var menuBarAnimationTimer: Timer?
     private var animationStartTime: Date = Date()
     private var currentAudioLevel: Float = 0.0
     private var menuBarState: MenuBarState = .loading
     private var downloadProgress: Float = 0.0
 
+    // Use the shared coordinator
+    private var coordinator: RecordingCoordinator {
+        RecordingCoordinator.shared
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
         setupGlobalHotkey()
-        loadTranscriber()
+        loadModel()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        HotkeyManager.shared.unregister()
+        coordinator.unregisterHotkey()
         menuBarAnimationTimer?.invalidate()
     }
 
@@ -178,9 +194,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func handleDownloadProgress(_ notification: Notification) {
         if let progress = notification.object as? Float {
-            DispatchQueue.main.async {
-                self.downloadProgress = progress
-            }
+            downloadProgress = progress
         }
     }
 
@@ -194,9 +208,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        Task { @MainActor in
-            AppState.shared.selectedLanguage = langCode
-        }
+        AppState.shared.selectedLanguage = langCode
     }
 
     @objc func selectModel(_ sender: NSMenuItem) {
@@ -209,13 +221,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        Task { @MainActor in
-            // Don't switch if already on this model
-            guard modelId != AppState.shared.selectedModel else { return }
+        // Don't switch if already on this model
+        guard modelId != AppState.shared.selectedModel else { return }
 
-            AppState.shared.selectedModel = modelId
-            NotificationCenter.default.post(name: .reloadModel, object: modelId)
-        }
+        AppState.shared.selectedModel = modelId
+        NotificationCenter.default.post(name: .reloadModel, object: modelId)
     }
 
     @objc func openSettings() {
@@ -227,13 +237,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func handleModelLoaded() {
-        DispatchQueue.main.async {
-            self.menuBarState = .idle
-            self.downloadProgress = 1.0
+        menuBarState = .idle
+        downloadProgress = 1.0
 
-            // Show notification that model is ready
-            self.showModelReadyNotification()
-        }
+        // Show notification that model is ready
+        showModelReadyNotification()
     }
 
     private func showModelReadyNotification() {
@@ -241,16 +249,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSSound(named: "Glass")?.play()
 
         // Show native macOS notification via osascript
-        Task { @MainActor in
-            let script = """
-            display notification "Ready! Hold Option+Space to transcribe." with title "Koe 声" sound name "Glass"
-            """
+        let script = """
+        display notification "Ready! Hold Option+Space to transcribe." with title "Koe 声" sound name "Glass"
+        """
 
-            let process = Process()
-            process.launchPath = "/usr/bin/osascript"
-            process.arguments = ["-e", script]
-            try? process.run()
-        }
+        let process = Process()
+        process.launchPath = "/usr/bin/osascript"
+        process.arguments = ["-e", script]
+        try? process.run()
     }
 
     @objc func handleAudioLevelUpdate(_ notification: Notification) {
@@ -266,82 +272,68 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarState = .loading
         downloadProgress = 0.01
 
-        Task { @MainActor in
-            // Immediately mark as not loaded to prevent recording during switch
-            AppState.shared.isModelLoaded = false
-
-            // Unload the old model first to free memory and prevent conflicts
-            self.transcriber?.unloadModel()
-
-            // Reuse existing transcriber to properly cancel previous loads
-            if self.transcriber == nil {
-                let transcriber = TranscriberService()
-                self.transcriber = transcriber
-                RecordingService.shared.setTranscriber(transcriber)
-            }
-
-            await self.transcriber?.loadModel(name: modelName)
-            AppState.shared.isModelLoaded = true
-            NotificationCenter.default.post(name: .modelLoaded, object: nil)
+        Task {
+            // Unload and reload using coordinator
+            coordinator.unloadModel()
+            await coordinator.loadModel(name: modelName)
         }
     }
 
     func setupGlobalHotkey() {
-        HotkeyManager.shared.register(
-            onKeyDown: {
-                Task { @MainActor in
-                    RecordingService.shared.startRecording()
-                }
-            },
-            onKeyUp: {
-                Task { @MainActor in
-                    RecordingService.shared.stopRecording()
-                }
-            }
-        )
+        coordinator.setupHotkey()
     }
 
-    func loadTranscriber() {
-        Task { @MainActor in
-            let transcriber = TranscriberService()
-            self.transcriber = transcriber
-            RecordingService.shared.setTranscriber(transcriber)
-            await transcriber.loadModel(name: AppState.shared.selectedModel)
-            AppState.shared.isModelLoaded = true
-            NotificationCenter.default.post(name: .modelLoaded, object: nil)
+    func loadModel() {
+        Task {
+            await coordinator.loadModel(name: AppState.shared.selectedModel)
         }
     }
 
     @objc func updateMenuBarIcon() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+        let state = AppState.shared.recordingState
 
-            let state = AppState.shared.recordingState
-
-            switch state {
-            case .idle:
-                // If model is loaded, show white waveform; otherwise keep loading (blue)
-                if AppState.shared.isModelLoaded {
-                    self.menuBarState = .idle
-                }
-                // Animation keeps running
-
-            case .recording:
-                self.menuBarState = .recording
-
-            case .processing:
-                self.menuBarState = .processing
+        switch state {
+        case .idle:
+            // If model is loaded, show white waveform; otherwise keep loading (blue)
+            if AppState.shared.isModelLoaded {
+                menuBarState = .idle
             }
+
+        case .recording:
+            menuBarState = .recording
+
+        case .processing:
+            menuBarState = .processing
+        }
+
+        // Optimize timer: fast animation when active, slow when idle
+        adjustTimerForState()
+    }
+
+    private func adjustTimerForState() {
+        let needsFastAnimation = (menuBarState == .loading || menuBarState == .recording || menuBarState == .processing)
+
+        if needsFastAnimation {
+            // Fast animation (20fps) for active states
+            startMenuBarAnimation(interval: 0.05)
+        } else {
+            // Slow animation (2fps) when idle - just subtle breathing
+            startMenuBarAnimation(interval: 0.5)
         }
     }
 
-    private func startMenuBarAnimation() {
-        guard menuBarAnimationTimer == nil else { return }
+    private func startMenuBarAnimation(interval: TimeInterval = 0.05) {
+        // If timer exists with same interval, keep it
+        if menuBarAnimationTimer != nil {
+            // Check if we need to change interval by stopping and restarting
+            menuBarAnimationTimer?.invalidate()
+        }
 
         animationStartTime = Date()
-        // Higher frequency for smoother animation
-        menuBarAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            self?.updateAnimatedIcon()
+        menuBarAnimationTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateAnimatedIcon()
+            }
         }
     }
 
@@ -402,37 +394,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let flag = getLanguageFlag()
-        button.image = createWaveformImage(color: color, audioLevel: audioLevel, time: time, speed: speed, percentText: percentText, flag: flag)
+        let isLoading = (menuBarState == .loading)
+        button.image = createWaveformImage(color: color, audioLevel: audioLevel, time: time, speed: speed, percentText: percentText, flag: flag, isLoading: isLoading)
     }
 
-    private func createWaveformImage(color: NSColor, audioLevel: Float, time: Double, speed: Double, percentText: String? = nil, flag: String = "🌐") -> NSImage {
-        // Base width for waveform + flag
-        let flagWidth: CGFloat = 14
+    private func createWaveformImage(color: NSColor, audioLevel: Float, time: Double, speed: Double, percentText: String? = nil, flag: String = "🌐", isLoading: Bool = false) -> NSImage {
+        // During loading: show percentage/dots instead of flag
+        // Otherwise: show flag
+        let leftTextWidth: CGFloat = isLoading ? 28 : 14
         let waveformWidth: CGFloat = 22
-        var width: CGFloat = flagWidth + waveformWidth
-
-        // Extra width if showing percentage
-        if percentText != nil {
-            width += 28
-        }
+        let width: CGFloat = leftTextWidth + waveformWidth
 
         let size = NSSize(width: width, height: 18)
 
         let image = NSImage(size: size, flipped: false) { rect in
-            // Draw flag on the left
-            let flagAttributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 11)
-            ]
-            let flagSize = flag.size(withAttributes: flagAttributes)
-            let flagY = (rect.height - flagSize.height) / 2
-            flag.draw(at: NSPoint(x: 0, y: flagY), withAttributes: flagAttributes)
+            // Left section: either loading indicator or flag
+            if isLoading, let text = percentText {
+                // Draw loading percentage/dots on the left (where flag normally is)
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                    .foregroundColor: color
+                ]
+                let textSize = text.size(withAttributes: attributes)
+                let textY = (rect.height - textSize.height) / 2
+                text.draw(at: NSPoint(x: 0, y: textY), withAttributes: attributes)
+            } else {
+                // Draw flag on the left
+                let flagAttributes: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: 11)
+                ]
+                let flagSize = flag.size(withAttributes: flagAttributes)
+                let flagY = (rect.height - flagSize.height) / 2
+                flag.draw(at: NSPoint(x: 0, y: flagY), withAttributes: flagAttributes)
+            }
 
-            // Waveform starts after flag
+            // Waveform starts after left section
             let barCount = 5
             let barWidth: CGFloat = 2.5
             let spacing: CGFloat = 1.5
-            let totalWidth = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * spacing
-            let waveformStartX: CGFloat = flagWidth + 2
+            let waveformStartX: CGFloat = leftTextWidth + 2
 
             color.setFill()
 
@@ -457,18 +457,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 path.fill()
             }
 
-            // Draw percentage text if provided
-            if let text = percentText {
-                let attributes: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .medium),
-                    .foregroundColor: color
-                ]
-                let textSize = text.size(withAttributes: attributes)
-                let textX = waveformStartX + totalWidth + 4
-                let textY = (rect.height - textSize.height) / 2
-                text.draw(at: NSPoint(x: textX, y: textY), withAttributes: attributes)
-            }
-
             return true
         }
         image.isTemplate = false
@@ -476,7 +464,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func togglePopover() {
-        if let window = NSApplication.shared.windows.first(where: { $0.title == "Whisper" || $0.contentView is NSHostingView<ContentView> }) {
+        if let window = NSApplication.shared.windows.first(where: { $0.title == "Koe" || $0.contentView is NSHostingView<ContentView> }) {
             window.makeKeyAndOrderFront(nil)
             NSApplication.shared.activate(ignoringOtherApps: true)
         } else {
