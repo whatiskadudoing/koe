@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/whatiskadudoing/koe/compare/v1.4.0...v1.4.1) (2026-01-07)
+
+
+### Bug Fixes
+
+* remove extra accessibility dialog, just open System Settings ([105987a](https://github.com/whatiskadudoing/koe/commit/105987ad8ab2ae8d09fff652f0641692e2785a22))
+
 ## [1.4.0](https://github.com/whatiskadudoing/koe/compare/v1.3.5...v1.4.0) (2026-01-07)
 
 
