@@ -100,8 +100,9 @@ public final class AppState {
     }
 
     public func checkAccessibilityPermission() {
-        // Use AXIsProcessTrusted() for silent check - does NOT trigger any prompts
-        // Note: This may have caching issues but it's the only way to check without prompting
+        // AXIsProcessTrusted() has caching issues, but the cache is refreshed when
+        // the "com.apple.accessibility.api" distributed notification fires
+        // (which happens when any app's accessibility permission changes)
         hasAccessibilityPermission = AXIsProcessTrusted()
     }
 

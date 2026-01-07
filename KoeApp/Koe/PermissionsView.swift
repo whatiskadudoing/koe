@@ -172,6 +172,18 @@ struct PermissionsView: View {
     }
 
     private func startPermissionPolling() {
+        // Register for distributed notification when accessibility permissions change
+        // This notification fires when ANY app's accessibility permission changes
+        DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.accessibility.api"),
+            object: nil,
+            queue: .main
+        ) { [weak appState] _ in
+            // When notification fires, AXIsProcessTrusted() cache is refreshed
+            appState?.checkAllPermissions()
+        }
+
+        // Also poll with timer as backup (for microphone and edge cases)
         checkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
             Task { @MainActor in
                 AppState.shared.checkAllPermissions()
@@ -195,6 +207,12 @@ struct PermissionsView: View {
     private func stopPermissionPolling() {
         checkTimer?.invalidate()
         checkTimer = nil
+        // Remove distributed notification observer
+        DistributedNotificationCenter.default().removeObserver(
+            self,
+            name: NSNotification.Name("com.apple.accessibility.api"),
+            object: nil
+        )
     }
 }
 
