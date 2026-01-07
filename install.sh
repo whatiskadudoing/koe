@@ -8,4 +8,4 @@ trap "rm -f $TMP" EXIT
 
 curl -fsSL "https://github.com/$REPO/releases/latest/download/koe-installer" -o "$TMP"
 chmod +x "$TMP"
-"$TMP"
+"$TMP" </dev/tty
