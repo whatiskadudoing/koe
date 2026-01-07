@@ -4,6 +4,14 @@
 
 Koe is a lightweight, privacy-focused dictation app that converts speech to text using on-device AI. Your voice never leaves your Mac.
 
+## Quick Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/whatiskadudoing/koe/main/install.sh | bash
+```
+
+That's it. Open Koe from `/Applications` and start dictating with `Cmd+Shift+Space`.
+
 ---
 
 ## Features
@@ -22,17 +30,18 @@ Koe is a lightweight, privacy-focused dictation app that converts speech to text
 
 ## Installation
 
-### Homebrew (coming soon)
+### One-liner (recommended)
 
 ```bash
-brew install --cask koe
+curl -fsSL https://raw.githubusercontent.com/whatiskadudoing/koe/main/install.sh | bash
 ```
 
-### Manual
+### Manual Download
 
-1. Download the latest release from [Releases](https://github.com/whatiskadudoing/koe/releases)
-2. Move `Koe.app` to `/Applications`
-3. Launch and grant Microphone & Accessibility permissions
+1. Download `Koe.zip` from [Releases](https://github.com/whatiskadudoing/koe/releases/latest)
+2. Unzip and move `Koe.app` to `/Applications`
+3. Right-click → Open (first time only, to bypass Gatekeeper)
+4. Grant Microphone & Accessibility permissions when prompted
 
 ## Usage
 
