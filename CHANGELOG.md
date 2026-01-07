@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.5](https://github.com/whatiskadudoing/koe/compare/v1.4.4...v1.4.5) (2026-01-07)
+
+
+### Bug Fixes
+
+* improve clipboard paste timing for large text ([0871dfb](https://github.com/whatiskadudoing/koe/commit/0871dfba833c6d323eabb8bd39c32e241f3fcce6))
+
 ## [1.4.4](https://github.com/whatiskadudoing/koe/compare/v1.4.3...v1.4.4) (2026-01-07)
 
 
