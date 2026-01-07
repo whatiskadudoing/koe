@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.10](https://github.com/whatiskadudoing/koe/compare/v1.4.9...v1.4.10) (2026-01-07)
+
+
+### Bug Fixes
+
+* add TCC reset and accessibility usage description ([3915c43](https://github.com/whatiskadudoing/koe/commit/3915c4304433636faac08b9d4c02b1125556450d))
+
 ## [1.4.9](https://github.com/whatiskadudoing/koe/compare/v1.4.8...v1.4.9) (2026-01-07)
 
 
