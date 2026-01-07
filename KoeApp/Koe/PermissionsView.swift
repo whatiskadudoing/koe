@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import ApplicationServices
+import AppKit
 import KoeTextInsertion
 
 struct PermissionsView: View {
@@ -136,12 +137,25 @@ struct PermissionsView: View {
     }
 
     private func requestPermissions() {
-        // Request microphone permission
+        // Request microphone permission (shows system dialog)
         AVCaptureDevice.requestAccess(for: .audio) { _ in }
 
         // Request accessibility permission
+        // Try the API first, then open System Settings as fallback
         let textInserter = TextInsertionServiceImpl()
         textInserter.requestPermission()
+
+        // Also open System Settings to Privacy > Accessibility
+        // This ensures user sees where to enable it if dialog doesn't appear
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            openAccessibilitySettings()
+        }
+    }
+
+    private func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
 }
 
