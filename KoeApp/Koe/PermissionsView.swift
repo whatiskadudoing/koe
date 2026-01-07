@@ -3,6 +3,7 @@ import AVFoundation
 import ApplicationServices
 import AppKit
 import KoeTextInsertion
+import Combine
 
 enum PermissionStep {
     case microphone
@@ -127,6 +128,24 @@ struct PermissionsView: View {
         }
         .onDisappear {
             stopPermissionPolling()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // When app gains focus (e.g., user returns from System Settings),
+            // force a permission check as AXIsProcessTrusted() cache may have been updated
+            Task { @MainActor in
+                appState.checkAllPermissions()
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    updateStep()
+                }
+
+                // Auto-advance if all permissions now granted
+                if appState.hasAllPermissions {
+                    stopPermissionPolling()
+                    withAnimation(.easeOut(duration: 0.4)) {
+                        appState.advanceReadinessState()
+                    }
+                }
+            }
         }
     }
 
