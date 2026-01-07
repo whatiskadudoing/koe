@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.8](https://github.com/whatiskadudoing/koe/compare/v1.4.7...v1.4.8) (2026-01-07)
+
+
+### Bug Fixes
+
+* add entitlements and auto-relaunch for accessibility permission ([193f791](https://github.com/whatiskadudoing/koe/commit/193f79153a16b209c096128a1e51f9e233d638fd))
+
 ## [1.4.7](https://github.com/whatiskadudoing/koe/compare/v1.4.6...v1.4.7) (2026-01-07)
 
 
