@@ -1,14 +1,31 @@
-name: Build
+name: Release Please
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
-  build-app:
-    name: Build Koe App
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Release Please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          release-type: simple
+          package-name: koe
+
+  build-and-release:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
     runs-on: macos-14
 
     steps:
@@ -20,7 +37,12 @@ jobs:
         with:
           xcode-version: "16.1"
 
-      - name: Build App (ARM64)
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Build App
         run: |
           cd WhisperApp
           swift build -c release
@@ -53,29 +75,9 @@ jobs:
           # Make executable
           chmod +x dist/Koe.app/Contents/MacOS/Koe
 
-          echo "App bundle created:"
-          ls -la dist/
-          ls -la dist/Koe.app/Contents/
-
-      - name: Upload App Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Koe-App-arm64
-          path: WhisperApp/dist/Koe.app
-          retention-days: 7
-
-  build-installer:
-    name: Build Installer
-    runs-on: macos-14
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+          # Create ZIP
+          cd dist
+          zip -r Koe-macos-arm64.zip Koe.app
 
       - name: Build Installer
         run: |
@@ -86,9 +88,10 @@ jobs:
             --output koe-installer \
             install.ts
 
-      - name: Upload Installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: koe-installer
-          path: WhisperApp/installer/koe-installer
-          retention-days: 7
+      - name: Upload Release Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ needs.release-please.outputs.tag_name }} \
+            WhisperApp/dist/Koe-macos-arm64.zip \
+            WhisperApp/installer/koe-installer

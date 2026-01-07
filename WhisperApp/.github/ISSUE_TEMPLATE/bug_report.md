@@ -1,36 +1,39 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: '[Bug] '
+name: Bug Report
+about: Report a bug to help us improve Koe
+title: "[Bug] "
 labels: bug
-assignees: ''
+assignees: ""
 ---
 
-## Describe the bug
-A clear and concise description of what the bug is.
+## Description
 
-## To Reproduce
-Steps to reproduce the behavior:
+A clear description of the bug.
+
+## Steps to Reproduce
+
 1. Go to '...'
 2. Click on '...'
 3. See error
 
-## Expected behavior
+## Expected Behavior
+
 What you expected to happen.
 
-## Screenshots
-If applicable, add screenshots to help explain your problem.
+## Actual Behavior
+
+What actually happened.
 
 ## Environment
-- macOS version: [e.g., 14.0]
-- Mac model: [e.g., MacBook Pro M2]
-- Whisper model: [e.g., tiny, base, large-v3]
-- App version: [e.g., 1.0.0]
 
-## Logs
-```
-Paste relevant logs from /tmp/whisper_debug.log
-```
+- **macOS Version:** (e.g., 14.2)
+- **Mac Model:** (e.g., MacBook Pro M2)
+- **Koe Version:** (e.g., v0.1.0)
 
-## Additional context
-Add any other context about the problem here.
+## Screenshots / Logs
+
+If applicable, add screenshots or console logs.
+
+## Additional Context
+
+Any other context about the problem.

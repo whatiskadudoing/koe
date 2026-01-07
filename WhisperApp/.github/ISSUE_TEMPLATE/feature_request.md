@@ -1,19 +1,27 @@
 ---
-name: Feature request
-about: Suggest an idea for WhisperApp
-title: '[Feature] '
+name: Feature Request
+about: Suggest a new feature for Koe
+title: "[Feature] "
 labels: enhancement
-assignees: ''
+assignees: ""
 ---
 
 ## Problem
-A clear description of what problem this feature would solve.
+
+A clear description of the problem or limitation you're experiencing.
 
 ## Proposed Solution
-Describe the solution you'd like.
+
+Describe the feature or solution you'd like.
 
 ## Alternatives Considered
+
 Any alternative solutions or features you've considered.
 
+## Use Case
+
+How would you use this feature? What problem does it solve for you?
+
 ## Additional Context
-Add any other context, screenshots, or mockups about the feature request.
+
+Any other context, screenshots, or mockups.

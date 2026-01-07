@@ -1,166 +1,100 @@
-# Contributing to Whisper
+# Contributing to Koe
 
-First off, thank you for considering contributing to Whisper! It's people like you that make Whisper such a great tool.
+Thanks for your interest in contributing to Koe! This document outlines the process for contributing to this project.
 
-## Code of Conduct
+## Getting Started
 
-This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
-
-## How Can I Contribute?
-
-### Reporting Bugs
-
-Before creating bug reports, please check existing issues as you might find out that you don't need to create one. When you are creating a bug report, please include as many details as possible:
-
-- **Use a clear and descriptive title**
-- **Describe the exact steps to reproduce the problem**
-- **Provide specific examples** (code snippets, screenshots, etc.)
-- **Describe the behavior you observed and what you expected**
-- **Include your macOS version and Mac model**
-- **Include the Whisper model you were using**
-- **Attach logs from `/tmp/whisper_debug.log` if relevant**
-
-### Suggesting Features
-
-Feature suggestions are tracked as GitHub issues. When creating a feature request:
-
-- **Use a clear and descriptive title**
-- **Provide a detailed description of the suggested feature**
-- **Explain why this feature would be useful**
-- **List any alternatives you've considered**
-
-### Pull Requests
-
-1. Fork the repo and create your branch from `main`
-2. If you've added code that should be tested, add tests
-3. Ensure your code follows the existing style
-4. Make sure your code builds without warnings
-5. Write a clear PR description
+1. Fork the repository
+2. Clone your fork:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/koe.git
+   cd koe
+   ```
+3. Open `WhisperApp/WhisperApp.xcodeproj` in Xcode
 
 ## Development Setup
 
-### Prerequisites
+### Requirements
 
-- macOS 13.0 or later
-- Xcode 15.0 or later
-- Swift 5.9 or later
-
-### Getting Started
-
-```bash
-# Fork and clone the repository
-git clone https://github.com/whatiskadudoing/koe.git
-cd WhisperApp
-
-# Build the project
-swift build
-
-# Run in development mode
-.build/debug/WhisperApp
-```
-
-### Project Structure
-
-```
-WhisperApp/
-├── WhisperApp/           # Main source code
-│   ├── WhisperApp.swift  # App entry point & menu bar
-│   ├── AppState.swift    # Global app state
-│   ├── TranscriberService.swift  # Whisper transcription
-│   ├── RecordingService.swift    # Audio recording & VAD
-│   ├── HotkeyManager.swift       # Global hotkey handling
-│   ├── ContentView.swift         # Main UI
-│   ├── SettingsView.swift        # Settings UI
-│   └── RecordingOverlay.swift    # Recording overlay UI
-├── Package.swift         # Swift package manifest
-├── build-app.sh          # Build script
-├── create-dmg.sh         # DMG creation script
-├── install.sh            # User installation script
-└── release.sh            # Release automation
-```
+- macOS 14.0+ (Sonoma)
+- Xcode 15.0+
+- Apple Silicon Mac (M1/M2/M3/M4)
 
 ### Building
 
 ```bash
-# Debug build
-swift build
-
-# Release build
-swift build -c release
-
-# Build app bundle with model
-./build-app.sh tiny
-
-# Create DMG
-./create-dmg.sh tiny
+cd WhisperApp
+open WhisperApp.xcodeproj
 ```
 
-## Style Guidelines
+Build and run with `Cmd+R`.
 
-### Swift Style
+## Making Changes
 
-- Follow [Swift API Design Guidelines](https://swift.org/documentation/api-design-guidelines/)
-- Use meaningful variable and function names
-- Keep functions focused and small
-- Add comments for complex logic
-- Use `// MARK:` comments to organize code sections
+### Branch Naming
+
+- `feature/` - New features
+- `fix/` - Bug fixes
+- `docs/` - Documentation updates
+
+Example: `feature/add-custom-hotkey`
 
 ### Commit Messages
 
-- Use the present tense ("Add feature" not "Added feature")
-- Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
-- Limit the first line to 72 characters or less
-- Reference issues and pull requests when relevant
+Write clear, concise commit messages:
 
-Example:
 ```
-Add support for custom hotkey configuration
+Add custom hotkey configuration
 
-- Add HotkeySettings view for customization
-- Store hotkey preferences in UserDefaults
-- Update HotkeyManager to use custom keys
-
-Fixes #123
+- Add preferences UI for hotkey selection
+- Store hotkey in UserDefaults
+- Update global hotkey listener
 ```
 
-### Code Organization
+### Code Style
 
-- Group related functionality together
-- Use extensions to organize protocol conformances
-- Keep files focused on a single responsibility
-- Prefer composition over inheritance
+- Follow Swift conventions and SwiftUI best practices
+- Use meaningful variable and function names
+- Keep functions focused and small
+- Add comments for complex logic
 
-## Testing
+## Pull Requests
 
-### Manual Testing Checklist
+1. Create a feature branch from `main`
+2. Make your changes
+3. Test thoroughly on your machine
+4. Push to your fork
+5. Open a Pull Request
 
-Before submitting a PR, please test:
+### PR Checklist
 
-- [ ] App launches without errors
-- [ ] Menu bar icon appears and animates correctly
-- [ ] Option+Space starts/stops recording
-- [ ] Transcription works and text is typed
-- [ ] Model switching works
-- [ ] Settings are saved and restored
-- [ ] App works after restart
+- [ ] Code builds without warnings
+- [ ] Tested on Apple Silicon Mac
+- [ ] Updated README if needed
+- [ ] Added comments for complex code
 
-### Debug Logging
+## Reporting Issues
 
-Debug logs are written to `/tmp/whisper_debug.log`. Include relevant logs when reporting issues.
+When reporting bugs, please include:
 
-## Release Process
+- macOS version
+- Mac model (M1/M2/M3/M4)
+- Steps to reproduce
+- Expected vs actual behavior
+- Console logs if relevant
 
-1. Update version in `build-app.sh`, `create-dmg.sh`, `install.sh`, `release.sh`
-2. Update CHANGELOG.md
-3. Create a PR with version bump
-4. After merge, tag the release: `git tag v1.0.0`
-5. Push tags: `git push --tags`
-6. Run `./release.sh upload` to build and upload all variants
+## Feature Requests
+
+Open an issue with:
+
+- Clear description of the feature
+- Use case / why it's needed
+- Any implementation ideas
 
 ## Questions?
 
-Feel free to open a [Discussion](https://github.com/whatiskadudoing/koe/discussions) if you have questions or want to discuss ideas before implementing them.
+Open an issue with the `question` label.
 
-## Recognition
+---
 
-Contributors will be recognized in our README and release notes. Thank you for helping make Whisper better!
+Thank you for contributing to Koe!

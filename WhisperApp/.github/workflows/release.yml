@@ -1,10 +1,12 @@
-name: Build
+name: Release
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build-app:
@@ -20,7 +22,7 @@ jobs:
         with:
           xcode-version: "16.1"
 
-      - name: Build App (ARM64)
+      - name: Build App (Release)
         run: |
           cd WhisperApp
           swift build -c release
@@ -53,16 +55,19 @@ jobs:
           # Make executable
           chmod +x dist/Koe.app/Contents/MacOS/Koe
 
-          echo "App bundle created:"
-          ls -la dist/
-          ls -la dist/Koe.app/Contents/
+          # Create ZIP for release
+          cd dist
+          zip -r Koe-macos-arm64.zip Koe.app
+
+          echo "App bundle created and zipped"
+          ls -la
 
       - name: Upload App Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Koe-App-arm64
-          path: WhisperApp/dist/Koe.app
-          retention-days: 7
+          name: Koe-App
+          path: WhisperApp/dist/Koe-macos-arm64.zip
+          retention-days: 1
 
   build-installer:
     name: Build Installer
@@ -91,4 +96,45 @@ jobs:
         with:
           name: koe-installer
           path: WhisperApp/installer/koe-installer
-          retention-days: 7
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: [build-app, build-installer]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download App Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Koe-App
+          path: artifacts/app
+
+      - name: Download Installer
+        uses: actions/download-artifact@v4
+        with:
+          name: koe-installer
+          path: artifacts/installer
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/app/Koe-macos-arm64.zip
+            artifacts/installer/koe-installer
+          generate_release_notes: true
+          body: |
+            ## Koe 声 - Voice to Text
+
+            ### Install (Apple Silicon)
+
+            ```bash
+            curl -fsSL https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/koe-installer -o koe && chmod +x koe && ./koe
+            ```
+
+            Or download `Koe-macos-arm64.zip` and move to Applications.
+
+            ### Usage
+            Hold **⌥ Space** anywhere to transcribe.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
