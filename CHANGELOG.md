@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.7](https://github.com/whatiskadudoing/koe/compare/v1.4.6...v1.4.7) (2026-01-07)
+
+
+### Bug Fixes
+
+* sign app bundle with correct bundle identifier ([254faf5](https://github.com/whatiskadudoing/koe/commit/254faf53acce6a92eb22f1eedbdb639303c59be4)), closes [#15](https://github.com/whatiskadudoing/koe/issues/15)
+
 ## [1.4.6](https://github.com/whatiskadudoing/koe/compare/v1.4.5...v1.4.6) (2026-01-07)
 
 
