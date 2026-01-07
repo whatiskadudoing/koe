@@ -42,58 +42,14 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Build App
-        run: |
-          cd KoeApp
-          swift build -c release
-
-      - name: Create App Bundle
-        run: |
-          cd KoeApp
-
-          # Find the executable
-          EXECUTABLE=$(find .build -name "Koe" -type f -path "*release*" | grep -v dSYM | head -1)
-          echo "Found executable: $EXECUTABLE"
-
-          # Create .app bundle structure
-          mkdir -p dist/Koe.app/Contents/MacOS
-          mkdir -p dist/Koe.app/Contents/Resources
-
-          # Copy executable
-          cp "$EXECUTABLE" dist/Koe.app/Contents/MacOS/Koe
-
-          # Copy Info.plist
-          cp Koe/Info.plist dist/Koe.app/Contents/Info.plist
-
-          # Add CFBundleExecutable to Info.plist
-          /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Koe" dist/Koe.app/Contents/Info.plist 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Koe" dist/Koe.app/Contents/Info.plist
-
-          # Create PkgInfo
-          echo -n "APPL????" > dist/Koe.app/Contents/PkgInfo
-
-          # Make executable
-          chmod +x dist/Koe.app/Contents/MacOS/Koe
-
-          # Ad-hoc sign with correct bundle identifier, entitlements, and stable designated requirement
-          # The --requirements flag ensures TCC uses the identifier (not cdhash) for permission tracking
-          codesign --force --deep --sign - --identifier "com.koe.voice" --entitlements Koe.entitlements --requirements '=designated => identifier "com.koe.voice"' dist/Koe.app
-          echo "App signed with identifier: com.koe.voice"
-          codesign -dv dist/Koe.app 2>&1
-          codesign -d --entitlements :- dist/Koe.app 2>&1
-
-          # Create ZIP
-          cd dist
-          zip -r Koe-macos-arm64.zip Koe.app
+      - name: Build and Bundle App
+        uses: ./.github/actions/build-app
+        with:
+          sign-app: 'true'
+          create-zip: 'true'
 
       - name: Build Installer
-        run: |
-          cd installer
-          deno compile \
-            --target aarch64-apple-darwin \
-            --allow-read --allow-write --allow-net --allow-run --allow-env \
-            --output koe-installer \
-            mod.ts
+        uses: ./.github/actions/build-installer
 
       - name: Upload Release Assets
         env:

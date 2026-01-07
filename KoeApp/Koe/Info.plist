@@ -9,9 +9,11 @@
     <key>CFBundleIdentifier</key>
     <string>com.koe.voice</string>
     <key>CFBundleVersion</key>
-    <string>1.0</string>
+    <!-- x-release-please-version -->
+    <string>1.4.11</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <!-- x-release-please-version -->
+    <string>1.4.11</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>

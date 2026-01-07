@@ -72,6 +72,30 @@ Koe is just getting started. Here's what's coming:
 
 ---
 
+## Development
+
+```bash
+# Clone and setup
+git clone https://github.com/whatiskadudoing/koe.git
+cd koe
+make setup    # Install dev tools (swift-format, swiftlint, deno)
+
+# Build
+make build          # Debug build
+make build-release  # Release build
+make bundle         # Create signed .app
+
+# Code quality
+make format         # Format Swift code
+make lint           # Run SwiftLint
+make check          # Run all checks
+
+# See all commands
+make help
+```
+
+---
+
 ## Contributing
 
 Koe is open source because the best tools are built in the open.

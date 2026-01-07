@@ -1,0 +1,83 @@
+name: 'Build Koe App'
+description: 'Build and bundle Koe macOS application'
+inputs:
+  sign-app:
+    description: 'Whether to codesign the app bundle'
+    required: false
+    default: 'true'
+  create-zip:
+    description: 'Whether to create ZIP archive'
+    required: false
+    default: 'false'
+outputs:
+  app-path:
+    description: 'Path to the built app bundle'
+    value: ${{ steps.bundle.outputs.app-path }}
+  zip-path:
+    description: 'Path to the ZIP archive (if created)'
+    value: ${{ steps.zip.outputs.zip-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build App (Release)
+      shell: bash
+      run: |
+        cd KoeApp
+        swift build -c release
+
+    - name: Create App Bundle
+      id: bundle
+      shell: bash
+      run: |
+        cd KoeApp
+
+        # Find the executable
+        EXECUTABLE=$(find .build -name "Koe" -type f -path "*release*" | grep -v dSYM | head -1)
+        echo "Found executable: $EXECUTABLE"
+
+        # Create .app bundle structure
+        mkdir -p dist/Koe.app/Contents/MacOS
+        mkdir -p dist/Koe.app/Contents/Resources
+
+        # Copy executable
+        cp "$EXECUTABLE" dist/Koe.app/Contents/MacOS/Koe
+
+        # Copy Info.plist
+        cp Koe/Info.plist dist/Koe.app/Contents/Info.plist
+
+        # Add CFBundleExecutable to Info.plist
+        /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Koe" dist/Koe.app/Contents/Info.plist 2>/dev/null || \
+        /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Koe" dist/Koe.app/Contents/Info.plist
+
+        # Create PkgInfo
+        echo -n "APPL????" > dist/Koe.app/Contents/PkgInfo
+
+        # Make executable
+        chmod +x dist/Koe.app/Contents/MacOS/Koe
+
+        echo "app-path=KoeApp/dist/Koe.app" >> $GITHUB_OUTPUT
+
+    - name: Sign App Bundle
+      if: ${{ inputs.sign-app == 'true' }}
+      shell: bash
+      run: |
+        cd KoeApp
+        codesign --force --deep --sign - --identifier "com.koe.voice" --entitlements Koe.entitlements \
+          --requirements '=designated => identifier "com.koe.voice"' dist/Koe.app
+        echo "App signed with identifier: com.koe.voice"
+        codesign -dv dist/Koe.app 2>&1
+        codesign -d --entitlements :- dist/Koe.app 2>&1
+
+        echo "App bundle created:"
+        ls -la dist/
+        ls -la dist/Koe.app/Contents/
+
+    - name: Create ZIP Archive
+      id: zip
+      if: ${{ inputs.create-zip == 'true' }}
+      shell: bash
+      run: |
+        cd KoeApp/dist
+        zip -r Koe-macos-arm64.zip Koe.app
+        echo "zip-path=KoeApp/dist/Koe-macos-arm64.zip" >> $GITHUB_OUTPUT
