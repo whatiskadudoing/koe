@@ -57,10 +57,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Language selection submenu
         let languageMenu = NSMenu()
         let languages = [
-            ("en", "English"),
-            ("es", "Español"),
-            ("pt", "Português"),
-            ("auto", "Auto-detect")
+            ("en", "🇺🇸 English"),
+            ("es", "🇪🇸 Español"),
+            ("pt", "🇧🇷 Português"),
+            ("auto", "🌐 Auto-detect")
         ]
 
         for (code, name) in languages {
@@ -76,8 +76,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // Language support info
-        let infoItem = NSMenuItem(title: "✨ Multilingual model - speak any language!", action: nil, keyEquivalent: "")
+        // Model selection submenu
+        let modelMenu = NSMenu()
+        let models = [
+            ("tiny", "Tiny - Fastest"),
+            ("base", "Base - Fast"),
+            ("small", "Small - Balanced"),
+            ("medium", "Medium - Accurate"),
+            ("large-v3", "Large - Best")
+        ]
+
+        for (id, name) in models {
+            let item = NSMenuItem(title: name, action: #selector(selectModel(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = id
+            modelMenu.addItem(item)
+        }
+
+        let modelMenuItem = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
+        modelMenuItem.submenu = modelMenu
+        menu.addItem(modelMenuItem)
+
+        // Info about multilingual support
+        let infoItem = NSMenuItem(title: "✨ All models support all languages", action: nil, keyEquivalent: "")
         infoItem.isEnabled = false
         menu.addItem(infoItem)
 
@@ -162,6 +183,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             AppState.shared.selectedLanguage = langCode
         }
+    }
+
+    @objc func selectModel(_ sender: NSMenuItem) {
+        guard let modelId = sender.representedObject as? String else { return }
+        Task { @MainActor in
+            AppState.shared.selectedModel = modelId
+        }
+        NotificationCenter.default.post(name: .reloadModel, object: modelId)
     }
 
     @objc func openSettings() {
