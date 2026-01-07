@@ -53,15 +53,11 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
     }
 
     private func insertWithClipboard(_ text: String) async throws {
-        let success = await withCheckedContinuation { continuation in
+        await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInteractive).async {
-                let result = Self.typeWithClipboardSync(text)
-                continuation.resume(returning: result)
+                Self.typeWithClipboardSync(text)
+                continuation.resume()
             }
-        }
-
-        if !success {
-            throw TextInsertionError.clipboardPasteFailed
         }
     }
 
@@ -96,93 +92,33 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
         return true
     }
 
-    private static func typeWithClipboardSync(_ text: String) -> Bool {
+    private static func typeWithClipboardSync(_ text: String) {
         let pasteboard = NSPasteboard.general
         let oldContents = pasteboard.string(forType: .string)
 
-        // For very large text, split into chunks to avoid overwhelming the target app
-        let chunkSize = 4000
-        let chunks: [String]
+        // Set new text to clipboard
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
 
-        if text.count > chunkSize {
-            chunks = text.chunked(into: chunkSize)
-        } else {
-            chunks = [text]
-        }
+        // Use AppleScript to paste - more reliable than CGEvents
+        let script = """
+        tell application "System Events"
+            keystroke "v" using command down
+        end tell
+        """
 
-        var success = true
-
-        for (index, chunk) in chunks.enumerated() {
-            // Set chunk to clipboard
-            pasteboard.clearContents()
-            let setResult = pasteboard.setString(chunk, forType: .string)
-
-            if !setResult {
-                success = false
-                break
-            }
-
-            // Small delay to ensure clipboard is ready
-            Thread.sleep(forTimeInterval: 0.05)
-
-            // Use AppleScript to paste - more reliable than CGEvents
-            let script = """
-            tell application "System Events"
-                keystroke "v" using command down
-            end tell
-            """
-
-            guard let appleScript = NSAppleScript(source: script) else {
-                success = false
-                break
-            }
-
+        if let appleScript = NSAppleScript(source: script) {
             var error: NSDictionary?
             appleScript.executeAndReturnError(&error)
-
-            if error != nil {
-                success = false
-                break
-            }
-
-            // Wait for paste to complete - scale with chunk size
-            // Base 200ms + 100ms per 1000 characters
-            let baseDelay = 0.2
-            let additionalDelay = Double(chunk.count) / 1000.0 * 0.1
-            let totalDelay = baseDelay + additionalDelay
-
-            Thread.sleep(forTimeInterval: totalDelay)
-
-            // Add extra delay between chunks
-            if index < chunks.count - 1 {
-                Thread.sleep(forTimeInterval: 0.2)
-            }
         }
 
-        // Restore old clipboard after a delay (only if there was old content)
+        Thread.sleep(forTimeInterval: 0.2)
+
+        // Restore old clipboard after a delay
         if let old = oldContents {
             Thread.sleep(forTimeInterval: 0.5)
             pasteboard.clearContents()
             pasteboard.setString(old, forType: .string)
         }
-
-        return success
-    }
-}
-
-// MARK: - String Extension for Chunking
-
-private extension String {
-    func chunked(into size: Int) -> [String] {
-        var chunks: [String] = []
-        var currentIndex = startIndex
-
-        while currentIndex < endIndex {
-            let endIndex = index(currentIndex, offsetBy: size, limitedBy: endIndex) ?? endIndex
-            chunks.append(String(self[currentIndex..<endIndex]))
-            currentIndex = endIndex
-        }
-
-        return chunks
     }
 }
