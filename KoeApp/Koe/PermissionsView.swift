@@ -160,16 +160,14 @@ struct PermissionsView: View {
     private func requestAccessibilityPermission() {
         isRequestingPermission = true
 
-        // Request accessibility permission (shows prompt)
-        let textInserter = TextInsertionServiceImpl()
-        textInserter.requestPermission()
+        // Just open System Settings - user can toggle Koe in the list
+        // No need to call requestPermission() which shows an extra dialog
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
 
-        // Open System Settings
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             isRequestingPermission = false
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                NSWorkspace.shared.open(url)
-            }
         }
     }
 
