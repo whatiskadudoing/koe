@@ -14,8 +14,8 @@
 
 set -e
 
-APP_NAME="Whisper"
-BUNDLE_ID="com.whisperapp.Whisper"
+APP_NAME="Koe"
+BUNDLE_ID="com.koe.app"
 VERSION="1.0.0"
 MODEL_VARIANT="${1:-none}"  # Default to no bundled model
 
@@ -194,9 +194,11 @@ cat > "${CONTENTS_DIR}/Info.plist" << EOF
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Whisper needs microphone access to transcribe your voice.</string>
+    <string>Koe needs microphone access to transcribe your voice.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Whisper needs accessibility access to type transcribed text.</string>
+    <string>Koe needs to send keystrokes to type transcribed text.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Koe needs accessibility access to type transcribed text into other applications.</string>
     <key>WhisperDefaultModel</key>
     <string>${DEFAULT_MODEL}</string>
     <key>WhisperBundledModels</key>
