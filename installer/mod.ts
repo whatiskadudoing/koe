@@ -234,6 +234,20 @@ async function openApp(): Promise<void> {
   await open.output();
 }
 
+async function resetTCCPermissions(): Promise<void> {
+  // Reset TCC accessibility permission for the bundle identifier
+  // This clears any stale entries from previous ad-hoc signed builds
+  // which can cause TCC to get confused and not recognize the permission
+  const tccutil = new Deno.Command("tccutil", {
+    args: ["reset", "Accessibility", "com.koe.voice"],
+    stdout: "null",
+    stderr: "null",
+  });
+  await tccutil.output();
+  // Note: We don't check success because tccutil may return non-zero
+  // even when it successfully reset (e.g., if no entry existed)
+}
+
 // =============================================================================
 // MODEL SELECTION
 // =============================================================================
@@ -315,6 +329,14 @@ async function main(): Promise<void> {
       console.log(c.error("\n  Failed to download. Please try again.\n"));
       Deno.exit(1);
     }
+
+    // Reset TCC permissions to clear stale entries from previous installs
+    await animatedStep(
+      "Clearing permission cache...",
+      async () => {
+        await resetTCCPermissions();
+      },
+    );
 
     // Install app
     const installSuccess = await animatedStep(
