@@ -30,18 +30,31 @@ That's it. Open Koe from `/Applications` and start dictating with `Cmd+Shift+Spa
 
 ## Installation
 
-### One-liner (recommended)
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/whatiskadudoing/koe/main/install.sh | bash
 ```
 
-### Manual Download
+Or choose a specific model:
 
-1. Download `Koe.zip` from [Releases](https://github.com/whatiskadudoing/koe/releases/latest)
-2. Unzip and move `Koe.app` to `/Applications`
-3. Right-click → Open (first time only, to bypass Gatekeeper)
-4. Grant Microphone & Accessibility permissions when prompted
+```bash
+# Fast & lightweight (~67MB)
+curl -fsSL https://raw.githubusercontent.com/whatiskadudoing/koe/main/install.sh | bash -s -- tiny
+
+# Better accuracy (~128MB)
+curl -fsSL https://raw.githubusercontent.com/whatiskadudoing/koe/main/install.sh | bash -s -- base
+```
+
+### Available Models
+
+| Model | Size | Speed | Accuracy | Best For |
+|-------|------|-------|----------|----------|
+| `tiny` | ~67MB | Fastest | Good | Quick notes, commands |
+| `base` | ~128MB | Fast | Better | General dictation |
+| `small` | ~500MB | Medium | Great | Detailed transcription |
+| `medium` | ~1.5GB | Slower | Excellent | Professional use |
+| `large` | ~3GB | Slowest | Best | Maximum accuracy |
+
+You can download additional models later in Settings.
 
 ## Usage
 
