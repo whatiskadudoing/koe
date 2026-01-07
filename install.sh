@@ -3,9 +3,9 @@
 set -e
 
 REPO="whatiskadudoing/koe"
-TMP=$(mktemp)
-trap "rm -f $TMP" EXIT
+TMP=$(mktemp -d)
+trap "rm -rf $TMP" EXIT
 
-curl -fsSL "https://github.com/$REPO/releases/latest/download/koe-installer" -o "$TMP"
-chmod +x "$TMP"
-"$TMP" </dev/tty
+curl -fsSL "https://github.com/$REPO/releases/latest/download/koe-installer" -o "$TMP/koe-installer"
+chmod +x "$TMP/koe-installer"
+exec "$TMP/koe-installer"
