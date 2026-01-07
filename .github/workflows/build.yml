@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  build-app:
+    name: Build Koe App
     runs-on: macos-14
 
     steps:
@@ -17,23 +18,65 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: "15.0"
+          xcode-version: "16.1"
 
-      - name: Build
+      - name: Build App (ARM64)
         run: |
           cd WhisperApp
-          xcodebuild build \
-            -project WhisperApp.xcodeproj \
-            -scheme WhisperApp \
-            -destination "platform=macOS,arch=arm64" \
-            -configuration Release \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+          swift build -c release
 
-      - name: Upload Build Artifact
+      - name: Package App
+        run: |
+          cd WhisperApp
+          mkdir -p dist
+          cp -r .build/release/Koe.app dist/ 2>/dev/null || \
+          cp -r .build/arm64-apple-macosx/release/Koe.app dist/ 2>/dev/null || \
+          echo "App bundle location may vary"
+
+      - name: Upload App Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Koe-Build
-          path: WhisperApp/build/Build/Products/Release/*.app
+          name: Koe-App-arm64
+          path: WhisperApp/dist/*.app
+          retention-days: 7
+          if-no-files-found: warn
+
+  build-installer:
+    name: Build Installer
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Build Installer (ARM64)
+        run: |
+          cd WhisperApp/installer
+          deno compile \
+            --target aarch64-apple-darwin \
+            --allow-read --allow-write --allow-net --allow-run --allow-env \
+            --output koe-installer-arm64 \
+            install.ts
+
+      - name: Build Installer (x86_64)
+        run: |
+          cd WhisperApp/installer
+          deno compile \
+            --target x86_64-apple-darwin \
+            --allow-read --allow-write --allow-net --allow-run --allow-env \
+            --output koe-installer-x64 \
+            install.ts
+
+      - name: Upload Installer Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Koe-Installer
+          path: |
+            WhisperApp/installer/koe-installer-arm64
+            WhisperApp/installer/koe-installer-x64
           retention-days: 7

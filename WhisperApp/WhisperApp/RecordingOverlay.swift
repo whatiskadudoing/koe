@@ -1,8 +1,10 @@
 import SwiftUI
 import AppKit
+import KoeDomain
 
 // MARK: - Overlay Window Controller
 
+@MainActor
 class RecordingOverlayController {
     static let shared = RecordingOverlayController()
 
@@ -12,15 +14,13 @@ class RecordingOverlayController {
     private init() {}
 
     func show() {
-        DispatchQueue.main.async {
-            if self.window == nil {
-                self.createWindow()
-            } else {
-                // Reposition to current focused screen
-                self.repositionWindow()
-            }
-            self.window?.orderFront(nil)
+        if self.window == nil {
+            self.createWindow()
+        } else {
+            // Reposition to current focused screen
+            self.repositionWindow()
         }
+        self.window?.orderFront(nil)
     }
 
     private func repositionWindow() {
@@ -41,21 +41,17 @@ class RecordingOverlayController {
     }
 
     func hide() {
-        DispatchQueue.main.async {
-            self.window?.orderOut(nil)
-        }
+        self.window?.orderOut(nil)
     }
 
     func updateFromService(audioLevel: Float, state: RecordingState) {
-        DispatchQueue.main.async {
-            RecordingOverlayViewModel.shared.audioLevel = audioLevel
-            RecordingOverlayViewModel.shared.state = state
+        RecordingOverlayViewModel.shared.audioLevel = audioLevel
+        RecordingOverlayViewModel.shared.state = state
 
-            if state == .recording || state == .processing {
-                self.show()
-            } else {
-                self.hide()
-            }
+        if state == .recording || state == .processing {
+            self.show()
+        } else {
+            self.hide()
         }
     }
 
@@ -96,6 +92,7 @@ class RecordingOverlayController {
 
 // MARK: - View Model
 
+@MainActor
 class RecordingOverlayViewModel: ObservableObject {
     static let shared = RecordingOverlayViewModel()
 

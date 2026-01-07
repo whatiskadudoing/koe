@@ -2,21 +2,40 @@
 import PackageDescription
 
 let package = Package(
-    name: "WhisperApp",
+    name: "Koe",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "WhisperApp", targets: ["WhisperApp"])
+        .executable(name: "Koe", targets: ["Koe"])
     ],
     dependencies: [
-        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.9.0"),
-        .package(url: "https://github.com/soffes/HotKey.git", from: "0.2.0")
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0"),
+        .package(url: "https://github.com/soffes/HotKey.git", from: "0.2.1"),
+        .package(path: "../Packages/KoeDomain"),
+        .package(path: "../Packages/KoeCore"),
+        .package(path: "../Packages/KoeAudio"),
+        .package(path: "../Packages/KoeTranscription"),
+        .package(path: "../Packages/KoeHotkey"),
+        .package(path: "../Packages/KoeTextInsertion"),
+        .package(path: "../Packages/KoeStorage"),
+        .package(path: "../Packages/KoeUI")
     ],
     targets: [
         .executableTarget(
-            name: "WhisperApp",
-            dependencies: ["WhisperKit", "HotKey"],
+            name: "Koe",
+            dependencies: [
+                "WhisperKit",
+                "HotKey",
+                "KoeDomain",
+                "KoeCore",
+                "KoeAudio",
+                "KoeTranscription",
+                "KoeHotkey",
+                "KoeTextInsertion",
+                "KoeStorage",
+                "KoeUI"
+            ],
             path: "WhisperApp"
         )
     ]

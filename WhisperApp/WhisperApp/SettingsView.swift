@@ -1,38 +1,20 @@
 import SwiftUI
+import KoeDomain
 
 struct SettingsView: View {
-    @EnvironmentObject var appState: AppState
+    @Environment(AppState.self) private var appState
     @State private var isLoadingModel = false
-
-    private let models = [
-        ("tiny", "Tiny (39 MB) - Fastest"),
-        ("base", "Base (74 MB) - Fast"),
-        ("small", "Small (244 MB) - Balanced"),
-        ("medium", "Medium (769 MB) - Accurate"),
-        ("large-v3", "Large V3 (1.5 GB) - Best Quality")
-    ]
-
-    private let languages = [
-        ("auto", "Auto-detect (Recommended)"),
-        ("en", "English"),
-        ("es", "Spanish"),
-        ("pt", "Portuguese"),
-        ("fr", "French"),
-        ("de", "German"),
-        ("it", "Italian"),
-        ("ja", "Japanese"),
-        ("ko", "Korean"),
-        ("zh", "Chinese")
-    ]
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
 
     var body: some View {
+        @Bindable var appState = appState
+
         Form {
             Section("Transcription") {
                 Picker("Model", selection: $appState.selectedModel) {
-                    ForEach(models, id: \.0) { model in
-                        Text(model.1).tag(model.0)
+                    ForEach(KoeModel.allCases, id: \.rawValue) { model in
+                        Text(model.displayName).tag(model.rawValue)
                     }
                 }
                 .pickerStyle(.menu)
@@ -51,8 +33,8 @@ struct SettingsView: View {
                 }
 
                 Picker("Language", selection: $appState.selectedLanguage) {
-                    ForEach(languages, id: \.0) { lang in
-                        Text(lang.1).tag(lang.0)
+                    ForEach(Language.all, id: \.code) { lang in
+                        Text("\(lang.flag) \(lang.name)").tag(lang.code)
                     }
                 }
                 .pickerStyle(.menu)
@@ -70,7 +52,7 @@ struct SettingsView: View {
             }
 
             Section("About") {
-                Text("Whisper Voice-to-Text")
+                Text("Koe 声 - Voice to Text")
                     .font(.headline)
                 Text("Powered by WhisperKit")
                     .font(.caption)
@@ -101,4 +83,3 @@ struct SettingsView: View {
 extension Notification.Name {
     static let reloadModel = Notification.Name("reloadModel")
 }
-

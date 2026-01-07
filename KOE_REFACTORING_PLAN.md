@@ -4,6 +4,35 @@
 
 ---
 
+## Progress Summary
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 1. Domain Layer (KoeDomain) | ✅ Complete | Protocols, models, errors |
+| 2. @Observable Migration | ✅ Complete | AppState, views updated |
+| 3. Service Extraction | ✅ Complete | All service packages created |
+| 4. Storage Layer (KoeStorage) | ✅ Complete | UserDefaultsTranscriptionRepository |
+| 5. UI Components (KoeUI) | ✅ Complete | Colors, WaveformView, KeyCap |
+| 6. MenuBarExtra | ⏸️ Deferred | Complex rewrite needed |
+| 7. Testing | ⏸️ Deferred | Requires Xcode |
+| 8. Naming (Whisper → Koe) | ✅ Complete | Info.plist, paths, messages updated |
+
+### Created Packages
+
+```
+Packages/
+├── KoeDomain/          # Protocols, models, errors
+├── KoeCore/            # Logger, extensions
+├── KoeAudio/           # AVAudioEngineRecorder, VAD, AudioLevelMonitor
+├── KoeTranscription/   # WhisperKitTranscriber
+├── KoeHotkey/          # KoeHotkeyManager
+├── KoeTextInsertion/   # Text insertion service
+├── KoeStorage/         # Transcription storage
+└── KoeUI/              # Design system, components
+```
+
+---
+
 ## Table of Contents
 
 1. [Current State Analysis](#1-current-state-analysis)
