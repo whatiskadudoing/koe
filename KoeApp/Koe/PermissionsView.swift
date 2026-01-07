@@ -64,12 +64,11 @@ struct PermissionsView: View {
                     Spacer()
                 }
 
-                // Bottom buttons - fixed at bottom
+                // Bottom button - fixed at bottom
                 VStack(spacing: 12) {
-                    if !hasUserAgreed {
-                        // Primary: Agree & Continue button
+                    if !appState.hasAllPermissions {
                         Button(action: agreeAndRequestPermissions) {
-                            Text("Agree & Continue")
+                            Text("Agree & Permit")
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -79,27 +78,6 @@ struct PermissionsView: View {
                         }
                         .buttonStyle(.plain)
                         .transition(.scale.combined(with: .opacity))
-                    } else {
-                        // Secondary: Try Again button (shown after agreeing)
-                        if !appState.hasAllPermissions {
-                            Button(action: {
-                                appState.checkAllPermissions()
-                            }) {
-                                Text("Try Again")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(accentColor)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(Color.white)
-                                    .cornerRadius(10)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(accentColor.opacity(0.2), lineWidth: 1)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .transition(.scale.combined(with: .opacity))
-                        }
                     }
                 }
                 .padding(.horizontal, 40)
