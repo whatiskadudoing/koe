@@ -108,6 +108,7 @@ struct WelcomeView: View {
     @State private var animationPhase: CGFloat = 0
     @State private var contentOpacity: Double = 0
     @State private var contentScale: Double = 0.95
+    @State private var contentOffset: CGFloat = 20
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
 
@@ -117,31 +118,37 @@ struct WelcomeView: View {
             Color(nsColor: NSColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0))
                 .ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: 28) {
+                Spacer()
+
                 // Animated waveform logo
                 LogoWaveform(phase: animationPhase)
                     .frame(width: 120, height: 60)
 
                 // App name with Japanese character
-                VStack(spacing: 8) {
+                VStack(spacing: 12) {
                     Text("声")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundColor(accentColor.opacity(0.6))
+                        .font(.system(size: 40, weight: .thin))
+                        .foregroundColor(accentColor.opacity(0.7))
 
                     Text("koe")
-                        .font(.system(size: 28, weight: .light, design: .rounded))
+                        .font(.system(size: 32, weight: .light, design: .rounded))
                         .foregroundColor(accentColor)
-                        .tracking(4)
+                        .tracking(6)
                 }
+
+                Spacer()
             }
             .opacity(contentOpacity)
             .scaleEffect(contentScale)
+            .offset(y: contentOffset)
         }
         .onAppear {
-            // Fade in content
-            withAnimation(.easeOut(duration: 0.6)) {
+            // Fade in content with slight scale
+            withAnimation(.easeOut(duration: 0.7)) {
                 contentOpacity = 1
                 contentScale = 1
+                contentOffset = 0
             }
 
             // Start continuous waveform animation
@@ -151,7 +158,7 @@ struct WelcomeView: View {
 
             // Advance to next state after 2.5 seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                withAnimation(.easeOut(duration: 0.5)) {
+                withAnimation(.easeOut(duration: 0.6)) {
                     appState.advanceReadinessState()
                 }
             }

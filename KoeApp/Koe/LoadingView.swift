@@ -5,6 +5,7 @@ struct LoadingView: View {
     @Environment(AppState.self) private var appState
     @State private var animationPhase: CGFloat = 0
     @State private var contentOpacity: Double = 0
+    @State private var contentOffset: CGFloat = 20
     @State private var checkTimer: Timer?
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
@@ -16,36 +17,54 @@ struct LoadingView: View {
             Color(nsColor: NSColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0))
                 .ignoresSafeArea()
 
-            VStack(spacing: 32) {
+            VStack(spacing: 0) {
                 Spacer()
 
                 // Animated blue waveform
                 LoadingWaveform(phase: animationPhase)
                     .frame(width: 140, height: 70)
 
+                Spacer()
+                    .frame(height: 36)
+
                 // Loading text
-                VStack(spacing: 12) {
+                VStack(spacing: 8) {
                     Text("Loading models...")
                         .font(.system(size: 16, weight: .light, design: .rounded))
                         .foregroundColor(accentColor)
+                        .tracking(0.2)
 
-                    // Show progress percentage if downloading
+                    // Subtle divider line
+                    Rectangle()
+                        .fill(accentColor.opacity(0.15))
+                        .frame(height: 1)
+                        .frame(width: 40)
+
+                    // Show progress percentage or status
                     if appState.modelLoadingProgress > 0 && appState.modelLoadingProgress < 1 {
                         Text("\(Int(appState.modelLoadingProgress * 100))%")
-                            .font(.system(size: 12, weight: .regular, design: .default))
+                            .font(.system(size: 11, weight: .regular, design: .rounded))
                             .foregroundColor(lightGray)
                             .monospacedDigit()
+                            .tracking(0.1)
+                    } else {
+                        Text("Preparing...")
+                            .font(.system(size: 11, weight: .regular, design: .rounded))
+                            .foregroundColor(lightGray.opacity(0.7))
+                            .tracking(0.1)
                     }
                 }
 
                 Spacer()
             }
             .opacity(contentOpacity)
+            .offset(y: contentOffset)
         }
         .onAppear {
-            // Fade in content
-            withAnimation(.easeOut(duration: 0.4)) {
+            // Fade in content with animation
+            withAnimation(.easeOut(duration: 0.5)) {
                 contentOpacity = 1
+                contentOffset = 0
             }
 
             // Start continuous waveform animation
