@@ -84,13 +84,14 @@ async function step(msg: string, ms: number): Promise<void> {
   const start = Date.now();
   const spin = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
   let i = 0;
+  const clearLine = "\x1b[2K\x1b[G"; // Clear line + move cursor to start
 
   while (Date.now() - start < ms) {
-    write(`\r  ${c.accent(spin[i % 10])} ${msg}  ${bar((Date.now() - start) / ms)}`);
+    write(`${clearLine}  ${c.accent(spin[i % 10])} ${msg}  ${bar((Date.now() - start) / ms)}`);
     i++;
     await new Promise(r => setTimeout(r, 80));
   }
-  write(`\r  ${c.success("✓")} ${msg}${" ".repeat(35)}\n`);
+  write(`${clearLine}  ${c.success("✓")} ${msg}\n`);
 }
 
 // ============================================================================
