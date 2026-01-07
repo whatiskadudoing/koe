@@ -53,8 +53,9 @@ jobs:
           # Make executable
           chmod +x dist/Koe.app/Contents/MacOS/Koe
 
-          # Ad-hoc sign with correct bundle identifier and entitlements
-          codesign --force --deep --sign - --identifier "com.koe.voice" --entitlements Koe.entitlements dist/Koe.app
+          # Ad-hoc sign with correct bundle identifier, entitlements, and stable designated requirement
+          # The --requirements flag ensures TCC uses the identifier (not cdhash) for permission tracking
+          codesign --force --deep --sign - --identifier "com.koe.voice" --entitlements Koe.entitlements --requirements '=designated => identifier "com.koe.voice"' dist/Koe.app
           echo "App signed with identifier: com.koe.voice"
           codesign -dv dist/Koe.app 2>&1
           codesign -d --entitlements :- dist/Koe.app 2>&1
