@@ -291,6 +291,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarAnimationTimer = nil
     }
 
+    private func getLanguageFlag() -> String {
+        // Get language on main thread safely
+        let lang = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto"
+        switch lang {
+        case "en": return "🇺🇸"
+        case "es": return "🇪🇸"
+        case "pt": return "🇧🇷"
+        default: return "🌐"  // Auto-detect
+        }
+    }
+
     private func updateAnimatedIcon() {
         guard let button = statusItem?.button else { return }
 
@@ -331,22 +342,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             speed = 3.0  // Active
         }
 
-        button.image = createWaveformImage(color: color, audioLevel: audioLevel, time: time, speed: speed, percentText: percentText)
+        let flag = getLanguageFlag()
+        button.image = createWaveformImage(color: color, audioLevel: audioLevel, time: time, speed: speed, percentText: percentText, flag: flag)
     }
 
-    private func createWaveformImage(color: NSColor, audioLevel: Float, time: Double, speed: Double, percentText: String? = nil) -> NSImage {
-        // Wider image if showing percentage
-        let width: CGFloat = percentText != nil ? 50 : 22
+    private func createWaveformImage(color: NSColor, audioLevel: Float, time: Double, speed: Double, percentText: String? = nil, flag: String = "🌐") -> NSImage {
+        // Base width for waveform + flag
+        let flagWidth: CGFloat = 14
+        let waveformWidth: CGFloat = 22
+        var width: CGFloat = flagWidth + waveformWidth
+
+        // Extra width if showing percentage
+        if percentText != nil {
+            width += 28
+        }
+
         let size = NSSize(width: width, height: 18)
 
         let image = NSImage(size: size, flipped: false) { rect in
+            // Draw flag on the left
+            let flagAttributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11)
+            ]
+            let flagSize = flag.size(withAttributes: flagAttributes)
+            let flagY = (rect.height - flagSize.height) / 2
+            flag.draw(at: NSPoint(x: 0, y: flagY), withAttributes: flagAttributes)
+
+            // Waveform starts after flag
             let barCount = 5
             let barWidth: CGFloat = 2.5
             let spacing: CGFloat = 1.5
             let totalWidth = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * spacing
-
-            // If showing percent, waveform is on the left
-            let waveformStartX: CGFloat = percentText != nil ? 2 : (rect.width - totalWidth) / 2
+            let waveformStartX: CGFloat = flagWidth + 2
 
             color.setFill()
 
