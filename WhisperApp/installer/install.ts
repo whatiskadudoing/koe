@@ -94,11 +94,10 @@ async function step(msg: string, ms: number): Promise<void> {
 // ============================================================================
 
 async function main(): Promise<void> {
-  try {
-    await intro();
+  await intro();
 
-    console.clear();
-    console.log(`
+  console.clear();
+  console.log(`
 
 
 
@@ -108,7 +107,9 @@ async function main(): Promise<void> {
              ${c.dim("Voice to Text")}
 `);
 
-    const model = await Select.prompt({
+  let model: string;
+  try {
+    model = await Select.prompt({
       message: "Select model",
       options: [
         { value: "small", name: `Small   ${c.dim("466 MB")}  Recommended` },
@@ -116,13 +117,17 @@ async function main(): Promise<void> {
         { value: "large", name: `Large   ${c.dim("2.9 GB")}  Best quality` },
       ],
     });
+  } catch {
+    console.log(c.dim("\n  Cancelled.\n"));
+    Deno.exit(0);
+  }
 
-    console.log();
-    await step("Installing Koe...", 1500);
-    await step(`Downloading ${model} model...`, 2500);
-    await step("Setting up hotkey...", 600);
+  console.log();
+  await step("Installing Koe...", 1500);
+  await step(`Downloading ${model} model...`, 2500);
+  await step("Setting up hotkey...", 600);
 
-    console.log(`
+  console.log(`
   ${c.success("━".repeat(45))}
 
   ${c.white("Ready!")} Hold ${colors.bold("⌥ Space")} anywhere to transcribe.
@@ -131,12 +136,7 @@ async function main(): Promise<void> {
 
   ${c.success("━".repeat(45))}
 `);
-    Deno.exit(0);
-
-  } catch {
-    console.log(c.dim("\n  Cancelled.\n"));
-    Deno.exit(0);
-  }
+  Deno.exit(0);
 }
 
 main();
