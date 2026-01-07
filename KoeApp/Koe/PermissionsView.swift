@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import ApplicationServices
+import KoeTextInsertion
 
 struct PermissionsView: View {
     @Environment(AppState.self) private var appState
@@ -46,7 +47,7 @@ struct PermissionsView: View {
                 .padding(.horizontal, 40)
 
                 // Open System Settings button
-                Button(action: openSystemSettings) {
+                Button(action: requestPermissions) {
                     Text("Open System Settings")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white)
@@ -70,6 +71,9 @@ struct PermissionsView: View {
     }
 
     private func startPermissionPolling() {
+        // Request permissions immediately
+        requestPermissions()
+
         // Check immediately
         appState.checkAllPermissions()
 
@@ -92,8 +96,13 @@ struct PermissionsView: View {
         checkTimer = nil
     }
 
-    private func openSystemSettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy")!)
+    private func requestPermissions() {
+        // Request microphone permission
+        AVCaptureDevice.requestAccess(for: .audio) { _ in }
+
+        // Request accessibility permission
+        let textInserter = TextInsertionServiceImpl()
+        textInserter.requestPermission()
     }
 }
 
