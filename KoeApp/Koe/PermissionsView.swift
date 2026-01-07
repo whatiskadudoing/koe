@@ -13,6 +13,7 @@ enum PermissionStep {
 struct PermissionsView: View {
     @Environment(AppState.self) private var appState
     @State private var checkTimer: Timer?
+    @State private var notificationObserver: NSObjectProtocol?
     @State private var currentStep: PermissionStep = .microphone
     @State private var contentOpacity = 0.0
     @State private var contentOffset: CGFloat = 20
@@ -174,13 +175,16 @@ struct PermissionsView: View {
     private func startPermissionPolling() {
         // Register for distributed notification when accessibility permissions change
         // This notification fires when ANY app's accessibility permission changes
-        DistributedNotificationCenter.default().addObserver(
+        // Store the observer token so we can remove it later
+        notificationObserver = DistributedNotificationCenter.default().addObserver(
             forName: NSNotification.Name("com.apple.accessibility.api"),
             object: nil,
             queue: .main
-        ) { [weak appState] _ in
+        ) { _ in
             // When notification fires, AXIsProcessTrusted() cache is refreshed
-            appState?.checkAllPermissions()
+            Task { @MainActor in
+                AppState.shared.checkAllPermissions()
+            }
         }
 
         // Also poll with timer as backup (for microphone and edge cases)
@@ -207,12 +211,11 @@ struct PermissionsView: View {
     private func stopPermissionPolling() {
         checkTimer?.invalidate()
         checkTimer = nil
-        // Remove distributed notification observer
-        DistributedNotificationCenter.default().removeObserver(
-            self,
-            name: NSNotification.Name("com.apple.accessibility.api"),
-            object: nil
-        )
+        // Remove distributed notification observer using the stored token
+        if let observer = notificationObserver {
+            DistributedNotificationCenter.default().removeObserver(observer)
+            notificationObserver = nil
+        }
     }
 }
 
