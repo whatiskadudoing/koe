@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.6](https://github.com/whatiskadudoing/koe/compare/v1.4.5...v1.4.6) (2026-01-07)
+
+
+### Bug Fixes
+
+* refresh permissions when app gains focus ([609a3a6](https://github.com/whatiskadudoing/koe/commit/609a3a64930c0b6fcf57e6894e7a4c56d529466d))
+* revert to original simple clipboard paste approach ([60d559e](https://github.com/whatiskadudoing/koe/commit/60d559ec6d2c997d94d67c1e0c6efe7807b33cf8))
+
 ## [1.4.5](https://github.com/whatiskadudoing/koe/compare/v1.4.4...v1.4.5) (2026-01-07)
 
 
