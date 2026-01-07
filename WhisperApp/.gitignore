@@ -1,0 +1,91 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+*.xcscmblueprint
+*.xcscheme
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+Packages/
+
+# Build outputs
+build/
+releases/
+*.app
+*.dmg
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Models (large files - download separately)
+Resources/Models/
+*.mlmodelc
+*.mlmodel
+
+# Debug logs
+*.log
+/tmp/whisper_debug.log
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+
+# Environment
+.env
+.env.local
+*.pem
+*.key
+*.p12
+*.mobileprovision
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# Secrets (just in case)
+secrets/
+credentials/
+*.secret
+
+# CocoaPods (if ever used)
+Pods/
+Podfile.lock
+
+# Carthage (if ever used)
+Carthage/Build/
+Carthage/Checkouts/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Code coverage
+*.gcno
+*.gcda
+*.gcov
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "15.0"
+
+      - name: Build Release
+        run: |
+          cd WhisperApp
+          xcodebuild build \
+            -project WhisperApp.xcodeproj \
+            -scheme WhisperApp \
+            -destination "platform=macOS,arch=arm64" \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package App
+        run: |
+          cd WhisperApp/build/Build/Products/Release
+          mv WhisperApp.app Koe.app || mv Whisper.app Koe.app || true
+          zip -r Koe.zip Koe.app
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: WhisperApp/build/Build/Products/Release/Koe.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

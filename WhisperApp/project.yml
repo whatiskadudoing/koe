@@ -1,0 +1,34 @@
+name: WhisperApp
+options:
+  bundleIdPrefix: com.whisper
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "15.0"
+
+packages:
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit.git
+    from: 0.9.0
+
+targets:
+  WhisperApp:
+    type: application
+    platform: macOS
+    sources:
+      - WhisperApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.whisper.voicetotext
+        PRODUCT_NAME: Whisper
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: WhisperApp/Info.plist
+        CODE_SIGN_ENTITLEMENTS: WhisperApp.entitlements
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+    dependencies:
+      - package: WhisperKit
+    entitlements:
+      path: WhisperApp.entitlements
