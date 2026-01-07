@@ -63,6 +63,10 @@ if [[ -d "$INSTALL_DIR/$APP_NAME" ]]; then
     rm -rf "$INSTALL_DIR/$APP_NAME"
 fi
 
+# Reset accessibility permission (so macOS asks again)
+echo "→ Resetting permissions..."
+tccutil reset Accessibility com.koe.app 2>/dev/null || true
+
 # Move to Applications
 mv "$TMP_DIR/$APP_NAME" "$INSTALL_DIR/"
 
