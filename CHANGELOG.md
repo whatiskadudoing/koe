@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/whatiskadudoing/koe/compare/v1.4.1...v1.4.2) (2026-01-07)
+
+
+### Bug Fixes
+
+* use distributed notification to detect accessibility permission changes ([4585611](https://github.com/whatiskadudoing/koe/commit/458561142d78e8fa7e1b1709e2c3ee5beb58ae5c))
+
 ## [1.4.1](https://github.com/whatiskadudoing/koe/compare/v1.4.0...v1.4.1) (2026-01-07)
 
 
