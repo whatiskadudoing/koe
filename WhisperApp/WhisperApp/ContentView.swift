@@ -1,7 +1,8 @@
 import SwiftUI
+import KoeDomain
 
 struct ContentView: View {
-    @EnvironmentObject var appState: AppState
+    @Environment(AppState.self) private var appState
     @ObservedObject private var recordingService = RecordingService.shared
 
     var body: some View {
@@ -252,7 +253,7 @@ struct TranscriptionCard: View {
 // MARK: - History Preview
 
 struct HistoryPreview: View {
-    let entries: [TranscriptionEntry]
+    let entries: [Transcription]
 
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
 
@@ -278,7 +279,7 @@ struct HistoryPreview: View {
 }
 
 struct HistoryChip: View {
-    let entry: TranscriptionEntry
+    let entry: Transcription
 
     var body: some View {
         Button(action: {

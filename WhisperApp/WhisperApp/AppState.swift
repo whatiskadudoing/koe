@@ -1,44 +1,94 @@
 import SwiftUI
-import Combine
+import KoeDomain
 
-enum RecordingState {
-    case idle
-    case recording
-    case processing
-}
-
+@Observable
 @MainActor
-class AppState: ObservableObject {
-    static let shared = AppState()
+public final class AppState {
+    // Singleton for backward compatibility during migration
+    // Will be removed once DI is fully implemented
+    public static let shared = AppState()
 
-    @Published var recordingState: RecordingState = .idle {
+    // Recording state
+    public var recordingState: RecordingState = .idle {
         didSet {
             NotificationCenter.default.post(name: .appStateChanged, object: nil)
         }
     }
 
-    @Published var currentTranscription: String = ""
-    @Published var transcriptionHistory: [TranscriptionEntry] = []
-    @Published var isModelLoaded: Bool = false
-    @Published var modelLoadingProgress: Double = 0.0
-    @Published var errorMessage: String?
+    public var currentTranscription: String = ""
+    public var audioLevel: Float = 0.0
 
-    // Settings - "tiny" is fastest by default, can change to better models in menu bar or settings
-    @AppStorage("selectedModel") var selectedModel: String = "tiny"
-    @AppStorage("selectedLanguage") var selectedLanguage: String = "auto"
-    // Transcription mode: "realtime" = types while speaking, "vad" = waits for pauses
-    @AppStorage("transcriptionMode") var transcriptionMode: String = "vad"
+    // Model state
+    public var isModelLoaded: Bool = false
+    public var modelLoadingProgress: Double = 0.0
+
+    // History
+    public var transcriptionHistory: [Transcription] = []
+
+    // Error handling
+    public var errorMessage: String?
+
+    // Settings - stored in UserDefaults
+    @ObservationIgnored
+    private var _selectedModel: String {
+        get { UserDefaults.standard.string(forKey: "selectedModel") ?? "tiny" }
+        set { UserDefaults.standard.set(newValue, forKey: "selectedModel") }
+    }
+
+    @ObservationIgnored
+    private var _selectedLanguage: String {
+        get { UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto" }
+        set { UserDefaults.standard.set(newValue, forKey: "selectedLanguage") }
+    }
+
+    @ObservationIgnored
+    private var _transcriptionMode: String {
+        get { UserDefaults.standard.string(forKey: "transcriptionMode") ?? "vad" }
+        set { UserDefaults.standard.set(newValue, forKey: "transcriptionMode") }
+    }
+
+    // Public accessors that trigger observation
+    public var selectedModel: String {
+        get { _selectedModel }
+        set { _selectedModel = newValue }
+    }
+
+    public var selectedLanguage: String {
+        get { _selectedLanguage }
+        set { _selectedLanguage = newValue }
+    }
+
+    public var transcriptionMode: String {
+        get { _transcriptionMode }
+        set { _transcriptionMode = newValue }
+    }
+
+    // Computed properties for typed access
+    public var currentKoeModel: KoeModel {
+        KoeModel(rawValue: selectedModel) ?? .tiny
+    }
+
+    public var currentLanguage: Language {
+        Language.all.first { $0.code == selectedLanguage } ?? .auto
+    }
+
+    public var currentTranscriptionMode: TranscriptionMode {
+        TranscriptionMode(rawValue: transcriptionMode) ?? .vad
+    }
 
     private init() {
         loadHistory()
     }
 
-    func addTranscription(_ text: String, duration: TimeInterval) {
-        let entry = TranscriptionEntry(
-            id: UUID(),
+    // MARK: - History Management
+
+    public func addTranscription(_ text: String, duration: TimeInterval) {
+        let entry = Transcription(
             text: text,
             duration: duration,
-            timestamp: Date()
+            timestamp: Date(),
+            language: currentLanguage,
+            model: currentKoeModel
         )
         transcriptionHistory.insert(entry, at: 0)
 
@@ -50,14 +100,14 @@ class AppState: ObservableObject {
         saveHistory()
     }
 
-    func clearHistory() {
+    public func clearHistory() {
         transcriptionHistory.removeAll()
         saveHistory()
     }
 
     private func loadHistory() {
         if let data = UserDefaults.standard.data(forKey: "transcriptionHistory"),
-           let history = try? JSONDecoder().decode([TranscriptionEntry].self, from: data) {
+           let history = try? JSONDecoder().decode([Transcription].self, from: data) {
             // Filter out entries older than 7 days
             let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
             transcriptionHistory = history.filter { $0.timestamp > cutoff }
@@ -71,9 +121,7 @@ class AppState: ObservableObject {
     }
 }
 
-struct TranscriptionEntry: Identifiable, Codable {
-    let id: UUID
-    let text: String
-    let duration: TimeInterval
-    let timestamp: Date
-}
+// MARK: - Legacy Support
+
+/// Backward compatibility alias - will be removed after full migration
+typealias TranscriptionEntry = Transcription

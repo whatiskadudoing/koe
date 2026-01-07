@@ -1,14 +1,15 @@
 import SwiftUI
+import KoeDomain
 
 @main
 struct WhisperApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var appState = AppState.shared
+    @State private var appState = AppState.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(appState)
+                .environment(appState)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
@@ -16,7 +17,7 @@ struct WhisperApp: App {
 
         Settings {
             SettingsView()
-                .environmentObject(appState)
+                .environment(appState)
         }
     }
 }
