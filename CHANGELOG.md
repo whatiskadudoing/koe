@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.9](https://github.com/whatiskadudoing/koe/compare/v1.4.8...v1.4.9) (2026-01-07)
+
+
+### Bug Fixes
+
+* use CGEvents for all text typing instead of clipboard ([95bb246](https://github.com/whatiskadudoing/koe/commit/95bb24650082171a5757e8235b9aafe0a9f9b9e8))
+
 ## [1.4.8](https://github.com/whatiskadudoing/koe/compare/v1.4.7...v1.4.8) (2026-01-07)
 
 
