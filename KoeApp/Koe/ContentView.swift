@@ -109,6 +109,7 @@ struct WelcomeView: View {
     @State private var contentOpacity: Double = 0
     @State private var contentScale: Double = 0.95
     @State private var contentOffset: CGFloat = 20
+    @State private var animationTimer: Timer?
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
 
@@ -151,18 +152,34 @@ struct WelcomeView: View {
                 contentOffset = 0
             }
 
-            // Start continuous waveform animation
-            withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
-                animationPhase = .pi * 2
-            }
+            // Start continuous waveform animation using Timer for reliable animation
+            startWaveformAnimation()
 
-            // Advance to next state after 2.5 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            // Advance to next state after 12 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
                 withAnimation(.easeOut(duration: 0.6)) {
                     appState.advanceReadinessState()
                 }
             }
         }
+        .onDisappear {
+            stopWaveformAnimation()
+        }
+    }
+
+    private func startWaveformAnimation() {
+        // Use Timer for reliable animation at 30fps
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { _ in
+            animationPhase += 0.12
+            if animationPhase > .pi * 2 {
+                animationPhase = 0
+            }
+        }
+    }
+
+    private func stopWaveformAnimation() {
+        animationTimer?.invalidate()
+        animationTimer = nil
     }
 }
 

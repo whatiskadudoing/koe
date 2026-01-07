@@ -111,11 +111,19 @@ public final class RecordingCoordinator {
         logger.info("Loading model: \(model.rawValue)")
         do {
             try await transcriber.loadModel(model)
-            AppState.shared.isModelLoaded = true
-            NotificationCenter.default.post(name: .modelLoaded, object: nil)
-            logger.info("Model loaded successfully")
+
+            // Only set loaded if transcriber is actually ready
+            if transcriber.isReady {
+                AppState.shared.isModelLoaded = true
+                NotificationCenter.default.post(name: .modelLoaded, object: nil)
+                logger.info("Model loaded successfully")
+            } else {
+                logger.warning("loadModel completed but transcriber.isReady is false")
+                AppState.shared.isModelLoaded = false
+            }
         } catch {
             logger.error("Failed to load model", error: error)
+            AppState.shared.isModelLoaded = false
         }
     }
 

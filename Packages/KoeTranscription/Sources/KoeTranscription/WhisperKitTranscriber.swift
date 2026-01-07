@@ -105,7 +105,6 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
         if isCancelled { return }
 
         do {
-
             // Check for bundled model first
             if let bundledPath = getBundledModelPath(for: name) {
                 notifyProgress(-1) // Animated loading
@@ -223,8 +222,7 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
             _isReady = false
             _loadingProgress = 0.0
             lock.unlock()
-            // Log error but don't throw since this is an internal async method
-            print("Model load failed: \(error)")
+            print("[WhisperKitTranscriber] Model load failed: \(error)")
         }
     }
 

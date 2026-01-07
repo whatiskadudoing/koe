@@ -4,16 +4,22 @@ import ApplicationServices
 import AppKit
 import KoeTextInsertion
 
+enum PermissionStep {
+    case microphone
+    case accessibility
+    case complete
+}
+
 struct PermissionsView: View {
     @Environment(AppState.self) private var appState
     @State private var checkTimer: Timer?
-    @State private var hasUserAgreed = false
+    @State private var currentStep: PermissionStep = .microphone
     @State private var contentOpacity = 0.0
     @State private var contentOffset: CGFloat = 20
+    @State private var isRequestingPermission = false
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
-    private let darkGray = Color(nsColor: NSColor(red: 0.35, green: 0.33, blue: 0.30, alpha: 1.0))
 
     var body: some View {
         ZStack {
@@ -35,50 +41,67 @@ struct PermissionsView: View {
                             .frame(height: 1)
                             .frame(width: 32)
 
-                        Text("We need your permission to record and type")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundColor(lightGray)
-                            .tracking(0.3)
+                        // Step indicator
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(currentStep == .microphone ? accentColor : (appState.hasMicrophonePermission ? Color.green : lightGray.opacity(0.3)))
+                                .frame(width: 8, height: 8)
+                            Circle()
+                                .fill(currentStep == .accessibility ? accentColor : (appState.hasAccessibilityPermission ? Color.green : lightGray.opacity(0.3)))
+                                .frame(width: 8, height: 8)
+                        }
+                        .padding(.top, 4)
                     }
                     .padding(.top, 40)
 
-                    // Permission list
-                    VStack(spacing: 12) {
-                        PermissionRow(
-                            icon: "mic.fill",
-                            title: "Microphone",
-                            description: "To record your voice",
-                            isGranted: appState.hasMicrophonePermission,
-                            isRequested: hasUserAgreed
-                        )
+                    // Current permission card
+                    VStack(spacing: 20) {
+                        switch currentStep {
+                        case .microphone:
+                            PermissionCard(
+                                icon: "mic.fill",
+                                title: "Microphone Access",
+                                description: "Koe needs microphone access to record your voice for transcription.",
+                                isGranted: appState.hasMicrophonePermission,
+                                isRequesting: isRequestingPermission,
+                                buttonTitle: "Allow Microphone",
+                                onRequest: requestMicrophonePermission
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
 
-                        PermissionRow(
-                            icon: "hand.point.up.left.fill",
-                            title: "Accessibility",
-                            description: "To type into other apps",
-                            isGranted: appState.hasAccessibilityPermission,
-                            isRequested: hasUserAgreed
-                        )
+                        case .accessibility:
+                            PermissionCard(
+                                icon: "hand.point.up.left.fill",
+                                title: "Accessibility Access",
+                                description: "Koe needs accessibility access to type transcribed text into other apps.",
+                                isGranted: appState.hasAccessibilityPermission,
+                                isRequesting: isRequestingPermission,
+                                buttonTitle: "Open Settings",
+                                onRequest: requestAccessibilityPermission
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+
+                        case .complete:
+                            EmptyView()
+                        }
                     }
                     .padding(.horizontal, 40)
+                    .animation(.easeInOut(duration: 0.4), value: currentStep)
 
                     Spacer()
                 }
 
-                // Bottom button - fixed at bottom
-                VStack(spacing: 12) {
-                    if !appState.hasAllPermissions {
-                        Button(action: agreeAndRequestPermissions) {
-                            Text("Agree & Permit")
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(accentColor)
-                                .cornerRadius(10)
-                        }
-                        .buttonStyle(.plain)
-                        .transition(.scale.combined(with: .opacity))
+                // Status summary at bottom
+                VStack(spacing: 8) {
+                    HStack(spacing: 16) {
+                        StatusPill(title: "Microphone", isGranted: appState.hasMicrophonePermission)
+                        StatusPill(title: "Accessibility", isGranted: appState.hasAccessibilityPermission)
                     }
                 }
                 .padding(.horizontal, 40)
@@ -93,39 +116,79 @@ struct PermissionsView: View {
                 contentOpacity = 1
                 contentOffset = 0
             }
+
+            // Check current permissions and set initial step
+            appState.checkAllPermissions()
+            updateStep()
+
+            // Start polling
+            startPermissionPolling()
         }
         .onDisappear {
             stopPermissionPolling()
         }
     }
 
-    private func agreeAndRequestPermissions() {
-        withAnimation(.easeInOut(duration: 0.3)) {
-            hasUserAgreed = true
+    private func updateStep() {
+        if !appState.hasMicrophonePermission {
+            currentStep = .microphone
+        } else if !appState.hasAccessibilityPermission {
+            currentStep = .accessibility
+        } else {
+            currentStep = .complete
         }
+    }
 
-        // After animation, request permissions
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            requestPermissions()
-            startPermissionPolling()
+    private func requestMicrophonePermission() {
+        isRequestingPermission = true
+
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
+            DispatchQueue.main.async {
+                isRequestingPermission = false
+                appState.checkMicrophonePermission()
+
+                if granted {
+                    // Move to next step with animation
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        updateStep()
+                    }
+                }
+            }
+        }
+    }
+
+    private func requestAccessibilityPermission() {
+        isRequestingPermission = true
+
+        // Request accessibility permission (shows prompt)
+        let textInserter = TextInsertionServiceImpl()
+        textInserter.requestPermission()
+
+        // Open System Settings
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            isRequestingPermission = false
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 
     private func startPermissionPolling() {
-        // Add a small delay before first check (macOS TCC caching issue)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            appState.checkAllPermissions()
-        }
+        checkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            Task { @MainActor in
+                AppState.shared.checkAllPermissions()
 
-        // Poll more frequently to catch permission updates quickly
-        checkTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
-            appState.checkAllPermissions()
+                // Update step based on current permissions
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    updateStep()
+                }
 
-            // Auto-advance when both permissions granted
-            if appState.hasAllPermissions {
-                stopPermissionPolling()
-                withAnimation(.easeOut(duration: 0.4)) {
-                    appState.advanceReadinessState()
+                // Auto-advance when all permissions granted
+                if AppState.shared.hasAllPermissions {
+                    stopPermissionPolling()
+                    withAnimation(.easeOut(duration: 0.4)) {
+                        AppState.shared.advanceReadinessState()
+                    }
                 }
             }
         }
@@ -135,82 +198,107 @@ struct PermissionsView: View {
         checkTimer?.invalidate()
         checkTimer = nil
     }
-
-    private func requestPermissions() {
-        // Request microphone permission (shows system dialog)
-        AVCaptureDevice.requestAccess(for: .audio) { _ in }
-
-        // Request accessibility permission
-        // Try the API first, then open System Settings as fallback
-        let textInserter = TextInsertionServiceImpl()
-        textInserter.requestPermission()
-
-        // Also open System Settings to Privacy > Accessibility
-        // This ensures user sees where to enable it if dialog doesn't appear
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            openAccessibilitySettings()
-        }
-    }
-
-    private func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
-    }
 }
 
-struct PermissionRow: View {
+// MARK: - Permission Card
+
+struct PermissionCard: View {
     let icon: String
     let title: String
     let description: String
     let isGranted: Bool
-    let isRequested: Bool
+    let isRequesting: Bool
+    let buttonTitle: String
+    let onRequest: () -> Void
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
 
     var body: some View {
-        HStack(spacing: 16) {
+        VStack(spacing: 20) {
             // Icon
-            Image(systemName: icon)
-                .font(.system(size: 24))
-                .foregroundColor(isGranted ? .green : (isRequested ? accentColor : lightGray))
-                .frame(width: 32)
-                .opacity(isRequested && !isGranted ? 0.6 : 1.0)
+            ZStack {
+                Circle()
+                    .fill(isGranted ? Color.green.opacity(0.1) : accentColor.opacity(0.1))
+                    .frame(width: 80, height: 80)
 
-            // Text
-            VStack(alignment: .leading, spacing: 2) {
+                Image(systemName: isGranted ? "checkmark" : icon)
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundColor(isGranted ? .green : accentColor)
+            }
+
+            // Title and description
+            VStack(spacing: 8) {
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 18, weight: .medium, design: .rounded))
                     .foregroundColor(accentColor)
 
                 Text(description)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(lightGray)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
             }
 
-            Spacer()
-
-            // Status indicator
+            // Button or granted state
             if isGranted {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(.green)
-                    .transition(.scale.combined(with: .opacity))
-            } else if isRequested {
-                // Subtle loading indicator when requested but not granted
-                Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 20))
-                    .foregroundColor(accentColor.opacity(0.5))
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Granted")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.green)
+                }
+                .padding(.top, 8)
             } else {
-                Image(systemName: "circle")
-                    .font(.system(size: 20))
-                    .foregroundColor(lightGray.opacity(0.4))
+                Button(action: onRequest) {
+                    HStack(spacing: 8) {
+                        if isRequesting {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        }
+                        Text(buttonTitle)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(accentColor)
+                    .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+                .disabled(isRequesting)
+                .padding(.top, 8)
             }
         }
-        .padding(16)
+        .padding(28)
         .background(Color.white)
-        .cornerRadius(10)
-        .shadow(color: .black.opacity(isRequested ? 0.06 : 0.04), radius: 8, x: 0, y: 2)
+        .cornerRadius(16)
+        .shadow(color: .black.opacity(0.08), radius: 20, x: 0, y: 4)
+    }
+}
+
+// MARK: - Status Pill
+
+struct StatusPill: View {
+    let title: String
+    let isGranted: Bool
+
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(isGranted ? Color.green : lightGray.opacity(0.4))
+                .frame(width: 8, height: 8)
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(isGranted ? Color.green : lightGray)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(isGranted ? Color.green.opacity(0.1) : Color.gray.opacity(0.1))
+        .cornerRadius(20)
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import ApplicationServices
 import KoeDomain
+import CoreGraphics
 
 @Observable
 @MainActor
@@ -99,6 +100,8 @@ public final class AppState {
     }
 
     public func checkAccessibilityPermission() {
+        // Use AXIsProcessTrusted() for silent check - does NOT trigger any prompts
+        // Note: This may have caching issues but it's the only way to check without prompting
         hasAccessibilityPermission = AXIsProcessTrusted()
     }
 

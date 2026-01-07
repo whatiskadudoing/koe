@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import ApplicationServices
+import CoreGraphics
 import KoeDomain
 
 /// Implementation of TextInsertionService for macOS
@@ -25,6 +26,9 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
     }
 
     public func hasPermission() -> Bool {
+        // Use AXIsProcessTrusted() for silent check - does NOT trigger any prompts
+        // Note: This may have caching issues but it's the only way to check without prompting
+        // CGEvent.tapCreate was previously used as fallback but it triggers the accessibility dialog
         return AXIsProcessTrusted()
     }
 

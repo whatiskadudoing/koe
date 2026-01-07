@@ -56,7 +56,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
-        loadModel()
+        // NOTE: Model loading is now triggered by LoadingView when permissions are granted
+        // This prevents file access dialogs from appearing before the user goes through permissions
     }
 
     func applicationWillTerminate(_ notification: Notification) {
