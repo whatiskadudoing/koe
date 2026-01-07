@@ -10,14 +10,14 @@ Koe is a lightweight, privacy-focused dictation app that converts speech to text
 curl -fsSL https://raw.githubusercontent.com/whatiskadudoing/koe/main/install.sh | bash
 ```
 
-That's it. Open Koe from `/Applications` and start dictating with `Cmd+Shift+Space`.
+That's it. Open Koe from `/Applications` and start dictating with `Option+Space`.
 
 ---
 
 ## Features
 
 - **100% Local Processing** - All transcription happens on-device using [WhisperKit](https://github.com/argmaxinc/WhisperKit). No cloud, no subscriptions, no data collection.
-- **Global Hotkey** - Trigger dictation from anywhere with `Cmd+Shift+Space` (customizable).
+- **Global Hotkey** - Trigger dictation from anywhere with `Option+Space` (customizable).
 - **System-Wide** - Transcribed text auto-inserts at your cursor in any application.
 - **Multiple Models** - Choose from tiny, base, small, medium, or large-v3 for your speed/accuracy preference.
 - **Multi-Language** - Auto-detect or specify your language (100+ supported).
@@ -58,7 +58,7 @@ You can download additional models later in Settings.
 
 ## Usage
 
-1. Press `Cmd+Shift+Space` (or your configured hotkey)
+1. Press `Option+Space` (or your configured hotkey)
 2. Speak
 3. Release - text appears at your cursor
 
