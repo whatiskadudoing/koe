@@ -1,28 +1,19 @@
 import Foundation
-import AppKit
 import ApplicationServices
 import CoreGraphics
 import KoeDomain
 
 /// Implementation of TextInsertionService for macOS
-/// Uses CGEvents for character-by-character typing and clipboard+paste as fallback
+/// Uses CGEvents for character-by-character typing (requires Accessibility permission)
 public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Sendable {
     public init() {}
 
     public func insertText(_ text: String) async throws {
-        // For long text, use clipboard (instant)
-        if text.count > 50 {
-            try await insertWithClipboard(text)
-            return
+        // Always use CGEvents to type text - only requires accessibility permission
+        let success = await insertWithCGEvents(text)
+        if !success {
+            throw TextInsertionError.accessibilityDenied
         }
-
-        // For short text, try CGEvents (looks more natural)
-        if await insertWithCGEvents(text) {
-            return
-        }
-
-        // Fallback to clipboard + paste
-        try await insertWithClipboard(text)
     }
 
     public func hasPermission() -> Bool {
@@ -52,15 +43,6 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
         }
     }
 
-    private func insertWithClipboard(_ text: String) async throws {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInteractive).async {
-                Self.typeWithClipboardSync(text)
-                continuation.resume()
-            }
-        }
-    }
-
     // MARK: - Static Sync Methods (run on background thread)
 
     private static func typeWithCGEventsSync(_ text: String) -> Bool {
@@ -86,39 +68,10 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
             keyUp.keyboardSetUnicodeString(stringLength: unicodeString.count, unicodeString: &unicodeString)
             keyUp.post(tap: .cghidEventTap)
 
-            Thread.sleep(forTimeInterval: 0.01)
+            // Small delay between characters for reliability
+            Thread.sleep(forTimeInterval: 0.002)
         }
 
         return true
-    }
-
-    private static func typeWithClipboardSync(_ text: String) {
-        let pasteboard = NSPasteboard.general
-        let oldContents = pasteboard.string(forType: .string)
-
-        // Set new text to clipboard
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-
-        // Use AppleScript to paste - more reliable than CGEvents
-        let script = """
-        tell application "System Events"
-            keystroke "v" using command down
-        end tell
-        """
-
-        if let appleScript = NSAppleScript(source: script) {
-            var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
-        }
-
-        Thread.sleep(forTimeInterval: 0.2)
-
-        // Restore old clipboard after a delay
-        if let old = oldContents {
-            Thread.sleep(forTimeInterval: 0.5)
-            pasteboard.clearContents()
-            pasteboard.setString(old, forType: .string)
-        }
     }
 }
