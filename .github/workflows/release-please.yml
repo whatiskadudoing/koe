@@ -44,12 +44,12 @@ jobs:
 
       - name: Build App
         run: |
-          cd WhisperApp
+          cd WhisperApp/WhisperApp
           swift build -c release
 
       - name: Create App Bundle
         run: |
-          cd WhisperApp
+          cd WhisperApp/WhisperApp
 
           # Find the executable
           EXECUTABLE=$(find .build -name "Koe" -type f -path "*release*" | grep -v dSYM | head -1)
@@ -93,5 +93,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload ${{ needs.release-please.outputs.tag_name }} \
-            WhisperApp/dist/Koe-macos-arm64.zip \
+            WhisperApp/WhisperApp/dist/Koe-macos-arm64.zip \
             WhisperApp/installer/koe-installer

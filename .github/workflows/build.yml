@@ -22,12 +22,12 @@ jobs:
 
       - name: Build App (ARM64)
         run: |
-          cd WhisperApp
+          cd WhisperApp/WhisperApp
           swift build -c release
 
       - name: Create App Bundle
         run: |
-          cd WhisperApp
+          cd WhisperApp/WhisperApp
 
           # Find the executable
           EXECUTABLE=$(find .build -name "Koe" -type f -path "*release*" | grep -v dSYM | head -1)
@@ -61,7 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Koe-App-arm64
-          path: WhisperApp/dist/Koe.app
+          path: WhisperApp/WhisperApp/dist/Koe.app
           retention-days: 7
 
   build-installer:
