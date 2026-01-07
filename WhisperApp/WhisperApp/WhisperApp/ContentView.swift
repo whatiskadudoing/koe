@@ -93,6 +93,8 @@ struct ContentView: View {
 
 struct WelcomeView: View {
     @State private var animationPhase: CGFloat = 0
+    @State private var contentOpacity: Double = 0
+    @State private var contentScale: Double = 0.95
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
 
@@ -107,15 +109,29 @@ struct WelcomeView: View {
                 LogoWaveform(phase: animationPhase)
                     .frame(width: 120, height: 60)
 
-                // App name
-                Text("koe")
-                    .font(.system(size: 28, weight: .light, design: .rounded))
-                    .foregroundColor(accentColor)
-                    .tracking(4)
+                // App name with Japanese character
+                VStack(spacing: 8) {
+                    Text("声")
+                        .font(.system(size: 36, weight: .light))
+                        .foregroundColor(accentColor.opacity(0.6))
+
+                    Text("koe")
+                        .font(.system(size: 28, weight: .light, design: .rounded))
+                        .foregroundColor(accentColor)
+                        .tracking(4)
+                }
             }
+            .opacity(contentOpacity)
+            .scaleEffect(contentScale)
         }
         .onAppear {
-            // Start continuous animation
+            // Fade in content
+            withAnimation(.easeOut(duration: 0.6)) {
+                contentOpacity = 1
+                contentScale = 1
+            }
+
+            // Start continuous waveform animation
             withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
                 animationPhase = .pi * 2
             }

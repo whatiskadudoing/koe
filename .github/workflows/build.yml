@@ -77,6 +77,12 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Lint Installer
+        run: |
+          cd WhisperApp/installer
+          deno lint
+          deno fmt --check
+
       - name: Build Installer
         run: |
           cd WhisperApp/installer
@@ -84,7 +90,7 @@ jobs:
             --target aarch64-apple-darwin \
             --allow-read --allow-write --allow-net --allow-run --allow-env \
             --output koe-installer \
-            install.ts
+            mod.ts
 
       - name: Upload Installer
         uses: actions/upload-artifact@v4

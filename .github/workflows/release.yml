@@ -89,7 +89,7 @@ jobs:
             --target aarch64-apple-darwin \
             --allow-read --allow-write --allow-net --allow-run --allow-env \
             --output koe-installer \
-            install.ts
+            mod.ts
 
       - name: Upload Installer
         uses: actions/upload-artifact@v4

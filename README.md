@@ -20,6 +20,8 @@ curl -fsSL https://raw.githubusercontent.com/whatiskadudoing/koe/main/install.sh
 
 One command. No Homebrew dependencies. No Xcode. Just paste and go.
 
+**Alternative:** Download `Koe-macos-arm64.zip` from the [latest release](https://github.com/whatiskadudoing/koe/releases/latest) and move to Applications.
+
 ---
 
 ## Why Koe?

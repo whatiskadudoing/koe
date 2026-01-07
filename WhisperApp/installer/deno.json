@@ -1,0 +1,41 @@
+{
+  "name": "@koe/installer",
+  "version": "1.0.0",
+  "exports": "./mod.ts",
+  "imports": {
+    "@cliffy/prompt": "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts",
+    "@cliffy/colors": "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts"
+  },
+  "tasks": {
+    "dev": "deno run --allow-all mod.ts",
+    "check": "deno check mod.ts",
+    "lint": "deno lint",
+    "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
+    "build": "deno compile --allow-read --allow-write --allow-net --allow-run --allow-env --output koe-installer mod.ts",
+    "build:arm64": "deno compile --target aarch64-apple-darwin --allow-read --allow-write --allow-net --allow-run --allow-env --output koe-installer mod.ts"
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"],
+      "include": [
+        "no-unused-vars",
+        "no-explicit-any",
+        "prefer-const"
+      ]
+    }
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": false,
+    "proseWrap": "preserve"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true
+  }
+}
