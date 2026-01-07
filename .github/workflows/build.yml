@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "15.0"
+
+      - name: Build
+        run: |
+          cd WhisperApp
+          xcodebuild build \
+            -project WhisperApp.xcodeproj \
+            -scheme WhisperApp \
+            -destination "platform=macOS,arch=arm64" \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Koe-Build
+          path: WhisperApp/build/Build/Products/Release/*.app
+          retention-days: 7
