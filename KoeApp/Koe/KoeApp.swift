@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import KoeDomain
 import KoeAudio
 import KoeTranscription
@@ -125,9 +126,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             logger.notice("[AppDelegate] Voice command settings updated: VAD=\(newSettings.vadEnabled), threshold=\(newSettings.confidenceThreshold)")
         }
 
-        // Set up command handler
-        commandDetector.onCommandDetected = { result in
-            print("[CommandDetector] Command detected: \(result.command.trigger) (confidence: \(result.confidence))")
+        // Set up command handler - actually execute the detected command
+        commandDetector.onCommandDetected = { [weak self] result in
+            guard let self = self else { return }
+            logger.notice("[CommandDetector] Command detected: \(result.command.trigger) (confidence: \(result.confidence), verified: \(result.isVoiceVerified))")
+
+            guard result.shouldExecute else {
+                logger.notice("[CommandDetector] Command not executed: shouldExecute=false")
+                return
+            }
+
+            // Execute the command action
+            Task { @MainActor in
+                self.executeCommandAction(result.command.action)
+            }
         }
 
         // Start listening if enabled and profile exists
@@ -146,6 +158,56 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             logger.notice("[AppDelegate] Stopping command detection")
             commandDetector.stopDetection()
+        }
+    }
+
+    @MainActor
+    private func executeCommandAction(_ action: CommandAction) {
+        logger.notice("[AppDelegate] Executing command action: \(String(describing: action))")
+
+        switch action {
+        case .notification(let title, let body):
+            // Send a user notification
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
+            logger.notice("[AppDelegate] Notification sent: \(title)")
+
+        case .startRecording:
+            // Post notification to start recording
+            NotificationCenter.default.post(name: .startRecordingFromVoiceCommand, object: nil)
+            logger.notice("[AppDelegate] Start recording notification posted")
+
+        case .stopRecording:
+            // Post notification to stop recording
+            NotificationCenter.default.post(name: .stopRecordingFromVoiceCommand, object: nil)
+            logger.notice("[AppDelegate] Stop recording notification posted")
+
+        case .togglePipelineOption(let option):
+            // Toggle a pipeline option
+            NotificationCenter.default.post(
+                name: .togglePipelineOptionFromVoiceCommand,
+                object: nil,
+                userInfo: ["option": option]
+            )
+            logger.notice("[AppDelegate] Toggle pipeline option: \(option)")
+
+        case .custom(let identifier):
+            // Custom action - post notification with identifier
+            NotificationCenter.default.post(
+                name: .customVoiceCommandAction,
+                object: nil,
+                userInfo: ["identifier": identifier]
+            )
+            logger.notice("[AppDelegate] Custom action: \(identifier)")
         }
     }
 
@@ -524,5 +586,14 @@ extension Notification.Name {
     static let commandListeningChanged = Notification.Name("commandListeningChanged")
     static let voiceProfileTrained = Notification.Name("voiceProfileTrained")
     static let voiceCommandSettingsChanged = Notification.Name("voiceCommandSettingsChanged")
+
+    // Voice command actions
+    static let startRecordingFromVoiceCommand = Notification.Name("startRecordingFromVoiceCommand")
+    static let stopRecordingFromVoiceCommand = Notification.Name("stopRecordingFromVoiceCommand")
+    static let togglePipelineOptionFromVoiceCommand = Notification.Name("togglePipelineOptionFromVoiceCommand")
+    static let customVoiceCommandAction = Notification.Name("customVoiceCommandAction")
+
+    // UI navigation
+    static let showVoiceTraining = Notification.Name("showVoiceTraining")
 }
 

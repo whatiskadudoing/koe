@@ -21,10 +21,6 @@ struct ContentView: View {
     /// Selected pipeline stage for settings modal
     @State private var selectedPipelineStage: PipelineStageInfo?
 
-    /// Model switching state
-    @State private var isLoadingModel: Bool = false
-    @State private var loadingModelName: String = ""
-
     enum AppTab {
         case dictation
         case meetings
@@ -96,11 +92,6 @@ struct ContentView: View {
                 .zIndex(10)
             }
 
-            // Model loading overlay
-            if isLoadingModel {
-                ModelLoadingOverlay(modelName: loadingModelName)
-                    .zIndex(20)
-            }
         }
         .frame(minWidth: 380, minHeight: 520)
         .onAppear {
@@ -156,18 +147,6 @@ struct ContentView: View {
                     Spacer()
                 }
 
-                // Model toggle (only show on dictation tab)
-                if selectedTab == .dictation {
-                    ModelToggle(
-                        selectedModel: Binding(
-                            get: { appState.currentKoeModel },
-                            set: { newModel in
-                                switchModel(to: newModel)
-                            }
-                        )
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                }
             }
             .padding(.top, 12)
 
@@ -177,35 +156,6 @@ struct ContentView: View {
                 dictationView
             case .meetings:
                 MeetingsView()
-            }
-        }
-    }
-
-    /// Switch to a different transcription model
-    private func switchModel(to model: KoeModel) {
-        guard model != appState.currentKoeModel else { return }
-
-        // Don't switch if recording
-        guard appState.recordingState == .idle else {
-            NSSound(named: "Basso")?.play()
-            return
-        }
-
-        // Show loading overlay
-        loadingModelName = model.shortName
-        isLoadingModel = true
-
-        // Update model selection and reload
-        appState.selectedModel = model.rawValue
-
-        Task {
-            // Unload current model and load new one
-            coordinator.unloadModel()
-            await coordinator.loadModel(model)
-
-            await MainActor.run {
-                isLoadingModel = false
-                loadingModelName = ""
             }
         }
     }
@@ -345,124 +295,6 @@ struct TabIconButton: View {
                 isHovered = hovering
             }
         }
-    }
-}
-
-// MARK: - Model Toggle
-
-struct ModelToggle: View {
-    @Binding var selectedModel: KoeModel
-
-    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
-    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(KoeModel.allCases, id: \.rawValue) { model in
-                ModelIconButton(
-                    model: model,
-                    isSelected: selectedModel == model,
-                    selectedColor: accentColor,
-                    unselectedColor: lightGray
-                ) {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        selectedModel = model
-                    }
-                }
-            }
-        }
-        .padding(4)
-        .background(Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0)))
-        .cornerRadius(20)
-    }
-}
-
-struct ModelIconButton: View {
-    let model: KoeModel
-    let isSelected: Bool
-    let selectedColor: Color
-    let unselectedColor: Color
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: model.icon)
-                    .font(.system(size: 11, weight: .medium))
-
-                if isSelected {
-                    Text(model.shortName)
-                        .font(.system(size: 11, weight: .medium))
-                        .lineLimit(1)
-                }
-            }
-            .foregroundColor(isSelected ? .white : (isHovered ? selectedColor : unselectedColor))
-            .padding(.horizontal, isSelected ? 10 : 8)
-            .padding(.vertical, 6)
-            .background(isSelected ? selectedColor : (isHovered ? selectedColor.opacity(0.1) : Color.clear))
-            .cornerRadius(16)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
-                isHovered = hovering
-            }
-        }
-        .help(model.displayName)
-    }
-}
-
-// MARK: - Model Loading Overlay
-
-struct ModelLoadingOverlay: View {
-    let modelName: String
-
-    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
-    private let circleSize: CGFloat = 80
-
-    var body: some View {
-        ZStack {
-            // Semi-transparent background
-            Color(nsColor: NSColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 0.95))
-                .ignoresSafeArea()
-
-            VStack(spacing: 20) {
-                // Animated ring with brain icon
-                ZStack {
-                    AnimatedRing(
-                        isActive: true,
-                        audioLevel: 0,
-                        color: accentColor,
-                        style: AppState.shared.currentRingAnimationStyle,
-                        maxAmplitude: 14
-                    )
-                    .frame(width: circleSize + 44, height: circleSize + 44)
-
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: circleSize, height: circleSize)
-                        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
-
-                    Image(systemName: "brain")
-                        .font(.system(size: 32, weight: .light))
-                        .foregroundColor(accentColor)
-                }
-
-                // Loading text
-                VStack(spacing: 6) {
-                    Text("Loading \(modelName)")
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .foregroundColor(accentColor)
-
-                    Text("This may take a moment...")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0)))
-                }
-            }
-        }
-        .transition(.opacity)
     }
 }
 

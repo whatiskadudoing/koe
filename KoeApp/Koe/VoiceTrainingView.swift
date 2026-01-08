@@ -15,9 +15,20 @@ struct VoiceTrainingView: View {
     @State private var audioLevel: Float = 0.0
     @State private var errorMessage: String?
 
-    private let totalSamples = 5
     private let commandDetector: CommandDetector
     private let onComplete: ((VoiceProfile) -> Void)?
+
+    /// Training prompts with diverse phrases for better voice embedding
+    /// Research shows phoneme diversity is more important than duration
+    private let trainingPrompts: [(phrase: String, duration: TimeInterval, instruction: String)] = [
+        ("kon", 2.0, "Say \"kon\""),
+        ("kon", 2.0, "Say \"kon\" again"),
+        ("My voice is my passport, verify me", 4.0, "Read the phrase above"),
+        ("One, two, three, four, five, six, seven, eight, nine, ten", 5.0, "Count from one to ten"),
+        ("The quick brown fox jumps over the lazy dog", 5.0, "Read the phrase above"),
+    ]
+
+    private var totalSamples: Int { trainingPrompts.count }
 
     // Colors
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
@@ -99,22 +110,22 @@ struct VoiceTrainingView: View {
             VStack(alignment: .leading, spacing: 16) {
                 instructionRow(
                     number: "1",
-                    text: "You'll say \"kon\" five times"
+                    text: "You'll record 5 short voice samples"
                 )
                 instructionRow(
                     number: "2",
-                    text: "Speak naturally, as you would normally"
+                    text: "Say each phrase naturally and clearly"
                 )
                 instructionRow(
                     number: "3",
-                    text: "Koe will learn to recognize your voice"
+                    text: "Different phrases help capture your unique voice"
                 )
             }
             .padding(.horizontal, 20)
 
             Spacer()
 
-            Text("This helps ensure only you can trigger voice commands")
+            Text("Diverse speech samples create a more accurate voice profile")
                 .font(.system(size: 12))
                 .foregroundColor(lightGray)
                 .multilineTextAlignment(.center)
@@ -138,8 +149,15 @@ struct VoiceTrainingView: View {
 
     // MARK: - Recording Content
 
+    private var currentPrompt: (phrase: String, duration: TimeInterval, instruction: String) {
+        guard currentSample < trainingPrompts.count else {
+            return trainingPrompts[0]
+        }
+        return trainingPrompts[currentSample]
+    }
+
     private var recordingContent: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             Spacer()
 
             // Progress indicator
@@ -154,6 +172,16 @@ struct VoiceTrainingView: View {
             Text("Sample \(currentSample + 1) of \(totalSamples)")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(lightGray)
+
+            // Phrase to read (shown above the mic)
+            if !isRecording {
+                Text("\"\(currentPrompt.phrase)\"")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(accentColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .frame(minHeight: 44)
+            }
 
             // Recording visualization
             ZStack {
@@ -177,14 +205,24 @@ struct VoiceTrainingView: View {
 
             // Instruction
             VStack(spacing: 4) {
-                Text(isRecording ? "Say \"kon\" now" : "Tap to record")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(isRecording ? recordingColor : accentColor)
-
                 if isRecording {
+                    Text("\"\(currentPrompt.phrase)\"")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(recordingColor)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+
                     Text("Recording...")
                         .font(.system(size: 12))
                         .foregroundColor(lightGray)
+                } else {
+                    Text(currentPrompt.instruction)
+                        .font(.system(size: 14))
+                        .foregroundColor(lightGray)
+
+                    Text("Tap to record")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(accentColor)
                 }
             }
 
@@ -327,10 +365,11 @@ struct VoiceTrainingView: View {
     private func startRecording() {
         isRecording = true
 
-        // Record for 2 seconds
+        // Record for the duration specified by the current prompt
+        let duration = currentPrompt.duration
         Task {
             do {
-                let samples = try await recordAudioSamples(duration: 2.0)
+                let samples = try await recordAudioSamples(duration: duration)
                 audioSamples.append(samples)
                 currentSample += 1
 

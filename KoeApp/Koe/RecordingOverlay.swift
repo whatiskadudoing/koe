@@ -141,7 +141,7 @@ struct OverlayContentView: View {
     private var currentStage: PipelineStageInfo {
         switch viewModel.state {
         case .idle, .recording:
-            return .hotkey  // Mic/trigger stage
+            return .trigger  // Mic/trigger stage
         case .transcribing:
             return .transcription
         case .refining:

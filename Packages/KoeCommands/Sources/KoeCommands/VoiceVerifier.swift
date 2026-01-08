@@ -44,6 +44,80 @@ public final class VoiceVerifier: @unchecked Sendable {
         self.sampleRate = sampleRate
     }
 
+    // MARK: - Voice Activity Detection (VAD)
+
+    /// VAD threshold - audio with energy below this is considered silence
+    public var vadThreshold: Float = 0.02
+
+    /// Check if audio contains speech using energy-based VAD
+    /// Returns a score between 0 and 1, where higher means more likely to be speech
+    public func detectVoiceActivity(in samples: [Float]) -> Float {
+        guard !samples.isEmpty else { return 0 }
+
+        // Calculate RMS energy
+        var sumSquares: Float = 0
+        vDSP_svesq(samples, 1, &sumSquares, vDSP_Length(samples.count))
+        let rms = sqrt(sumSquares / Float(samples.count))
+
+        // Calculate zero crossing rate
+        let zcr = calculateZeroCrossingRate(samples)
+
+        // Speech typically has:
+        // - Higher energy than silence
+        // - ZCR between 0.02 and 0.15 (voiced speech)
+        // - Lower ZCR indicates voiced sounds, higher indicates unvoiced/noise
+
+        // Energy score (normalized, speech typically has RMS > 0.01)
+        let energyScore = min(rms / 0.05, 1.0)
+
+        // ZCR score (speech typically has ZCR in 0.02-0.15 range)
+        let optimalZCR: Float = 0.08
+        let zcrDeviation = abs(zcr - optimalZCR)
+        let zcrScore = max(0, 1.0 - zcrDeviation / 0.1)
+
+        // Spectral flatness (lower = more tonal/speech-like)
+        let spectralScore = calculateSpectralFlatnessScore(samples)
+
+        // Combined VAD score
+        let vadScore = energyScore * 0.5 + zcrScore * 0.25 + spectralScore * 0.25
+
+        return vadScore
+    }
+
+    /// Check if audio passes VAD threshold
+    public func containsSpeech(in samples: [Float]) -> Bool {
+        return detectVoiceActivity(in: samples) >= vadThreshold
+    }
+
+    /// Calculate spectral flatness score (1 = tonal/speech, 0 = noise)
+    private func calculateSpectralFlatnessScore(_ samples: [Float]) -> Float {
+        guard samples.count >= fftSize else { return 0.5 }
+
+        let powerSpectrum = computePowerSpectrum(Array(samples.prefix(fftSize)))
+
+        // Geometric mean / Arithmetic mean
+        var logSum: Float = 0
+        var linearSum: Float = 0
+        var validCount = 0
+
+        for power in powerSpectrum where power > 1e-10 {
+            logSum += log(power)
+            linearSum += power
+            validCount += 1
+        }
+
+        guard validCount > 0, linearSum > 0 else { return 0.5 }
+
+        let geometricMean = exp(logSum / Float(validCount))
+        let arithmeticMean = linearSum / Float(validCount)
+
+        let flatness = geometricMean / arithmeticMean
+
+        // Invert: low flatness = tonal (speech), high flatness = noise
+        // Speech typically has flatness < 0.3
+        return max(0, 1.0 - flatness / 0.5)
+    }
+
     // MARK: - Public Methods
 
     /// Train the verifier with multiple audio samples
@@ -138,7 +212,7 @@ public final class VoiceVerifier: @unchecked Sendable {
         var mfccFrames: [[Float]] = []
 
         // Pre-emphasis filter
-        var emphasized = preEmphasis(samples)
+        let emphasized = preEmphasis(samples)
 
         // Process frames
         var frameStart = 0
@@ -214,17 +288,22 @@ public final class VoiceVerifier: @unchecked Sendable {
         var realp = [Float](repeating: 0, count: fftSize / 2)
         var imagp = [Float](repeating: 0, count: fftSize / 2)
 
-        // Convert to split complex
-        paddedFrame.withUnsafeBufferPointer { ptr in
-            ptr.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: fftSize / 2) { complexPtr in
-                var splitComplex = DSPSplitComplex(realp: &realp, imagp: &imagp)
-                vDSP_ctoz(complexPtr, 2, &splitComplex, 1, vDSP_Length(fftSize / 2))
+        // Convert to split complex and perform FFT
+        realp.withUnsafeMutableBufferPointer { realpPtr in
+            imagp.withUnsafeMutableBufferPointer { imagpPtr in
+                var splitComplex = DSPSplitComplex(realp: realpPtr.baseAddress!, imagp: imagpPtr.baseAddress!)
+
+                // Convert to split complex
+                paddedFrame.withUnsafeBufferPointer { ptr in
+                    ptr.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: fftSize / 2) { complexPtr in
+                        vDSP_ctoz(complexPtr, 2, &splitComplex, 1, vDSP_Length(fftSize / 2))
+                    }
+                }
+
+                // Perform FFT
+                vDSP_fft_zrip(fftSetup, &splitComplex, 1, log2n, FFTDirection(FFT_FORWARD))
             }
         }
-
-        // Perform FFT
-        var splitComplex = DSPSplitComplex(realp: &realp, imagp: &imagp)
-        vDSP_fft_zrip(fftSetup, &splitComplex, 1, log2n, FFTDirection(FFT_FORWARD))
 
         // Compute power spectrum
         var powerSpectrum = [Float](repeating: 0, count: fftSize / 2 + 1)

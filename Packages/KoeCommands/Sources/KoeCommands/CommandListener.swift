@@ -201,8 +201,11 @@ public final class CommandListener: NSObject, @unchecked Sendable {
         recognitionRequest.shouldReportPartialResults = true
         recognitionRequest.requiresOnDeviceRecognition = speechRecognizer.supportsOnDeviceRecognition
 
-        // Add context hints for better recognition of "kon"
-        recognitionRequest.contextualStrings = ["kon", "Kon", "KON", "kong", "Kong", "con", "Con"]
+        // Add context hints for better recognition of "kon" and "koe"
+        recognitionRequest.contextualStrings = [
+            "kon", "Kon", "KON", "kong", "Kong", "con", "Con",
+            "koe", "Koe", "KOE", "koi", "Koi", "coy", "Coy"
+        ]
 
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)

@@ -105,12 +105,19 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
         if isCancelled { return }
 
         do {
+            // Use ANE for fastest daily transcription (one-time 4-min compilation on first load)
+            let computeOptions = ModelComputeOptions(
+                audioEncoderCompute: .cpuAndNeuralEngine,
+                textDecoderCompute: .cpuAndNeuralEngine
+            )
+
             // Check for bundled model first
             if let bundledPath = getBundledModelPath(for: name) {
                 notifyProgress(-1) // Animated loading
 
                 let kit = try await WhisperKit(
                     modelFolder: bundledPath,
+                    computeOptions: computeOptions,
                     verbose: false,
                     logLevel: .error,
                     prewarm: true,
@@ -142,9 +149,10 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
 
                 let kit = try await WhisperKit(
                     modelFolder: cachedModelPath.path,
+                    computeOptions: computeOptions,
                     verbose: false,
                     logLevel: .error,
-                    prewarm: true,
+                    prewarm: false,  // Skip prewarm for faster startup
                     load: true
                 )
 
@@ -204,10 +212,12 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
 
             let kit = try await WhisperKit(
                 modelFolder: downloadedFolder.path,
+                computeOptions: computeOptions,
                 verbose: false,
                 logLevel: .error,
-                prewarm: true,
-                load: true
+                prewarm: false,  // Skip prewarm for faster startup
+                load: true,
+                useBackgroundDownloadSession: false
             )
 
             lock.lock()

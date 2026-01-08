@@ -10,11 +10,13 @@ public final class CommandDetector: @unchecked Sendable {
 
     private let listener: CommandListener
     private let verifier: VoiceVerifier
+    private let fluidVerifier: FluidAudioVerifier
     private let profileManager: VoiceProfileManager
 
     private let lock = NSLock()
     private var _commands: [VoiceCommand] = []
     private var _isEnabled: Bool = false
+    private var _settings: VoiceCommandSettings = .load()
     private var lastDetectionTime: Date?
     private let detectionCooldown: TimeInterval = 2.0  // Prevent rapid re-triggers
 
@@ -22,7 +24,23 @@ public final class CommandDetector: @unchecked Sendable {
     private var pendingCommand: CommandDetectionResult?
     private var pendingCommandTimer: Timer?
     private var triggerWordCount: Int = 0  // Word count when trigger was detected
-    private let silenceConfirmationDelay: TimeInterval = 2.0  // Wait 2 seconds of silence
+    private let defaultSilenceConfirmationDelay: TimeInterval = 2.0
+
+    /// Voice command settings (experimental features)
+    public var settings: VoiceCommandSettings {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _settings
+        }
+        set {
+            lock.lock()
+            _settings = newValue
+            lock.unlock()
+            newValue.save()
+            applySettings()
+        }
+    }
 
     /// Callback when a command is detected and verified
     public var onCommandDetected: ((CommandDetectionResult) -> Void)?
@@ -84,10 +102,12 @@ public final class CommandDetector: @unchecked Sendable {
     public init(
         listener: CommandListener = CommandListener(),
         verifier: VoiceVerifier = VoiceVerifier(),
+        fluidVerifier: FluidAudioVerifier = FluidAudioVerifier(),
         profileManager: VoiceProfileManager = .shared
     ) {
         self.listener = listener
         self.verifier = verifier
+        self.fluidVerifier = fluidVerifier
         self.profileManager = profileManager
 
         // Load saved commands
@@ -96,14 +116,44 @@ public final class CommandDetector: @unchecked Sendable {
         // Load user embedding if profile exists
         if let profile = profileManager.currentProfile {
             verifier.userEmbedding = profile.embedding
+            // Also load for FluidVerifier (will use if ECAPA-TDNN enabled and embedding is 256-dim)
+            if profile.neuralEmbedding != nil {
+                fluidVerifier.userEmbedding = profile.neuralEmbedding
+                logger.notice("[CommandDetector] Loaded neural embedding with \(profile.neuralEmbedding?.count ?? 0) dimensions")
+            }
             logger.notice("[CommandDetector] Loaded profile with \(profile.embedding.count)-dim embedding")
         } else {
             logger.notice("[CommandDetector] No profile found at init")
         }
 
         setupListener()
+        applySettings()
         let commandCount = _commands.count
         logger.notice("[CommandDetector] Initialized with \(commandCount) commands")
+    }
+
+    /// Apply current settings to components
+    private func applySettings() {
+        lock.lock()
+        let currentSettings = _settings
+        lock.unlock()
+
+        // Apply VAD threshold to verifier
+        verifier.vadThreshold = currentSettings.vadThreshold
+
+        // Apply confidence threshold to both verifiers
+        verifier.threshold = currentSettings.confidenceThreshold
+        fluidVerifier.threshold = currentSettings.confidenceThreshold
+
+        // If ECAPA-TDNN is enabled, load the model in background (lazy loading)
+        if currentSettings.useECAPATDNN && !fluidVerifier.isReady {
+            Task {
+                logger.notice("[CommandDetector] Loading FluidAudio model for ECAPA-TDNN...")
+                await fluidVerifier.loadModelIfNeeded()
+            }
+        }
+
+        logger.notice("[CommandDetector] Applied settings: VAD=\(currentSettings.vadEnabled), threshold=\(currentSettings.confidenceThreshold), ECAPA=\(currentSettings.useECAPATDNN)")
     }
 
     // MARK: - Public Methods
@@ -158,7 +208,7 @@ public final class CommandDetector: @unchecked Sendable {
             logger.notice("[CommandDetector] Sample \(i+1): \(sample.count) samples")
         }
 
-        // Extract and average embeddings
+        // Extract and average embeddings (simple MFCC-based)
         let embedding = verifier.train(samples: samples)
 
         guard !embedding.isEmpty else {
@@ -169,7 +219,7 @@ public final class CommandDetector: @unchecked Sendable {
         logger.notice("[CommandDetector] Generated embedding with \(embedding.count) features")
 
         // Create and save profile
-        let profile = VoiceProfile(
+        var profile = VoiceProfile(
             name: name,
             embedding: embedding,
             trainingCommandSamples: samples.count
@@ -180,7 +230,69 @@ public final class CommandDetector: @unchecked Sendable {
 
         logger.notice("[CommandDetector] Voice profile saved successfully")
 
+        // Also train neural embedding asynchronously if ECAPA-TDNN is enabled
+        Task {
+            await self.trainNeuralEmbedding(samples: samples)
+        }
+
         return profile
+    }
+
+    /// Train neural embedding asynchronously (for ECAPA-TDNN/WeSpeaker)
+    private func trainNeuralEmbedding(samples: [[Float]]) async {
+        logger.notice("[CommandDetector] Training neural embedding with FluidAudio...")
+
+        let neuralEmbedding = await fluidVerifier.train(samples: samples)
+
+        guard !neuralEmbedding.isEmpty else {
+            logger.notice("[CommandDetector] Neural embedding training failed")
+            return
+        }
+
+        logger.notice("[CommandDetector] Generated neural embedding with \(neuralEmbedding.count) dimensions")
+
+        // Update the profile with neural embedding
+        if var profile = profileManager.currentProfile {
+            profile.neuralEmbedding = neuralEmbedding
+            profile.updatedAt = Date()
+            profileManager.currentProfile = profile
+            fluidVerifier.userEmbedding = neuralEmbedding
+            logger.notice("[CommandDetector] Saved neural embedding to profile")
+        }
+    }
+
+    /// Perform speaker verification using the appropriate verifier based on settings
+    private func performVerification(samples: [Float]) -> (isMatch: Bool, confidence: Float) {
+        lock.lock()
+        let useNeural = _settings.useECAPATDNN
+        lock.unlock()
+
+        if useNeural && fluidVerifier.isReady && fluidVerifier.userEmbedding != nil {
+            // Use neural network verification (ECAPA-TDNN/WeSpeaker)
+            logger.notice("[CommandDetector] Using FluidAudio neural verification")
+
+            // FluidAudioVerifier.verify is async, so we need to run it in a detached task
+            // For now, use synchronous fallback with the simple verifier
+            // The neural verification happens asynchronously below
+            let semaphore = DispatchSemaphore(value: 0)
+            var neuralResult: (Bool, Float) = (false, 0.0)
+
+            Task {
+                neuralResult = await self.fluidVerifier.verify(samples: samples)
+                semaphore.signal()
+            }
+
+            // Wait with timeout
+            let waitResult = semaphore.wait(timeout: .now() + 2.0)
+            if waitResult == .success {
+                return neuralResult
+            } else {
+                logger.notice("[CommandDetector] Neural verification timed out, falling back to simple verifier")
+            }
+        }
+
+        // Use simple MFCC-based verification
+        return verifier.verify(samples: samples)
     }
 
     /// Delete the current voice profile
@@ -194,9 +306,14 @@ public final class CommandDetector: @unchecked Sendable {
     public func reloadProfile() {
         if let profile = profileManager.currentProfile {
             verifier.userEmbedding = profile.embedding
+            if let neuralEmb = profile.neuralEmbedding {
+                fluidVerifier.userEmbedding = neuralEmb
+                logger.notice("[CommandDetector] Reloaded neural embedding: \(neuralEmb.count) dimensions")
+            }
             logger.notice("[CommandDetector] Reloaded voice profile: \(profile.name)")
         } else {
             verifier.userEmbedding = nil
+            fluidVerifier.userEmbedding = nil
             logger.notice("[CommandDetector] No voice profile found")
         }
     }
@@ -252,10 +369,21 @@ public final class CommandDetector: @unchecked Sendable {
     }
 
     private func handleDetectedText(_ text: String, samples: [Float]) {
+        let currentSettings = settings
+
         // Check if another app is using the microphone (skip to avoid false triggers during calls)
         if listener.isOtherAppUsingMicrophone() {
             logger.notice("[CommandDetector] Another app is using microphone, skipping")
             return
+        }
+
+        // Voice Activity Detection - skip if no speech detected (if enabled)
+        if currentSettings.vadEnabled {
+            let vadScore = verifier.detectVoiceActivity(in: samples)
+            if vadScore < currentSettings.vadThreshold {
+                logger.notice("[CommandDetector] VAD: No speech detected (score: \(vadScore)), skipping")
+                return
+            }
         }
 
         // Check cooldown
@@ -285,6 +413,16 @@ public final class CommandDetector: @unchecked Sendable {
             }
         }
 
+        // Check for extended trigger phrase first (Phase 2 feature)
+        if currentSettings.useExtendedTrigger {
+            let extendedTrigger = currentSettings.extendedTriggerPhrase.lowercased()
+            if normalizedText.contains(extendedTrigger) {
+                logger.notice("[CommandDetector] ✓ Matched extended trigger: \(extendedTrigger, privacy: .public)")
+                processMatchedTrigger(text: normalizedText, samples: samples, wordCount: currentWordCount, settings: currentSettings)
+                return
+            }
+        }
+
         // Check for matching commands
         lock.lock()
         let activeCommands = _commands.filter { $0.isEnabled }
@@ -304,7 +442,7 @@ public final class CommandDetector: @unchecked Sendable {
                 logger.notice("[CommandDetector] ✓ Matched trigger: \(command.trigger, privacy: .public)")
                 // Verify speaker
                 logger.notice("[CommandDetector] Verifying voice with \(samples.count) samples...")
-                let (isMatch, confidence) = verifier.verify(samples: samples)
+                let (isMatch, confidence) = performVerification(samples: samples)
                 logger.notice("[CommandDetector] Voice verification: match=\(isMatch), confidence=\(confidence)")
 
                 let result = CommandDetectionResult(
@@ -326,6 +464,40 @@ public final class CommandDetector: @unchecked Sendable {
         }
     }
 
+    /// Process a matched trigger (used for both regular and extended triggers)
+    private func processMatchedTrigger(text: String, samples: [Float], wordCount: Int, settings: VoiceCommandSettings) {
+        // Get the first enabled command (for extended trigger, use default command)
+        lock.lock()
+        let activeCommands = _commands.filter { $0.isEnabled }
+        lock.unlock()
+
+        guard let command = activeCommands.first else {
+            logger.notice("[CommandDetector] No active commands to execute")
+            return
+        }
+
+        // Verify speaker
+        logger.notice("[CommandDetector] Verifying voice with \(samples.count) samples...")
+        let (isMatch, confidence) = performVerification(samples: samples)
+        logger.notice("[CommandDetector] Voice verification: match=\(isMatch), confidence=\(confidence)")
+
+        let result = CommandDetectionResult(
+            command: command,
+            confidence: Double(confidence),
+            isVoiceVerified: isMatch
+        )
+
+        // Use settings threshold for shouldExecute check
+        let meetsThreshold = confidence >= settings.confidenceThreshold
+        if command.isEnabled && isMatch && meetsThreshold {
+            // Don't execute immediately - wait for silence confirmation
+            logger.notice("[CommandDetector] ⏳ Waiting for silence confirmation...")
+            setPendingCommand(result, wordCount: wordCount)
+        } else {
+            logger.notice("[CommandDetector] ✗ Extended trigger detected but verification failed (confidence: \(confidence), threshold: \(settings.confidenceThreshold))")
+        }
+    }
+
     // MARK: - Silence Confirmation
 
     private func setPendingCommand(_ result: CommandDetectionResult, wordCount: Int) {
@@ -333,15 +505,17 @@ public final class CommandDetector: @unchecked Sendable {
         triggerWordCount = wordCount
 
         // Start timer - if no more words detected, execute command
+        let delay = settings.silenceConfirmationDelay
         pendingCommandTimer?.invalidate()
-        pendingCommandTimer = Timer.scheduledTimer(withTimeInterval: silenceConfirmationDelay, repeats: false) { [weak self] _ in
+        pendingCommandTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             self?.executePendingCommand()
         }
     }
 
     private func resetPendingCommandTimer() {
+        let delay = settings.silenceConfirmationDelay
         pendingCommandTimer?.invalidate()
-        pendingCommandTimer = Timer.scheduledTimer(withTimeInterval: silenceConfirmationDelay, repeats: false) { [weak self] _ in
+        pendingCommandTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             self?.executePendingCommand()
         }
     }

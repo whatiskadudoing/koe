@@ -86,8 +86,8 @@ struct PipelineStripView: View {
         case .idle:
             return false
         case .recording:
-            // Recording means hotkey is being held
-            return stage == .hotkey
+            // Recording means trigger is active (hotkey held or voice command)
+            return stage == .trigger
         case .transcribing:
             return stage == .transcription
         case .refining:

@@ -3,7 +3,7 @@ import KoeUI
 
 /// Represents a stage in the visual pipeline editor
 enum PipelineStageInfo: String, CaseIterable, Identifiable {
-    case hotkey
+    case trigger  // Unified: hotkey + voice command triggers
     case transcription
     case improve  // Combined: cleanup, tone, and prompt optimization
     case autoType
@@ -13,7 +13,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .hotkey: return "Hotkey"
+        case .trigger: return "Trigger"
         case .transcription: return "Transcribe"
         case .improve: return "Improve"
         case .autoType: return "Type"
@@ -23,7 +23,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .hotkey: return "command"
+        case .trigger: return "bolt.circle"
         case .transcription: return "text.bubble"
         case .improve: return "sparkles"
         case .autoType: return "keyboard"
@@ -33,7 +33,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .hotkey: return KoeColors.accent
+        case .trigger: return KoeColors.accent
         case .transcription: return KoeColors.stateTranscribing
         case .improve: return KoeColors.stateRefining
         case .autoType: return KoeColors.accent
@@ -57,7 +57,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this stage has settings that can be configured
     var hasSettings: Bool {
         switch self {
-        case .hotkey, .transcription, .improve: return true
+        case .trigger, .transcription, .improve: return true
         default: return false
         }
     }
@@ -66,7 +66,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Returns nil for stages that aren't tracked as pipeline elements
     var pipelineTypeId: String? {
         switch self {
-        case .hotkey: return nil  // Hotkey is a trigger, not a pipeline element
+        case .trigger: return nil  // Trigger is not a pipeline element
         case .transcription: return nil  // Transcription happens before pipeline
         case .improve: return "text-improve"
         case .autoType: return "auto-type"

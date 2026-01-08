@@ -4,7 +4,8 @@ import Foundation
 public struct VoiceProfile: Codable, Sendable, Identifiable, Equatable {
     public let id: UUID
     public let name: String
-    public let embedding: [Float]
+    public let embedding: [Float]  // Simple MFCC-based embedding
+    public var neuralEmbedding: [Float]?  // 256-dim WeSpeaker embedding (optional)
     public let trainingCommandSamples: Int
     public let createdAt: Date
     public var updatedAt: Date
@@ -13,6 +14,7 @@ public struct VoiceProfile: Codable, Sendable, Identifiable, Equatable {
         id: UUID = UUID(),
         name: String,
         embedding: [Float],
+        neuralEmbedding: [Float]? = nil,
         trainingCommandSamples: Int,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -20,6 +22,7 @@ public struct VoiceProfile: Codable, Sendable, Identifiable, Equatable {
         self.id = id
         self.name = name
         self.embedding = embedding
+        self.neuralEmbedding = neuralEmbedding
         self.trainingCommandSamples = trainingCommandSamples
         self.createdAt = createdAt
         self.updatedAt = updatedAt

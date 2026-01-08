@@ -11,12 +11,17 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../KoeDomain"),
-        .package(path: "../KoeAudio")
+        .package(path: "../KoeAudio"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.7.9")
     ],
     targets: [
         .target(
             name: "KoeCommands",
-            dependencies: ["KoeDomain", "KoeAudio"]
+            dependencies: [
+                "KoeDomain",
+                "KoeAudio",
+                .product(name: "FluidAudio", package: "FluidAudio")
+            ]
         )
     ]
 )

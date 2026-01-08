@@ -13,8 +13,8 @@ struct NodeSettingsContent: View {
         @Bindable var appState = appState
 
         switch stage {
-        case .hotkey:
-            HotkeySettings(appState: appState)
+        case .trigger:
+            TriggerSettings(appState: appState)
         case .transcription:
             TranscribeSettings(appState: appState)
         case .improve:
@@ -187,9 +187,80 @@ struct AutoEnterSettings: View {
     }
 }
 
-// MARK: - Hotkey Settings
+// MARK: - Unified Trigger Settings
 
-struct HotkeySettings: View {
+struct TriggerSettings: View {
+    @Bindable var appState: AppState
+    @State private var selectedTab: TriggerTab = .hotkey
+
+    enum TriggerTab: String, CaseIterable {
+        case hotkey = "Hotkey"
+        case voice = "Voice"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Tab selector
+            HStack(spacing: 4) {
+                ForEach(TriggerTab.allCases, id: \.self) { tab in
+                    TriggerTabButton(
+                        tab: tab,
+                        isSelected: selectedTab == tab,
+                        isEnabled: tab == .hotkey ? true : appState.hasVoiceProfile
+                    ) {
+                        selectedTab = tab
+                    }
+                }
+            }
+            .padding(3)
+            .background(KoeColors.surface)
+            .cornerRadius(8)
+
+            Divider()
+
+            // Tab content
+            switch selectedTab {
+            case .hotkey:
+                HotkeyTriggerContent(appState: appState)
+            case .voice:
+                VoiceCommandTriggerContent(appState: appState)
+            }
+        }
+    }
+}
+
+struct TriggerTabButton: View {
+    let tab: TriggerSettings.TriggerTab
+    let isSelected: Bool
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: tab == .hotkey ? "command" : "waveform")
+                    .font(.system(size: 10))
+                Text(tab.rawValue)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                if !isEnabled {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 8))
+                        .foregroundColor(.orange)
+                }
+            }
+            .foregroundColor(isSelected ? .white : KoeColors.accent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isSelected ? KoeColors.accent : Color.clear)
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Hotkey Trigger Content
+
+struct HotkeyTriggerContent: View {
     @Bindable var appState: AppState
 
     private let presets: [(name: String, keyCode: UInt32, modifiers: Int, display: String)] = [
@@ -252,6 +323,113 @@ struct HotkeySettings: View {
     }
 }
 
+// MARK: - Voice Command Trigger Content
+
+struct VoiceCommandTriggerContent: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Enable/disable toggle
+            HStack {
+                Toggle(isOn: $appState.isCommandListeningEnabled) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 12))
+                            .foregroundColor(appState.isCommandListeningEnabled ? KoeColors.accent : KoeColors.textLight)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Voice Activation")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(KoeColors.accent)
+
+                            Text("Say \"kon\" to start recording")
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .disabled(!appState.hasVoiceProfile)
+            }
+
+            // Voice profile status
+            if appState.hasVoiceProfile {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.green)
+                    Text("Voice trained")
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.textTertiary)
+
+                    Spacer()
+
+                    Button("Retrain") {
+                        NotificationCenter.default.post(name: .showVoiceTraining, object: nil)
+                    }
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(KoeColors.accent)
+                    .buttonStyle(.plain)
+                }
+            } else {
+                // Training required message
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.orange)
+                        Text("Voice training required")
+                            .font(.system(size: 11))
+                            .foregroundColor(.orange)
+                    }
+
+                    Button(action: {
+                        NotificationCenter.default.post(name: .showVoiceTraining, object: nil)
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.wave.2")
+                                .font(.system(size: 11))
+                            Text("Train Your Voice")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(KoeColors.accent)
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            // Status indicator when enabled
+            if appState.isCommandListeningEnabled && appState.hasVoiceProfile {
+                Divider()
+
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 6, height: 6)
+                    Text("Listening for \"kon\"...")
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+            }
+        }
+    }
+}
+
+// Keep for backwards compatibility
+struct HotkeySettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        HotkeyTriggerContent(appState: appState)
+    }
+}
+
 // MARK: - Settings Tone Chip
 
 struct SettingsToneChip: View {
@@ -286,12 +464,12 @@ struct SettingsToneChip: View {
         }
 
         SettingsModal(
-            title: "Hotkey Settings",
-            icon: "command",
+            title: "Trigger Settings",
+            icon: "bolt.circle",
             iconColor: KoeColors.accent,
             onClose: {}
         ) {
-            NodeSettingsContent(stage: .hotkey)
+            NodeSettingsContent(stage: .trigger)
                 .environment(AppState.shared)
         }
     }

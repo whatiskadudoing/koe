@@ -1,6 +1,7 @@
 import SwiftUI
 import KoeDomain
 import KoeUI
+import KoeModels
 
 struct LoadingView: View {
     @Environment(AppState.self) private var appState
@@ -8,10 +9,23 @@ struct LoadingView: View {
     @State private var contentOpacity: Double = 0
     @State private var contentOffset: CGFloat = 20
     @State private var checkTimer: Timer?
+    @State private var progressTimer: Timer?
+
+    // Loading state
+    @State private var loadingPhase: LoadingPhase = .checkingModels
+    @State private var downloadProgress: Double = 0
+    @State private var downloadingModelName: String?
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
     private let circleSize: CGFloat = 80
+
+    enum LoadingPhase {
+        case checkingModels
+        case downloading
+        case loadingModel
+        case ready
+    }
 
     var body: some View {
         ZStack {
@@ -38,27 +52,93 @@ struct LoadingView: View {
                         .frame(width: circleSize, height: circleSize)
                         .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
 
-                    Image(systemName: "brain")
+                    Image(systemName: phaseIcon)
                         .font(.system(size: 32, weight: .light))
                         .foregroundColor(accentColor)
                 }
 
                 // Loading text
                 VStack(spacing: 8) {
-                    Text("Getting smarter")
+                    Text(phaseTitle)
                         .font(.system(size: 18, weight: .light, design: .rounded))
                         .foregroundColor(accentColor)
                         .tracking(0.3)
 
-                    // Show progress percentage or status
-                    if coordinator.modelLoadingProgress > 0 && coordinator.modelLoadingProgress < 1 {
-                        Text("\(Int(coordinator.modelLoadingProgress * 100))%")
-                            .font(.system(size: 12, weight: .regular, design: .monospaced))
-                            .foregroundColor(lightGray)
-                    } else {
-                        Text("Loading intelligence...")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundColor(lightGray.opacity(0.8))
+                    // Show progress or status
+                    Group {
+                        switch loadingPhase {
+                        case .checkingModels:
+                            Text("Checking models...")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(lightGray.opacity(0.8))
+
+                        case .downloading:
+                            VStack(spacing: 6) {
+                                if let modelName = downloadingModelName {
+                                    Text("Downloading \(modelName)")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(lightGray.opacity(0.8))
+                                }
+
+                                // Progress bar
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .fill(lightGray.opacity(0.2))
+                                        RoundedRectangle(cornerRadius: 3)
+                                            .fill(accentColor)
+                                            .frame(width: geo.size.width * downloadProgress)
+                                    }
+                                }
+                                .frame(width: 160, height: 6)
+
+                                Text("\(Int(downloadProgress * 100))%")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundColor(lightGray)
+                            }
+
+                        case .loadingModel:
+                            VStack(spacing: 6) {
+                                if downloadProgress > 0.01 && downloadProgress < 0.95 {
+                                    Text("Downloading model... \(Int(downloadProgress * 100))%")
+                                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                        .foregroundColor(lightGray)
+
+                                    // Progress bar for download
+                                    GeometryReader { geo in
+                                        ZStack(alignment: .leading) {
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .fill(lightGray.opacity(0.2))
+                                            RoundedRectangle(cornerRadius: 3)
+                                                .fill(accentColor)
+                                                .frame(width: geo.size.width * downloadProgress)
+                                        }
+                                    }
+                                    .frame(width: 160, height: 6)
+                                } else if downloadProgress >= 0.95 {
+                                    Text("Compiling AI model...")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(lightGray.opacity(0.8))
+
+                                    Text("First run only - please wait")
+                                        .font(.system(size: 10, weight: .regular))
+                                        .foregroundColor(lightGray.opacity(0.5))
+                                } else {
+                                    Text("Loading AI model...")
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(lightGray.opacity(0.8))
+
+                                    Text("This may take a moment")
+                                        .font(.system(size: 10, weight: .regular))
+                                        .foregroundColor(lightGray.opacity(0.5))
+                                }
+                            }
+
+                        case .ready:
+                            Text("Ready")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(lightGray.opacity(0.8))
+                        }
                     }
                 }
 
@@ -74,23 +154,62 @@ struct LoadingView: View {
                 contentOffset = 0
             }
 
-            // Trigger model loading now that we're past the permissions screen
-            startModelLoading()
+            // Start progress polling timer
+            startProgressPolling()
+
+            // Start the loading process
+            Task {
+                await checkAndLoadModels()
+            }
 
             // Start checking for model loaded state
             startModelLoadingCheck()
         }
         .onDisappear {
             stopModelLoadingCheck()
+            stopProgressPolling()
         }
     }
 
-    private func startModelLoading() {
+    private var phaseTitle: String {
+        switch loadingPhase {
+        case .checkingModels:
+            return "Getting ready"
+        case .downloading:
+            return "Downloading models"
+        case .loadingModel:
+            return "Getting smarter"
+        case .ready:
+            return "Welcome back"
+        }
+    }
+
+    private var phaseIcon: String {
+        switch loadingPhase {
+        case .checkingModels:
+            return "magnifyingglass"
+        case .downloading:
+            return "arrow.down.circle"
+        case .loadingModel:
+            return "brain"
+        case .ready:
+            return "checkmark.circle"
+        }
+    }
+
+    private func checkAndLoadModels() async {
+        // Note: WhisperKit handles its own model downloads with progress
+        // ModelManager is for optional models (FluidAudio, LLMs) that are downloaded on-demand
+        // So we go straight to loading the transcription model
+
+        loadingPhase = .loadingModel
+        await startModelLoading()
+    }
+
+    private func startModelLoading() async {
         // Only start loading if not already loaded
         if !coordinator.isModelLoaded {
-            Task {
-                await RecordingCoordinator.shared.loadModel(name: AppState.shared.selectedModel)
-            }
+            await RecordingCoordinator.shared.loadModel(name: AppState.shared.selectedModel)
         }
     }
 
@@ -124,6 +243,23 @@ struct LoadingView: View {
     private func stopModelLoadingCheck() {
         checkTimer?.invalidate()
         checkTimer = nil
+    }
+
+    private func startProgressPolling() {
+        // Poll progress every 100ms to update UI reactively
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            Task { @MainActor in
+                let progress = RecordingCoordinator.shared.modelLoadingProgress
+                if progress != self.downloadProgress {
+                    self.downloadProgress = progress
+                }
+            }
+        }
+    }
+
+    private func stopProgressPolling() {
+        progressTimer?.invalidate()
+        progressTimer = nil
     }
 
     private func advanceToReady() {
