@@ -96,6 +96,7 @@ struct MeetingsView: View {
         .sheet(isPresented: $showDetail) {
             if let meeting = selectedMeeting {
                 MeetingDetailView(meeting: meeting)
+                    .environment(coordinator)
             }
         }
         .onChange(of: coordinator.meetingState.isRecording) { _, isRecording in
