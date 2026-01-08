@@ -50,7 +50,7 @@ struct ContentView: View {
 
     private var mainUI: some View {
         VStack(spacing: 0) {
-            // Top bar with settings and tab toggle
+            // Top bar with tab toggle
             HStack {
                 Spacer()
 
@@ -58,10 +58,8 @@ struct ContentView: View {
                 TabToggle(selectedTab: $selectedTab)
 
                 Spacer()
-
-                SettingsButton()
             }
-            .padding(.top, 4)
+            .padding(.top, 12)
 
             // Content based on selected tab
             switch selectedTab {

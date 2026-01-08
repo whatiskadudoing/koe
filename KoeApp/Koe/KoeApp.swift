@@ -365,17 +365,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarAnimationTimer = nil
     }
 
-    private func getLanguageFlag() -> String {
-        // Get language on main thread safely
-        let lang = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto"
-        switch lang {
-        case "en": return "🇺🇸"
-        case "es": return "🇪🇸"
-        case "pt": return "🇧🇷"
-        default: return "🌐"  // Auto-detect
-        }
-    }
-
     private func updateAnimatedIcon() {
         guard let button = statusItem?.button else { return }
 
@@ -386,22 +375,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let color: NSColor
         let audioLevel: Float
         let speed: Double
-        var percentText: String? = nil
 
         switch menuBarState {
         case .loading:
             color = .systemBlue
             audioLevel = 0.6
             speed = 3.0  // Faster animation while loading
-            // Show percentage during download, or animated dots for cached loading
-            if downloadProgress > 0 && downloadProgress < 1 {
-                let percent = Int(downloadProgress * 100)
-                percentText = "\(percent)%"
-            } else {
-                // Animated loading dots
-                let dots = Int(time * 2) % 4
-                percentText = String(repeating: ".", count: dots + 1)
-            }
         case .idle:
             color = .white
             audioLevel = 0.3
@@ -416,47 +395,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             speed = 3.0  // Active
         }
 
-        let flag = getLanguageFlag()
-        let isLoading = (menuBarState == .loading)
-        button.image = createWaveformImage(color: color, audioLevel: audioLevel, time: time, speed: speed, percentText: percentText, flag: flag, isLoading: isLoading)
+        button.image = createWaveformImage(color: color, audioLevel: audioLevel, time: time, speed: speed)
     }
 
-    private func createWaveformImage(color: NSColor, audioLevel: Float, time: Double, speed: Double, percentText: String? = nil, flag: String = "🌐", isLoading: Bool = false) -> NSImage {
-        // During loading: show percentage/dots instead of flag
-        // Otherwise: show flag
-        let leftTextWidth: CGFloat = isLoading ? 28 : 14
-        let waveformWidth: CGFloat = 22
-        let width: CGFloat = leftTextWidth + waveformWidth
-
+    private func createWaveformImage(color: NSColor, audioLevel: Float, time: Double, speed: Double) -> NSImage {
+        // Just the waveform, no text
+        let barCount = 5
+        let barWidth: CGFloat = 2.5
+        let spacing: CGFloat = 1.5
+        let width: CGFloat = CGFloat(barCount) * barWidth + CGFloat(barCount - 1) * spacing + 4  // Add small padding
         let size = NSSize(width: width, height: 18)
 
         let image = NSImage(size: size, flipped: false) { rect in
-            // Left section: either loading indicator or flag
-            if isLoading, let text = percentText {
-                // Draw loading percentage/dots on the left (where flag normally is)
-                let attributes: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
-                    .foregroundColor: color
-                ]
-                let textSize = text.size(withAttributes: attributes)
-                let textY = (rect.height - textSize.height) / 2
-                text.draw(at: NSPoint(x: 0, y: textY), withAttributes: attributes)
-            } else {
-                // Draw flag on the left
-                let flagAttributes: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.systemFont(ofSize: 11)
-                ]
-                let flagSize = flag.size(withAttributes: flagAttributes)
-                let flagY = (rect.height - flagSize.height) / 2
-                flag.draw(at: NSPoint(x: 0, y: flagY), withAttributes: flagAttributes)
-            }
-
-            // Waveform starts after left section
-            let barCount = 5
-            let barWidth: CGFloat = 2.5
-            let spacing: CGFloat = 1.5
-            let waveformStartX: CGFloat = leftTextWidth + 2
-
             color.setFill()
 
             for i in 0..<barCount {
@@ -472,7 +422,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let heightRatio = CGFloat(0.15 + normalizedWave * 0.85) * levelFactor
 
                 let barHeight = max(3, rect.height * heightRatio)
-                let x = waveformStartX + CGFloat(i) * (barWidth + spacing)
+                let x = 2 + CGFloat(i) * (barWidth + spacing)  // Start with small padding
                 let y = (rect.height - barHeight) / 2
 
                 let barRect = NSRect(x: x, y: y, width: barWidth, height: barHeight)
