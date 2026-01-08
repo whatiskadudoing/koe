@@ -159,6 +159,9 @@ public final class RecordingCoordinator {
             try await audioRecorder.startRecording()
             isRecording = true
 
+            // Notify mode manager that dictation started
+            NotificationCenter.default.post(name: .dictationStarted, object: nil)
+
             // Update AppState
             AppState.shared.recordingState = .recording
             AppState.shared.currentTranscription = ""
@@ -210,6 +213,9 @@ public final class RecordingCoordinator {
 
         // Final transcription
         await transcribeFinalAudio(mode: mode, language: language)
+
+        // Notify mode manager that dictation ended
+        NotificationCenter.default.post(name: .dictationEnded, object: nil)
 
         // Update AppState to idle
         AppState.shared.recordingState = .idle

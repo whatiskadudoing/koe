@@ -7,6 +7,7 @@ import Combine
 
 enum PermissionStep {
     case microphone
+    case screenRecording
     case accessibility
     case complete
 }
@@ -50,6 +51,9 @@ struct PermissionsView: View {
                                 .fill(currentStep == .microphone ? accentColor : (appState.hasMicrophonePermission ? Color.green : lightGray.opacity(0.3)))
                                 .frame(width: 8, height: 8)
                             Circle()
+                                .fill(currentStep == .screenRecording ? accentColor : (appState.hasScreenRecordingPermission ? Color.green : lightGray.opacity(0.3)))
+                                .frame(width: 8, height: 8)
+                            Circle()
                                 .fill(currentStep == .accessibility ? accentColor : (appState.hasAccessibilityPermission ? Color.green : lightGray.opacity(0.3)))
                                 .frame(width: 8, height: 8)
                         }
@@ -69,6 +73,21 @@ struct PermissionsView: View {
                                 isRequesting: isRequestingPermission,
                                 buttonTitle: "Allow Microphone",
                                 onRequest: requestMicrophonePermission
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+
+                        case .screenRecording:
+                            PermissionCard(
+                                icon: "rectangle.dashed.badge.record",
+                                title: "Screen Recording",
+                                description: "Koe needs screen recording access to detect meeting apps and capture meeting audio.",
+                                isGranted: appState.hasScreenRecordingPermission,
+                                isRequesting: isRequestingPermission,
+                                buttonTitle: "Open Settings",
+                                onRequest: requestScreenRecordingPermission
                             )
                             .transition(.asymmetric(
                                 insertion: .move(edge: .trailing).combined(with: .opacity),
@@ -102,9 +121,10 @@ struct PermissionsView: View {
 
                 // Status summary at bottom
                 VStack(spacing: 8) {
-                    HStack(spacing: 16) {
-                        StatusPill(title: "Microphone", isGranted: appState.hasMicrophonePermission)
-                        StatusPill(title: "Accessibility", isGranted: appState.hasAccessibilityPermission)
+                    HStack(spacing: 12) {
+                        StatusPill(title: "Mic", isGranted: appState.hasMicrophonePermission)
+                        StatusPill(title: "Screen", isGranted: appState.hasScreenRecordingPermission)
+                        StatusPill(title: "Access", isGranted: appState.hasAccessibilityPermission)
                     }
                 }
                 .padding(.horizontal, 40)
@@ -169,6 +189,8 @@ struct PermissionsView: View {
     private func updateStep() {
         if !appState.hasMicrophonePermission {
             currentStep = .microphone
+        } else if !appState.hasScreenRecordingPermission {
+            currentStep = .screenRecording
         } else if !appState.hasAccessibilityPermission {
             currentStep = .accessibility
         } else {
@@ -191,6 +213,19 @@ struct PermissionsView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func requestScreenRecordingPermission() {
+        isRequestingPermission = true
+
+        // Open Screen Recording settings in System Preferences
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            isRequestingPermission = false
         }
     }
 

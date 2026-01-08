@@ -13,6 +13,7 @@ public struct KoeLogger: Sendable {
         case hotkey = "Hotkey"
         case ui = "UI"
         case storage = "Storage"
+        case meeting = "Meeting"
         case general = "General"
     }
 
@@ -99,6 +100,9 @@ public extension KoeLogger {
 
     /// Storage logger
     static let storage = KoeLogger(category: .storage)
+
+    /// Meeting logger
+    static let meeting = KoeLogger(category: .meeting)
 
     /// General logger
     static let general = KoeLogger(category: .general)

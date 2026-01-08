@@ -1,9 +1,21 @@
 import SwiftUI
 import KoeDomain
+import KoeMeeting
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(RecordingCoordinator.self) private var coordinator
+    @Environment(MeetingCoordinator.self) private var meetingCoordinator
+
+    @State private var selectedTab: AppTab = .dictation
+
+    /// Track if we auto-switched to meetings (to know if we should auto-return)
+    @State private var didAutoSwitchToMeetings: Bool = false
+
+    enum AppTab {
+        case dictation
+        case meetings
+    }
 
     var body: some View {
         ZStack {
@@ -35,24 +47,84 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 380, minHeight: 520)
+        .onAppear {
+            setupTabSwitchObservers()
+        }
+    }
+
+    // MARK: - Tab Switch Observers
+
+    private func setupTabSwitchObservers() {
+        // Observe meeting detected - switch to meetings tab
+        NotificationCenter.default.addObserver(
+            forName: .meetingDetectedSwitchTab,
+            object: nil,
+            queue: .main
+        ) { _ in
+            // Only auto-switch if we're on dictation and not recording
+            if selectedTab == .dictation && appState.recordingState == .idle {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    selectedTab = .meetings
+                    didAutoSwitchToMeetings = true
+                }
+            }
+        }
+
+        // Observe meeting ended - return to dictation if we auto-switched
+        NotificationCenter.default.addObserver(
+            forName: .meetingEndedSwitchTab,
+            object: nil,
+            queue: .main
+        ) { _ in
+            if didAutoSwitchToMeetings {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    selectedTab = .dictation
+                    didAutoSwitchToMeetings = false
+                }
+            }
+        }
     }
 
     // MARK: - Main UI
 
     private var mainUI: some View {
         VStack(spacing: 0) {
-            // Settings button at top right
+            // Top bar with tab toggle
             HStack {
                 Spacer()
-                SettingsButton()
+
+                // Tab toggle
+                TabToggle(selectedTab: $selectedTab, onManualSwitch: handleManualTabSwitch)
+
+                Spacer()
             }
+            .padding(.top, 12)
 
-            // Top spacing
-            Spacer()
-                .frame(height: 20)
+            // Content based on selected tab
+            switch selectedTab {
+            case .dictation:
+                dictationView
+            case .meetings:
+                MeetingsView()
+            }
+        }
+    }
 
-            // Main content area
-            VStack(spacing: 32) {
+    /// Handle manual tab switch - clear auto-switch flag
+    private func handleManualTabSwitch(_ tab: AppTab) {
+        // If user manually switches away from meetings during auto-switch, clear the flag
+        if tab == .dictation && didAutoSwitchToMeetings {
+            didAutoSwitchToMeetings = false
+            ModeManager.shared.userDidSwitchTab(to: "dictation")
+        }
+    }
+
+    // MARK: - Dictation View
+
+    private var dictationView: some View {
+        VStack(spacing: 0) {
+            // Top section - Mic button and controls
+            VStack(spacing: 16) {
                 // Mic button
                 MicButton(
                     state: appState.recordingState,
@@ -74,28 +146,108 @@ struct ContentView: View {
                     }
                 )
 
-                // Status text
-                StatusText(state: appState.recordingState)
-
-                // Hotkey hint
-                HotkeyHint()
+                // Status text and hotkey hint
+                VStack(spacing: 8) {
+                    StatusText(state: appState.recordingState)
+                    HotkeyHint()
+                }
 
                 // Mode toggle
                 ModeToggle()
-
-                // Transcription display
-                if !appState.currentTranscription.isEmpty {
-                    TranscriptionCard(text: appState.currentTranscription)
-                }
             }
+            .padding(.top, 8)
             .padding(.horizontal, 32)
 
-            Spacer()
+            // Current transcription (if any)
+            if !appState.currentTranscription.isEmpty {
+                TranscriptionCard(text: appState.currentTranscription)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+            }
 
-            // Bottom section - history preview
+            // History section - vertical scrollable list
             if !appState.transcriptionHistory.isEmpty {
-                HistoryPreview(entries: appState.transcriptionHistory)
-                    .padding(.bottom, 24)
+                HistoryList(entries: appState.transcriptionHistory)
+                    .padding(.top, 16)
+            } else {
+                Spacer()
+            }
+        }
+    }
+}
+
+// MARK: - Tab Toggle
+
+struct TabToggle: View {
+    @Binding var selectedTab: ContentView.AppTab
+    /// Binding to clear auto-switch flag when user manually switches
+    var onManualSwitch: ((ContentView.AppTab) -> Void)?
+
+    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Dictation tab - waveform icon
+            TabIconButton(
+                icon: "waveform",
+                isSelected: selectedTab == .dictation,
+                selectedColor: accentColor,
+                unselectedColor: lightGray
+            ) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    selectedTab = .dictation
+                    onManualSwitch?(.dictation)
+                }
+            }
+
+            // Meetings tab - video icon
+            TabIconButton(
+                icon: "video.fill",
+                isSelected: selectedTab == .meetings,
+                selectedColor: accentColor,
+                unselectedColor: lightGray
+            ) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    selectedTab = .meetings
+                    onManualSwitch?(.meetings)
+                }
+            }
+        }
+        .padding(4)
+        .background(Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0)))
+        .cornerRadius(24)
+    }
+}
+
+struct TabIconButton: View {
+    let icon: String
+    let isSelected: Bool
+    let selectedColor: Color
+    let unselectedColor: Color
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                // Selection indicator circle
+                Circle()
+                    .fill(isSelected ? selectedColor : Color.clear)
+                    .frame(width: 36, height: 36)
+
+                // Icon
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(isSelected ? .white : (isHovered ? selectedColor : unselectedColor))
+            }
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered && !isSelected ? 1.08 : 1.0)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.15)) {
+                isHovered = hovering
             }
         }
     }
@@ -256,6 +408,9 @@ struct MicButton: View {
     // Japanese indigo accent
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
 
+    // Fixed container size to prevent layout shifts
+    private let containerSize: CGFloat = 180
+
     var body: some View {
         Button(action: {
             // Prevent recording before app is fully ready
@@ -266,13 +421,16 @@ struct MicButton: View {
             onTap()
         }) {
             ZStack {
-                // Outer ring - audio visualization
-                if state == .recording {
-                    Circle()
-                        .stroke(accentColor.opacity(0.3), lineWidth: 2)
-                        .frame(width: 140 + CGFloat(audioLevel) * 40, height: 140 + CGFloat(audioLevel) * 40)
-                        .animation(.easeOut(duration: 0.1), value: audioLevel)
-                }
+                // Fixed size container to prevent layout shifts
+                Color.clear
+                    .frame(width: containerSize, height: containerSize)
+
+                // Outer ring - audio visualization (always present but invisible when not recording)
+                Circle()
+                    .stroke(state == .recording ? accentColor.opacity(0.3) : Color.clear, lineWidth: 2)
+                    .frame(width: 140 + CGFloat(state == .recording ? audioLevel : 0) * 40,
+                           height: 140 + CGFloat(state == .recording ? audioLevel : 0) * 40)
+                    .animation(.easeOut(duration: 0.1), value: audioLevel)
 
                 // Main circle
                 Circle()
@@ -320,7 +478,7 @@ struct MicButton: View {
         case .idle:
             return Color.white
         case .recording:
-            return Color.red.opacity(0.9)
+            return accentColor.opacity(0.95)
         case .processing:
             return accentColor
         }
@@ -483,78 +641,144 @@ struct TranscriptionCard: View {
     }
 }
 
-// MARK: - History Preview
+// MARK: - History List
 
-struct HistoryPreview: View {
+struct HistoryList: View {
     let entries: [Transcription]
 
+    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("recent")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(lightGray)
-                .tracking(1)
-                .textCase(.uppercase)
-                .padding(.horizontal, 32)
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                Text("Recent")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(lightGray)
+                    .tracking(0.5)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(entries.prefix(5)) { entry in
-                        HistoryChip(entry: entry)
+                Spacer()
+
+                Text("\(entries.count) items")
+                    .font(.system(size: 11))
+                    .foregroundColor(lightGray.opacity(0.7))
+            }
+            .padding(.horizontal, 24)
+
+            // Scrollable list
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 10) {
+                    ForEach(entries.prefix(20)) { entry in
+                        HistoryRow(entry: entry)
                     }
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
             }
         }
     }
 }
 
-struct HistoryChip: View {
+struct HistoryRow: View {
     let entry: Transcription
 
     @State private var isHovered = false
     @State private var showCopied = false
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+    private let textColor = Color(nsColor: NSColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 1.0))
 
     var body: some View {
-        Button(action: {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(entry.text, forType: .string)
-            withAnimation(.easeOut(duration: 0.2)) {
-                showCopied = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    showCopied = false
-                }
-            }
-        }) {
-            HStack(spacing: 4) {
-                if showCopied {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .semibold))
+        Button(action: copyText) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Transcription text - show more characters (up to 120)
+                Text(entry.text.prefix(120) + (entry.text.count > 120 ? "..." : ""))
+                    .font(.system(size: 13))
+                    .foregroundColor(textColor)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Bottom row: timestamp and copy indicator
+                HStack {
+                    // Timestamp
+                    Text(formatTimestamp(entry.timestamp))
+                        .font(.system(size: 11))
+                        .foregroundColor(lightGray)
+
+                    Spacer()
+
+                    // Copy indicator
+                    if showCopied {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("Copied")
+                                .font(.system(size: 11, weight: .medium))
+                        }
                         .foregroundColor(accentColor)
                         .transition(.scale.combined(with: .opacity))
+                    } else if isHovered {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 10))
+                            Text("Click to copy")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundColor(lightGray)
+                        .transition(.opacity)
+                    }
                 }
-                Text(showCopied ? "copied" : String(entry.text.prefix(30)) + (entry.text.count > 30 ? "..." : ""))
-                    .font(.system(size: 12))
-                    .foregroundColor(showCopied ? accentColor : Color(nsColor: NSColor(red: 0.35, green: 0.33, blue: 0.30, alpha: 1.0)))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(isHovered ? Color.white : Color.white.opacity(0.8))
-            .cornerRadius(16)
-            .shadow(color: .black.opacity(isHovered ? 0.08 : 0), radius: 8, x: 0, y: 2)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white)
+                    .shadow(color: .black.opacity(isHovered ? 0.08 : 0.04), radius: isHovered ? 8 : 4, y: isHovered ? 2 : 1)
+            )
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.15)) {
                 isHovered = hovering
             }
+        }
+    }
+
+    private func copyText() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(entry.text, forType: .string)
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            showCopied = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                showCopied = false
+            }
+        }
+    }
+
+    private func formatTimestamp(_ date: Date) -> String {
+        let now = Date()
+        let interval = now.timeIntervalSince(date)
+
+        if interval < 60 {
+            return "Just now"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes) min ago"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "\(hours) hour\(hours == 1 ? "" : "s") ago"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d, h:mm a"
+            return formatter.string(from: date)
         }
     }
 }
