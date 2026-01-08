@@ -12,6 +12,9 @@ struct ContentView: View {
     /// Track if we auto-switched to meetings (to know if we should auto-return)
     @State private var didAutoSwitchToMeetings: Bool = false
 
+    /// Selected history item for detail view
+    @State private var selectedHistoryItem: Transcription?
+
     enum AppTab {
         case dictation
         case meetings
@@ -122,55 +125,71 @@ struct ContentView: View {
     // MARK: - Dictation View
 
     private var dictationView: some View {
-        VStack(spacing: 0) {
-            // Top section - Mic button and controls
-            VStack(spacing: 16) {
-                // Mic button
-                MicButton(
-                    state: appState.recordingState,
-                    audioLevel: coordinator.audioLevel,
-                    onTap: {
-                        Task { @MainActor in
-                            if appState.recordingState == .idle {
-                                let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
-                                let langCode = appState.selectedLanguage
-                                let language = Language.all.first { $0.code == langCode } ?? .auto
-                                await coordinator.startRecording(mode: mode, language: language)
-                            } else if appState.recordingState == .recording {
-                                let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
-                                let langCode = appState.selectedLanguage
-                                let language = Language.all.first { $0.code == langCode } ?? .auto
-                                await coordinator.stopRecording(mode: mode, language: language)
+        ZStack(alignment: .trailing) {
+            VStack(spacing: 0) {
+                // Top section - Mic button and controls
+                VStack(spacing: 16) {
+                    // Mic button
+                    MicButton(
+                        state: appState.recordingState,
+                        audioLevel: coordinator.audioLevel,
+                        onTap: {
+                            Task { @MainActor in
+                                if appState.recordingState == .idle {
+                                    let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
+                                    let langCode = appState.selectedLanguage
+                                    let language = Language.all.first { $0.code == langCode } ?? .auto
+                                    await coordinator.startRecording(mode: mode, language: language)
+                                } else if appState.recordingState == .recording {
+                                    let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
+                                    let langCode = appState.selectedLanguage
+                                    let language = Language.all.first { $0.code == langCode } ?? .auto
+                                    await coordinator.stopRecording(mode: mode, language: language)
+                                }
                             }
                         }
-                    }
-                )
+                    )
 
-                // Status text and hotkey hint
-                VStack(spacing: 8) {
-                    StatusText(state: appState.recordingState)
-                    HotkeyHint()
+                    // Status text and hotkey hint
+                    VStack(spacing: 8) {
+                        StatusText(state: appState.recordingState)
+                        HotkeyHint()
+                    }
+
+                    // Mode toggle, auto enter toggle, and AI refinement toggle
+                    HStack(spacing: 16) {
+                        ModeToggle()
+                        AutoEnterToggle()
+                        RefinementToggle()
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.horizontal, 32)
+
+                // Current transcription (if any)
+                if !appState.currentTranscription.isEmpty {
+                    TranscriptionCard(text: appState.currentTranscription)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 16)
                 }
 
-                // Mode toggle
-                ModeToggle()
-            }
-            .padding(.top, 8)
-            .padding(.horizontal, 32)
-
-            // Current transcription (if any)
-            if !appState.currentTranscription.isEmpty {
-                TranscriptionCard(text: appState.currentTranscription)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
+                // History section - vertical scrollable list
+                if !appState.transcriptionHistory.isEmpty {
+                    HistoryList(entries: appState.transcriptionHistory, selectedItem: $selectedHistoryItem)
+                        .padding(.top, 16)
+                } else {
+                    Spacer()
+                }
             }
 
-            // History section - vertical scrollable list
-            if !appState.transcriptionHistory.isEmpty {
-                HistoryList(entries: appState.transcriptionHistory)
-                    .padding(.top, 16)
-            } else {
-                Spacer()
+            // History detail slide-over panel
+            if let item = selectedHistoryItem {
+                HistoryDetailView(entry: item, onClose: {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        selectedHistoryItem = nil
+                    }
+                })
+                .transition(.move(edge: .trailing))
             }
         }
     }
@@ -450,7 +469,7 @@ struct MicButton: View {
                         WaveformView(audioLevel: audioLevel, color: .white)
                             .frame(width: 60, height: 40)
 
-                    case .processing:
+                    case .transcribing, .refining:
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .scaleEffect(1.5)
@@ -479,7 +498,7 @@ struct MicButton: View {
             return Color.white
         case .recording:
             return accentColor.opacity(0.95)
-        case .processing:
+        case .transcribing, .refining:
             return accentColor
         }
     }
@@ -530,8 +549,10 @@ struct StatusText: View {
             return "tap to speak"
         case .recording:
             return "listening..."
-        case .processing:
+        case .transcribing:
             return "transcribing..."
+        case .refining:
+            return "refining..."
         }
     }
 }
@@ -645,6 +666,7 @@ struct TranscriptionCard: View {
 
 struct HistoryList: View {
     let entries: [Transcription]
+    @Binding var selectedItem: Transcription?
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
@@ -670,7 +692,11 @@ struct HistoryList: View {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 10) {
                     ForEach(entries.prefix(20)) { entry in
-                        HistoryRow(entry: entry)
+                        HistoryRow(entry: entry, onTap: {
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                selectedItem = entry
+                            }
+                        })
                     }
                 }
                 .padding(.horizontal, 24)
@@ -682,6 +708,7 @@ struct HistoryList: View {
 
 struct HistoryRow: View {
     let entry: Transcription
+    var onTap: (() -> Void)?
 
     @State private var isHovered = false
     @State private var showCopied = false
@@ -691,7 +718,13 @@ struct HistoryRow: View {
     private let textColor = Color(nsColor: NSColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 1.0))
 
     var body: some View {
-        Button(action: copyText) {
+        Button(action: {
+            if let onTap = onTap {
+                onTap()
+            } else {
+                copyText()
+            }
+        }) {
             VStack(alignment: .leading, spacing: 8) {
                 // Transcription text - show more characters (up to 120)
                 Text(entry.text.prefix(120) + (entry.text.count > 120 ? "..." : ""))
@@ -701,7 +734,7 @@ struct HistoryRow: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                // Bottom row: timestamp and copy indicator
+                // Bottom row: timestamp and detail hint
                 HStack {
                     // Timestamp
                     Text(formatTimestamp(entry.timestamp))
@@ -710,7 +743,7 @@ struct HistoryRow: View {
 
                     Spacer()
 
-                    // Copy indicator
+                    // Detail indicator
                     if showCopied {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark")
@@ -722,10 +755,8 @@ struct HistoryRow: View {
                         .transition(.scale.combined(with: .opacity))
                     } else if isHovered {
                         HStack(spacing: 4) {
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 10))
-                            Text("Click to copy")
-                                .font(.system(size: 11))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .medium))
                         }
                         .foregroundColor(lightGray)
                         .transition(.opacity)
@@ -852,6 +883,379 @@ struct ModeButton: View {
                 isHovered = hovering
             }
         }
+    }
+}
+
+// MARK: - History Detail View
+
+struct HistoryDetailView: View {
+    let entry: Transcription
+    let onClose: () -> Void
+
+    @State private var showCopied = false
+
+    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+    private let textColor = Color(nsColor: NSColor(red: 0.20, green: 0.20, blue: 0.22, alpha: 1.0))
+    private let backgroundColor = Color(nsColor: NSColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0))
+
+    // State colors
+    private let transcribingColor = Color(nsColor: NSColor(red: 0.95, green: 0.75, blue: 0.20, alpha: 1.0))
+    private let refiningColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Button(action: onClose) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(accentColor)
+                }
+                .buttonStyle(.plain)
+
+                Text("Details")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(textColor)
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+                .background(lightGray.opacity(0.3))
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Timestamp and duration
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(formatFullTimestamp(entry.timestamp))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(textColor)
+
+                        if entry.duration > 0 {
+                            Text("Duration: \(String(format: "%.1fs", entry.duration))")
+                                .font(.system(size: 12))
+                                .foregroundColor(lightGray)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                    // Pipeline steps
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Transcription step (always present)
+                        PipelineStepCard(
+                            stepName: "Transcription",
+                            stepIcon: "waveform",
+                            stepColor: transcribingColor,
+                            inputDescription: "Audio input",
+                            outputText: entry.text,
+                            status: .completed,
+                            duration: entry.duration > 0 ? entry.duration : nil
+                        )
+
+                        // Refinement step (if refinement was enabled)
+                        // For now, check if there's a ProcessingResult linked
+                        // Since we don't have that yet, show as skipped if refinement disabled
+                        PipelineStepCard(
+                            stepName: "AI Refinement",
+                            stepIcon: "sparkles",
+                            stepColor: refiningColor,
+                            inputDescription: "Transcribed text",
+                            outputText: nil,
+                            status: .skipped,
+                            duration: nil
+                        )
+                    }
+                    .padding(.horizontal, 16)
+
+                    // Final text section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Final Text")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(lightGray)
+
+                        Text(entry.text)
+                            .font(.system(size: 14))
+                            .foregroundColor(textColor)
+                            .textSelection(.enabled)
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.white)
+                            .cornerRadius(8)
+                    }
+                    .padding(.horizontal, 16)
+
+                    // Copy button
+                    Button(action: copyText) {
+                        HStack {
+                            Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 12))
+                            Text(showCopied ? "Copied!" : "Copy Text")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(accentColor)
+                        .cornerRadius(20)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 20)
+                }
+            }
+        }
+        .frame(width: 300)
+        .background(backgroundColor)
+        .shadow(color: .black.opacity(0.15), radius: 20, x: -5, y: 0)
+    }
+
+    private func copyText() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(entry.text, forType: .string)
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            showCopied = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                showCopied = false
+            }
+        }
+    }
+
+    private func formatFullTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Pipeline Step Card
+
+struct PipelineStepCard: View {
+    let stepName: String
+    let stepIcon: String
+    let stepColor: Color
+    let inputDescription: String
+    let outputText: String?
+    let status: StepStatus
+    let duration: Double?
+
+    enum StepStatus {
+        case completed
+        case failed
+        case skipped
+    }
+
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+    private let textColor = Color(nsColor: NSColor(red: 0.20, green: 0.20, blue: 0.22, alpha: 1.0))
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Step header
+            HStack {
+                // Icon with color
+                Image(systemName: stepIcon)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(stepColor)
+                    .frame(width: 24, height: 24)
+                    .background(stepColor.opacity(0.15))
+                    .cornerRadius(6)
+
+                Text(stepName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(textColor)
+
+                Spacer()
+
+                // Status badge
+                statusBadge
+            }
+
+            // Content based on status
+            if status == .completed {
+                VStack(alignment: .leading, spacing: 6) {
+                    // Input
+                    HStack(spacing: 4) {
+                        Text("Input:")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(lightGray)
+                        Text(inputDescription)
+                            .font(.system(size: 11))
+                            .foregroundColor(lightGray)
+                    }
+
+                    // Output preview
+                    if let output = outputText {
+                        HStack(alignment: .top, spacing: 4) {
+                            Text("Output:")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(lightGray)
+                            Text(output.prefix(80) + (output.count > 80 ? "..." : ""))
+                                .font(.system(size: 11))
+                                .foregroundColor(textColor)
+                                .lineLimit(2)
+                        }
+                    }
+
+                    // Duration
+                    if let duration = duration {
+                        Text(String(format: "%.1fs", duration))
+                            .font(.system(size: 10))
+                            .foregroundColor(lightGray.opacity(0.8))
+                    }
+                }
+                .padding(.leading, 28)
+            } else if status == .skipped {
+                Text("Skipped")
+                    .font(.system(size: 11))
+                    .foregroundColor(lightGray)
+                    .padding(.leading, 28)
+            }
+        }
+        .padding(12)
+        .background(Color.white)
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(stepColor.opacity(status == .completed ? 0.3 : 0.1), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private var statusBadge: some View {
+        switch status {
+        case .completed:
+            HStack(spacing: 3) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .bold))
+                Text("Done")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(.green)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(4)
+
+        case .failed:
+            HStack(spacing: 3) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                Text("Failed")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundColor(.red)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.red.opacity(0.1))
+            .cornerRadius(4)
+
+        case .skipped:
+            Text("Skipped")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(lightGray)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(lightGray.opacity(0.1))
+                .cornerRadius(4)
+        }
+    }
+}
+
+// MARK: - Refinement Toggle
+
+struct RefinementToggle: View {
+    @Environment(AppState.self) private var appState
+    @State private var isHovered = false
+
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+    private let purpleColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
+
+    // Refinement is currently disabled on macOS 26 due to MLX/Metal issues
+    private var isAvailable: Bool {
+        false  // TODO: Enable when macOS 26 MLX compatibility is fixed
+    }
+
+    var body: some View {
+        @Bindable var appState = appState
+
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                // AI icon
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(appState.isRefinementEnabled && isAvailable ? purpleColor : lightGray)
+
+                // Toggle
+                Toggle("", isOn: $appState.isRefinementEnabled)
+                    .toggleStyle(.switch)
+                    .scaleEffect(0.65)
+                    .disabled(!isAvailable)
+                    .opacity(isAvailable ? 1.0 : 0.5)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0)))
+            .cornerRadius(14)
+
+            // Status text
+            Text(statusText)
+                .font(.system(size: 10))
+                .foregroundColor(lightGray)
+        }
+        .help(isAvailable ? "AI refinement improves transcription quality" : "AI refinement unavailable on macOS 26")
+    }
+
+    private var statusText: String {
+        if !isAvailable {
+            return "unavailable"
+        }
+        return appState.isRefinementEnabled ? "AI on" : "AI off"
+    }
+}
+
+// MARK: - Auto Enter Toggle
+
+struct AutoEnterToggle: View {
+    @Environment(AppState.self) private var appState
+
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+
+    var body: some View {
+        @Bindable var appState = appState
+
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                // Return key icon
+                Image(systemName: "return")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(appState.isAutoEnterEnabled ? accentColor : lightGray)
+
+                // Toggle
+                Toggle("", isOn: $appState.isAutoEnterEnabled)
+                    .toggleStyle(.switch)
+                    .scaleEffect(0.65)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0)))
+            .cornerRadius(14)
+
+            // Status text
+            Text(appState.isAutoEnterEnabled ? "auto enter" : "no enter")
+                .font(.system(size: 10))
+                .foregroundColor(lightGray)
+        }
+        .help("Automatically press Enter after inserting text")
     }
 }
 

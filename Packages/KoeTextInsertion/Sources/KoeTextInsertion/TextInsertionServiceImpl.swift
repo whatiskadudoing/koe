@@ -16,6 +16,19 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
         }
     }
 
+    public func pressEnter() async throws {
+        guard AXIsProcessTrusted() else {
+            throw TextInsertionError.accessibilityDenied
+        }
+
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInteractive).async {
+                Self.pressEnterSync()
+                continuation.resume()
+            }
+        }
+    }
+
     public func hasPermission() -> Bool {
         // Use AXIsProcessTrusted() for silent check - does NOT trigger any prompts
         // Note: This may have caching issues but it's the only way to check without prompting
@@ -73,5 +86,24 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
         }
 
         return true
+    }
+
+    private static func pressEnterSync() {
+        guard let source = CGEventSource(stateID: .hidSystemState) else {
+            return
+        }
+
+        // Virtual key code for Return/Enter is 36
+        let returnKeyCode: CGKeyCode = 36
+
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: returnKeyCode, keyDown: true) else {
+            return
+        }
+        keyDown.post(tap: .cghidEventTap)
+
+        guard let keyUp = CGEvent(keyboardEventSource: source, virtualKey: returnKeyCode, keyDown: false) else {
+            return
+        }
+        keyUp.post(tap: .cghidEventTap)
     }
 }

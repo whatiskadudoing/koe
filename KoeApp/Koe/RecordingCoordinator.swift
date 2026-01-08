@@ -220,9 +220,9 @@ public final class RecordingCoordinator {
         isRecording = false
         audioLevel = 0
 
-        // Update AppState to processing
-        AppState.shared.recordingState = .processing
-        RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .processing)
+        // Update AppState to transcribing
+        AppState.shared.recordingState = .transcribing
+        RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .transcribing)
 
         // Wait for any in-progress transcription (max 2 seconds)
         var waitCount = 0
@@ -345,7 +345,13 @@ public final class RecordingCoordinator {
             }
 
             // Note: Refinement disabled due to macOS 26 MLX/Metal issues
-            // Once fixed, refinement step would be applied here
+            // When re-enabled, the refinement step would be:
+            // if AppState.shared.isRefinementEnabled && isRefinementModelLoaded {
+            //     AppState.shared.recordingState = .refining
+            //     RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .refining)
+            //     let refinedText = try await refinementService.refine(finalText)
+            //     finalText = refinedText
+            // }
 
             // Insert text
             var insertionSucceeded = false
@@ -362,6 +368,11 @@ public final class RecordingCoordinator {
                     // VAD mode - paste all text at once
                     try await textInserter.insertText(finalText)
                     insertionSucceeded = true
+                }
+
+                // Press Enter after insertion if auto-enter is enabled
+                if insertionSucceeded && AppState.shared.isAutoEnterEnabled {
+                    try await textInserter.pressEnter()
                 }
             } catch {
                 logger.error("Text insertion failed", error: error)

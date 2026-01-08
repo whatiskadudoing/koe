@@ -73,6 +73,15 @@ public final class AppState {
         set { UserDefaults.standard.set(newValue, forKey: "isRefinementEnabled") }
     }
 
+    @ObservationIgnored
+    private var _isAutoEnterEnabled: Bool {
+        get {
+            // Default to false if not set
+            return UserDefaults.standard.bool(forKey: "isAutoEnterEnabled")
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "isAutoEnterEnabled") }
+    }
+
     // Public accessors that trigger observation
     public var selectedModel: String {
         get { _selectedModel }
@@ -92,6 +101,11 @@ public final class AppState {
     public var isRefinementEnabled: Bool {
         get { _isRefinementEnabled }
         set { _isRefinementEnabled = newValue }
+    }
+
+    public var isAutoEnterEnabled: Bool {
+        get { _isAutoEnterEnabled }
+        set { _isAutoEnterEnabled = newValue }
     }
 
     // Computed properties for typed access
