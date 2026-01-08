@@ -13,11 +13,18 @@ public final class KoeHotkeyManager: HotkeyService {
     private var keyCode: UInt32 = 49  // Space
     private var modifierFlags: Int = 2  // Option
 
+    // For modifier-only keys (like Right Option)
+    private var flagsMonitor: Any?
+    private var modifierPressTime: Date?
+    private var holdTimer: Timer?
+    private var isModifierHeld = false
+    private let holdThreshold: TimeInterval = 0.2  // 200ms hold required
+
     public init() {}
 
     /// Set the keyboard shortcut
     /// - Parameters:
-    ///   - keyCode: The virtual key code (49 = Space, 36 = Return, etc.)
+    ///   - keyCode: The virtual key code (49 = Space, 36 = Return, 61 = Right Option, etc.)
     ///   - modifiers: Modifier flags (1 = Command, 2 = Option, 4 = Control, 8 = Shift)
     public func setShortcut(keyCode: UInt32, modifiers: Int) {
         self.keyCode = keyCode
@@ -28,6 +35,14 @@ public final class KoeHotkeyManager: HotkeyService {
             unregister()
             register(onKeyDown: down, onKeyUp: up)
         }
+    }
+
+    /// Check if the key code is a modifier-only key
+    private func isModifierOnlyKey(_ code: UInt32) -> Bool {
+        // 61 = Right Option, 58 = Right Command, 60 = Right Shift, 62 = Right Control
+        // 55 = Left Command, 56 = Left Shift, 58 = Left Option, 59 = Left Control
+        return code == 61 || code == 58 || code == 60 || code == 62 ||
+               code == 55 || code == 56 || code == 59
     }
 
     /// Register hotkey handlers
@@ -41,6 +56,15 @@ public final class KoeHotkeyManager: HotkeyService {
         self.onKeyDown = onKeyDown
         self.onKeyUp = onKeyUp
 
+        if isModifierOnlyKey(keyCode) {
+            registerModifierOnlyKey()
+        } else {
+            registerRegularHotkey()
+        }
+    }
+
+    /// Register a regular hotkey (key + modifiers)
+    private func registerRegularHotkey() {
         // Convert key code to Key enum
         let key = keyFromCode(keyCode)
 
@@ -62,16 +86,109 @@ public final class KoeHotkeyManager: HotkeyService {
         }
     }
 
+    /// Register a modifier-only key (like Right Option)
+    private func registerModifierOnlyKey() {
+        // Use global event monitor for flagsChanged events
+        flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleFlagsChanged(event)
+        }
+
+        // Also monitor local events (when app is focused)
+        let localMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleFlagsChanged(event)
+            return event
+        }
+        // Store local monitor reference (we'll use flagsMonitor for cleanup)
+        if flagsMonitor != nil {
+            // Create a combined cleanup by storing both
+            let globalMonitor = flagsMonitor
+            flagsMonitor = (globalMonitor, localMonitor) as AnyObject
+        }
+    }
+
+    /// Handle flagsChanged events for modifier-only keys
+    private func handleFlagsChanged(_ event: NSEvent) {
+        let flags = event.modifierFlags
+
+        // Check if our specific modifier key is pressed
+        let isPressed: Bool
+        switch keyCode {
+        case 61:  // Right Option
+            isPressed = flags.contains(.option) && event.keyCode == 61
+        case 58:  // Right Command (note: keyCode for right command)
+            isPressed = flags.contains(.command)
+        case 60:  // Right Shift
+            isPressed = flags.contains(.shift)
+        case 62:  // Right Control
+            isPressed = flags.contains(.control)
+        default:
+            isPressed = false
+        }
+
+        // For Right Option, we need to check if option is currently held
+        // and distinguish between press and release
+        if keyCode == 61 {
+            let optionHeld = flags.contains(.option)
+
+            if optionHeld && !isModifierHeld {
+                // Option key just pressed - start hold timer
+                modifierPressTime = Date()
+                isModifierHeld = true
+
+                // Start timer to check for hold threshold
+                holdTimer?.invalidate()
+                holdTimer = Timer.scheduledTimer(withTimeInterval: holdThreshold, repeats: false) { [weak self] _ in
+                    guard let self = self, self.isModifierHeld else { return }
+                    // Held long enough - trigger key down
+                    DispatchQueue.main.async {
+                        self.onKeyDown?()
+                    }
+                }
+            } else if !optionHeld && isModifierHeld {
+                // Option key released
+                isModifierHeld = false
+                holdTimer?.invalidate()
+                holdTimer = nil
+
+                // Only trigger key up if we had triggered key down (held long enough)
+                if let pressTime = modifierPressTime,
+                   Date().timeIntervalSince(pressTime) >= holdThreshold {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onKeyUp?()
+                    }
+                }
+                modifierPressTime = nil
+            }
+        }
+    }
+
     /// Unregister the hotkey
     public func unregister() {
         hotKey = nil
+
+        // Clean up modifier key monitoring
+        if let monitor = flagsMonitor {
+            if let tuple = monitor as? (Any?, Any?) {
+                if let global = tuple.0 { NSEvent.removeMonitor(global) }
+                if let local = tuple.1 { NSEvent.removeMonitor(local) }
+            } else {
+                NSEvent.removeMonitor(monitor)
+            }
+            flagsMonitor = nil
+        }
+
+        holdTimer?.invalidate()
+        holdTimer = nil
+        isModifierHeld = false
+        modifierPressTime = nil
+
         onKeyDown = nil
         onKeyUp = nil
     }
 
     /// Check if hotkey is registered
     public var isRegistered: Bool {
-        hotKey != nil
+        hotKey != nil || flagsMonitor != nil
     }
 
     /// Convert virtual key code to HotKey's Key enum

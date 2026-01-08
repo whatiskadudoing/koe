@@ -1,60 +1,89 @@
 import SwiftUI
 import KoeUI
+import KoeDomain
 
-/// Settings panel that expands below the pipeline strip when a node is selected
-struct NodeSettingsPanel: View {
+// MARK: - Node Settings Content (used inside modal)
+
+/// Content view for node settings - used inside SettingsModal
+struct NodeSettingsContent: View {
     let stage: PipelineStageInfo
     @Environment(AppState.self) private var appState
-    let onClose: () -> Void
 
     var body: some View {
         @Bindable var appState = appState
 
+        switch stage {
+        case .hotkey:
+            HotkeySettings(appState: appState)
+        case .transcription:
+            TranscribeSettings(appState: appState)
+        case .improve:
+            ImproveSettings(appState: appState)
+        case .autoEnter:
+            AutoEnterSettings()
+        default:
+            Text("No settings available")
+                .font(.system(size: 12))
+                .foregroundColor(KoeColors.textLight)
+        }
+    }
+}
+
+// MARK: - Transcribe Settings
+
+struct TranscribeSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack {
-                Image(systemName: stage.icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(stage.color)
+            // Language selector
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Language")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(KoeColors.textTertiary)
 
-                Text("\(stage.displayName) Settings")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(KoeColors.accent)
-
-                Spacer()
-
-                // Close button
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(KoeColors.textLight)
-                        .padding(6)
-                        .background(KoeColors.surface)
-                        .clipShape(Circle())
+                Picker("", selection: $appState.selectedLanguage) {
+                    ForEach(Language.all, id: \.code) { lang in
+                        Text("\(lang.flag) \(lang.name)").tag(lang.code)
+                    }
                 }
-                .buttonStyle(.plain)
+                .pickerStyle(.menu)
+                .labelsHidden()
             }
 
             Divider()
 
-            // Stage-specific settings
-            switch stage {
-            case .hotkey:
-                HotkeySettings(appState: appState)
-            case .improve:
-                ImproveSettings(appState: appState)
-            case .autoEnter:
-                AutoEnterSettings()
-            default:
-                Text("No settings available")
-                    .font(.system(size: 12))
-                    .foregroundColor(KoeColors.textLight)
+            // Model selector
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Model")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(KoeColors.textTertiary)
+
+                Picker("", selection: $appState.selectedModel) {
+                    ForEach(KoeModel.allCases, id: \.rawValue) { model in
+                        Text(model.displayName).tag(model.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .onChange(of: appState.selectedModel) { _, newModel in
+                    // Reload model when changed
+                    Task {
+                        await RecordingCoordinator.shared.loadModel(name: newModel)
+                    }
+                }
+            }
+
+            // Info about current model
+            HStack(spacing: 6) {
+                Image(systemName: appState.isModelLoaded ? "checkmark.circle.fill" : "arrow.down.circle")
+                    .font(.system(size: 10))
+                    .foregroundColor(appState.isModelLoaded ? .green : KoeColors.textLight)
+                Text(appState.isModelLoaded ? "Model loaded" : "Loading model...")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textTertiary)
             }
         }
-        .padding(14)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
     }
 }
 
@@ -165,7 +194,7 @@ struct HotkeySettings: View {
 
     private let presets: [(name: String, keyCode: UInt32, modifiers: Int, display: String)] = [
         ("Option + Space", 49, 2, "⌥ Space"),
-        ("Cmd + Space", 49, 1, "⌘ Space"),
+        ("Right Option", 61, 0, "R-⌥"),
         ("Ctrl + Space", 49, 4, "⌃ Space"),
         ("F5", 96, 0, "F5"),
     ]
@@ -246,17 +275,25 @@ struct SettingsToneChip: View {
 
 #Preview {
     VStack(spacing: 20) {
-        NodeSettingsPanel(
-            stage: .improve,
+        SettingsModal(
+            title: "Improve Settings",
+            icon: "sparkles",
+            iconColor: KoeColors.stateRefining,
             onClose: {}
-        )
-        .environment(AppState.shared)
+        ) {
+            NodeSettingsContent(stage: .improve)
+                .environment(AppState.shared)
+        }
 
-        NodeSettingsPanel(
-            stage: .hotkey,
+        SettingsModal(
+            title: "Hotkey Settings",
+            icon: "command",
+            iconColor: KoeColors.accent,
             onClose: {}
-        )
-        .environment(AppState.shared)
+        ) {
+            NodeSettingsContent(stage: .hotkey)
+                .environment(AppState.shared)
+        }
     }
     .padding()
     .background(KoeColors.background)

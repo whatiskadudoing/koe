@@ -124,6 +124,17 @@ public final class PipelineManager {
             NSLog("[Pipeline] Context metric: key='%@', type='%@', duration=%@", key, value.elementType, value.formattedDuration)
         }
 
+        // Capture current settings for the execution record
+        let executionSettings = PipelineExecutionSettings(
+            language: AppState.shared.selectedLanguage,
+            model: AppState.shared.selectedModel,
+            cleanupEnabled: AppState.shared.isCleanupEnabled,
+            tone: AppState.shared.toneStyle,
+            promptMode: AppState.shared.isPromptImproverEnabled,
+            hotkeyKeyCode: AppState.shared.hotkeyKeyCode,
+            hotkeyModifiers: AppState.shared.hotkeyModifiers
+        )
+
         let executionRecord = PipelineExecutionRecord(
             id: runId,
             timestamp: Date(),
@@ -132,7 +143,8 @@ public final class PipelineManager {
             status: status,
             elementMetrics: metricsArray,
             inputText: text,
-            outputText: resultContext.text
+            outputText: resultContext.text,
+            settings: executionSettings
         )
         AppState.shared.addPipelineExecution(executionRecord)
 

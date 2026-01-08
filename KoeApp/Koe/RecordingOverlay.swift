@@ -33,8 +33,8 @@ class RecordingOverlayController {
         guard let screen = screen else { return }
 
         let screenFrame = screen.frame
-        let windowWidth: CGFloat = 200
-        let windowHeight: CGFloat = 50
+        let windowWidth: CGFloat = 112
+        let windowHeight: CGFloat = 112
         let x = screenFrame.origin.x + (screenFrame.width - windowWidth) / 2
         let y = screenFrame.origin.y + 100
 
@@ -64,8 +64,8 @@ class RecordingOverlayController {
 
         let screenFrame = screen.frame
 
-        let windowWidth: CGFloat = 200
-        let windowHeight: CGFloat = 50
+        let windowWidth: CGFloat = 112
+        let windowHeight: CGFloat = 112
         // Center horizontally, position near bottom of the focused screen
         let x = screenFrame.origin.x + (screenFrame.width - windowWidth) / 2
         let y = screenFrame.origin.y + 100  // 100px from bottom of the screen
@@ -109,25 +109,51 @@ struct OverlayContentView: View {
     @ObservedObject private var viewModel = RecordingOverlayViewModel.shared
 
     // Dark neutral background
-    private let backgroundColor = Color(nsColor: NSColor(red: 0.15, green: 0.15, blue: 0.18, alpha: 1.0))
+    private let backgroundColor = Color(nsColor: NSColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1.0))
+    private let circleSize: CGFloat = 56
 
     var body: some View {
         ZStack {
-            // Dark background
-            RoundedRectangle(cornerRadius: 25)
-                .fill(backgroundColor.opacity(0.92))
+            // Animated ring (Siri-style)
+            AnimatedRing(
+                isActive: viewModel.state != .idle,
+                audioLevel: viewModel.state == .recording ? viewModel.audioLevel : 0,
+                color: stateColor
+            )
+            .frame(width: circleSize + 48, height: circleSize + 48)
 
-            if viewModel.state.isProcessing {
-                // Processing: show progress waveform with state color
-                ProcessingIndicator(state: viewModel.state)
-            } else if viewModel.state == .recording {
-                // Recording: show live waveform in red
-                SimpleWaveform(audioLevel: viewModel.audioLevel, state: viewModel.state)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-            }
+            // Dark circle background
+            Circle()
+                .fill(backgroundColor)
+                .frame(width: circleSize, height: circleSize)
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
+
+            // Stage icon
+            Image(systemName: stageIcon)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(stateColor)
         }
-        .frame(width: 200, height: 50)
+        .frame(width: circleSize + 56, height: circleSize + 56)
+    }
+
+    /// Map recording state to pipeline stage to get the icon
+    private var currentStage: PipelineStageInfo {
+        switch viewModel.state {
+        case .idle, .recording:
+            return .hotkey  // Mic/trigger stage
+        case .transcribing:
+            return .transcription
+        case .refining:
+            return .improve
+        }
+    }
+
+    private var stageIcon: String {
+        currentStage.icon
+    }
+
+    private var stateColor: Color {
+        KoeColors.color(for: viewModel.state)
     }
 }
 

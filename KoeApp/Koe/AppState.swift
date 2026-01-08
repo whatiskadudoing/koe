@@ -114,23 +114,13 @@ public final class AppState {
         set { UserDefaults.standard.set(newValue, forKey: "customRefinementPrompt") }
     }
 
-    // Hotkey settings
-    @ObservationIgnored
-    private var _hotkeyKeyCode: UInt32 {
-        get { UInt32(UserDefaults.standard.integer(forKey: "hotkeyKeyCode")) == 0 ? 49 : UInt32(UserDefaults.standard.integer(forKey: "hotkeyKeyCode")) }
-        set { UserDefaults.standard.set(Int(newValue), forKey: "hotkeyKeyCode") }
+    // Hotkey settings - stored properties for proper observation
+    private var _hotkeyKeyCode: UInt32 = 49 {
+        didSet { UserDefaults.standard.set(Int(_hotkeyKeyCode), forKey: "hotkeyKeyCode") }
     }
 
-    @ObservationIgnored
-    private var _hotkeyModifiers: Int {
-        get {
-            // Default to Option (2) if not set
-            if UserDefaults.standard.object(forKey: "hotkeyModifiers") == nil {
-                return 2  // .option
-            }
-            return UserDefaults.standard.integer(forKey: "hotkeyModifiers")
-        }
-        set { UserDefaults.standard.set(newValue, forKey: "hotkeyModifiers") }
+    private var _hotkeyModifiers: Int = 2 {
+        didSet { UserDefaults.standard.set(_hotkeyModifiers, forKey: "hotkeyModifiers") }
     }
 
 
@@ -211,6 +201,7 @@ public final class AppState {
         switch hotkeyKeyCode {
         case 49: parts.append("Space")
         case 36: parts.append("Return")
+        case 61: parts.append("R-⌥")  // Right Option key
         case 96: parts.append("F5")
         case 97: parts.append("F6")
         case 98: parts.append("F7")
@@ -279,7 +270,19 @@ public final class AppState {
     private init() {
         loadHistory()
         loadRefinementOptions()
+        loadHotkeySettings()
         loadPipelineHistory()
+    }
+
+    private func loadHotkeySettings() {
+        // Load saved hotkey settings
+        let savedKeyCode = UserDefaults.standard.integer(forKey: "hotkeyKeyCode")
+        if savedKeyCode != 0 {
+            _hotkeyKeyCode = UInt32(savedKeyCode)
+        }
+        if UserDefaults.standard.object(forKey: "hotkeyModifiers") != nil {
+            _hotkeyModifiers = UserDefaults.standard.integer(forKey: "hotkeyModifiers")
+        }
     }
 
     private func loadRefinementOptions() {

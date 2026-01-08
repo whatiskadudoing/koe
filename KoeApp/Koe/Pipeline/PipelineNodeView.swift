@@ -12,35 +12,31 @@ struct PipelineNodeView: View {
     let onTap: () -> Void
 
     @State private var isHovered = false
-    @State private var wavePhase: CGFloat = 0
 
-    private let nodeSize: CGFloat = 48
-    private let cornerRadius: CGFloat = 10
+    private let nodeSize: CGFloat = 44
 
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 4) {
-                ZStack(alignment: .topTrailing) {
-                    // Node background
-                    RoundedRectangle(cornerRadius: cornerRadius)
+                ZStack {
+                    // Node background - circular
+                    Circle()
                         .fill(isRunning ? stage.color.opacity(0.15) : Color.white)
                         .frame(width: nodeSize, height: nodeSize)
                         .shadow(
-                            color: .black.opacity(isHovered ? 0.08 : 0.04),
+                            color: .black.opacity(isHovered ? 0.10 : 0.05),
                             radius: isHovered ? 8 : 4,
                             y: 2
                         )
 
                     // Icon or waveform when running
                     if isRunning {
-                        MiniWaveform(phase: wavePhase, color: stage.color)
+                        AnimatedWaveform(color: stage.color, barCount: 4, minHeight: 4, maxHeight: 12)
                             .frame(width: 24, height: 16)
-                            .frame(width: nodeSize, height: nodeSize)
                     } else {
                         Image(systemName: stage.icon)
-                            .font(.system(size: 18))
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundColor(effectiveIconColor)
-                            .frame(width: nodeSize, height: nodeSize)
                     }
 
                     // Toggle indicator (only for toggleable stages)
@@ -48,7 +44,7 @@ struct PipelineNodeView: View {
                         Circle()
                             .fill(isEnabled ? Color.green : KoeColors.textLighter)
                             .frame(width: 8, height: 8)
-                            .offset(x: -4, y: 4)
+                            .offset(x: 14, y: -14)
                     }
 
                     // Status indicator for failed stages
@@ -56,11 +52,11 @@ struct PipelineNodeView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 10))
                             .foregroundColor(.red)
-                            .offset(x: -4, y: 4)
+                            .offset(x: 14, y: -14)
                     }
                 }
                 .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
+                    Circle()
                         .stroke(isRunning ? stage.color : (isSelected ? KoeColors.accent : Color.clear), lineWidth: 2)
                 )
 
@@ -68,17 +64,6 @@ struct PipelineNodeView: View {
                 Text(stage.displayName)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(isRunning ? stage.color : (isEnabled ? KoeColors.textSecondary : KoeColors.textLight))
-
-                // Timing badge (only show when metrics available and stage was executed, not while running)
-                if let m = metrics, isEnabled, !isRunning {
-                    Text(m.formattedDuration)
-                        .font(.system(size: 8, weight: .medium, design: .monospaced))
-                        .foregroundColor(timingColor(for: m))
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(timingColor(for: m).opacity(0.12))
-                        .cornerRadius(4)
-                }
             }
             .opacity(effectiveOpacity)
             .scaleEffect(isHovered ? 1.05 : 1.0)
@@ -88,22 +73,6 @@ struct PipelineNodeView: View {
             withAnimation(.easeOut(duration: 0.15)) {
                 isHovered = hovering
             }
-        }
-        .onAppear {
-            if isRunning {
-                startWaveAnimation()
-            }
-        }
-        .onChange(of: isRunning) { _, newValue in
-            if newValue {
-                startWaveAnimation()
-            }
-        }
-    }
-
-    private func startWaveAnimation() {
-        withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
-            wavePhase = .pi * 2
         }
     }
 
@@ -141,31 +110,6 @@ struct PipelineNodeView: View {
             return 1.0
         }
         return isEnabled ? 1.0 : 0.5
-    }
-}
-
-// MARK: - Mini Waveform for Running State
-
-struct MiniWaveform: View {
-    let phase: CGFloat
-    let color: Color
-    private let barCount = 5
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<barCount, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(color)
-                    .frame(width: 3, height: barHeight(for: index))
-            }
-        }
-    }
-
-    private func barHeight(for index: Int) -> CGFloat {
-        let minHeight: CGFloat = 4
-        let maxHeight: CGFloat = 14
-        let wave = sin(phase + CGFloat(index) * 0.8) * 0.5 + 0.5
-        return minHeight + wave * (maxHeight - minHeight)
     }
 }
 

@@ -630,8 +630,8 @@ struct HotkeySettingsSection: View {
     // Preset shortcuts
     private let presets: [(name: String, keyCode: UInt32, modifiers: Int)] = [
         ("⌥ Space", 49, 2),          // Option + Space (default)
+        ("R-⌥", 61, 0),              // Right Option key
         ("⌃ Space", 49, 4),          // Control + Space
-        ("⌘⇧ Space", 49, 9),         // Command + Shift + Space
         ("F5", 96, 0),               // F5
         ("F6", 97, 0),               // F6
     ]

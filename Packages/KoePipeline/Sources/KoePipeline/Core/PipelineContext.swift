@@ -224,6 +224,47 @@ public struct ElementExecutionMetrics: Codable, Sendable {
     }
 }
 
+// MARK: - Pipeline Execution Settings
+
+/// Settings used during a pipeline execution (for comparison/testing)
+public struct PipelineExecutionSettings: Codable, Sendable, Equatable {
+    public let language: String
+    public let model: String
+    public let cleanupEnabled: Bool
+    public let tone: String
+    public let promptMode: Bool
+    public let hotkeyKeyCode: UInt32
+    public let hotkeyModifiers: Int
+
+    public init(
+        language: String,
+        model: String,
+        cleanupEnabled: Bool,
+        tone: String,
+        promptMode: Bool,
+        hotkeyKeyCode: UInt32,
+        hotkeyModifiers: Int
+    ) {
+        self.language = language
+        self.model = model
+        self.cleanupEnabled = cleanupEnabled
+        self.tone = tone
+        self.promptMode = promptMode
+        self.hotkeyKeyCode = hotkeyKeyCode
+        self.hotkeyModifiers = hotkeyModifiers
+    }
+
+    public var summary: String {
+        var parts: [String] = []
+        parts.append(language == "auto" ? "Auto" : language)
+        parts.append(model)
+        if cleanupEnabled { parts.append("cleanup") }
+        if tone != "none" { parts.append(tone) }
+        if promptMode { parts.append("prompt") }
+        return parts.joined(separator: ", ")
+    }
+}
+
 // MARK: - Pipeline Execution History
 
 /// Complete history of a pipeline execution
@@ -237,6 +278,7 @@ public struct PipelineExecutionRecord: Codable, Sendable, Identifiable {
     public let inputText: String
     public let outputText: String
     public let errorMessage: String?
+    public let settings: PipelineExecutionSettings?
 
     public init(
         id: UUID = UUID(),
@@ -247,7 +289,8 @@ public struct PipelineExecutionRecord: Codable, Sendable, Identifiable {
         elementMetrics: [ElementExecutionMetrics],
         inputText: String,
         outputText: String,
-        errorMessage: String? = nil
+        errorMessage: String? = nil,
+        settings: PipelineExecutionSettings? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -258,6 +301,7 @@ public struct PipelineExecutionRecord: Codable, Sendable, Identifiable {
         self.inputText = inputText
         self.outputText = outputText
         self.errorMessage = errorMessage
+        self.settings = settings
     }
 
     public var formattedDuration: String {

@@ -57,7 +57,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this stage has settings that can be configured
     var hasSettings: Bool {
         switch self {
-        case .hotkey, .improve: return true
+        case .hotkey, .transcription, .improve: return true
         default: return false
         }
     }

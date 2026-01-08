@@ -3,6 +3,7 @@ import KoeDomain
 import KoeMeeting
 import KoeRefinement
 import KoePipeline
+import KoeUI
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
@@ -16,6 +17,9 @@ struct ContentView: View {
 
     /// Selected history item for detail view
     @State private var selectedHistoryItem: Transcription?
+
+    /// Selected pipeline stage for settings modal
+    @State private var selectedPipelineStage: PipelineStageInfo?
 
     enum AppTab {
         case dictation
@@ -49,6 +53,43 @@ struct ContentView: View {
                 mainUI
                     .transition(.opacity)
                     .zIndex(0)
+            }
+
+            // Modal overlays at root level (to cover entire window)
+            if selectedHistoryItem != nil {
+                ModalOverlay(isPresented: Binding(
+                    get: { selectedHistoryItem != nil },
+                    set: { if !$0 { selectedHistoryItem = nil } }
+                )) {
+                    SettingsModal(
+                        title: "Transcription Details",
+                        icon: "text.bubble",
+                        iconColor: KoeColors.accent,
+                        onClose: { withAnimation { selectedHistoryItem = nil } }
+                    ) {
+                        if let item = selectedHistoryItem {
+                            HistoryDetailContent(entry: item)
+                        }
+                    }
+                }
+                .zIndex(10)
+            }
+
+            if let stage = selectedPipelineStage, stage.isToggleable || stage.hasSettings {
+                ModalOverlay(isPresented: Binding(
+                    get: { selectedPipelineStage != nil },
+                    set: { if !$0 { selectedPipelineStage = nil } }
+                )) {
+                    SettingsModal(
+                        title: "\(stage.displayName) Settings",
+                        icon: stage.icon,
+                        iconColor: stage.color,
+                        onClose: { withAnimation { selectedPipelineStage = nil } }
+                    ) {
+                        NodeSettingsContent(stage: stage)
+                    }
+                }
+                .zIndex(10)
             }
         }
         .frame(minWidth: 380, minHeight: 520)
@@ -127,74 +168,57 @@ struct ContentView: View {
     // MARK: - Dictation View
 
     private var dictationView: some View {
-        ZStack(alignment: .trailing) {
-            VStack(spacing: 0) {
-                // Top section - Mic button and controls
-                VStack(spacing: 16) {
-                    // Mic button
-                    MicButton(
-                        state: appState.recordingState,
-                        audioLevel: coordinator.audioLevel,
-                        onTap: {
-                            Task { @MainActor in
-                                if appState.recordingState == .idle {
-                                    let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
-                                    let langCode = appState.selectedLanguage
-                                    let language = Language.all.first { $0.code == langCode } ?? .auto
-                                    await coordinator.startRecording(mode: mode, language: language)
-                                } else if appState.recordingState == .recording {
-                                    let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
-                                    let langCode = appState.selectedLanguage
-                                    let language = Language.all.first { $0.code == langCode } ?? .auto
-                                    await coordinator.stopRecording(mode: mode, language: language)
-                                }
+        VStack(spacing: 0) {
+            Spacer()
+
+            // Center section - Mic button and controls
+            VStack(spacing: 20) {
+                // Mic button
+                MicButton(
+                    state: appState.recordingState,
+                    audioLevel: coordinator.audioLevel,
+                    onTap: {
+                        Task { @MainActor in
+                            if appState.recordingState == .idle {
+                                let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
+                                let langCode = appState.selectedLanguage
+                                let language = Language.all.first { $0.code == langCode } ?? .auto
+                                await coordinator.startRecording(mode: mode, language: language)
+                            } else if appState.recordingState == .recording {
+                                let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
+                                let langCode = appState.selectedLanguage
+                                let language = Language.all.first { $0.code == langCode } ?? .auto
+                                await coordinator.stopRecording(mode: mode, language: language)
                             }
                         }
-                    )
-
-                    // Status text and hotkey hint
-                    VStack(spacing: 8) {
-                        StatusText(state: appState.recordingState)
-                        HotkeyHint()
                     }
+                )
 
-                    // Mode toggle removed - "while speaking" mode not worth it for now
-                    // ModeToggle()
+                // Status text (only shown when active)
+                if appState.recordingState != .idle {
+                    StatusText(state: appState.recordingState)
                 }
-                .padding(.top, 8)
-                .padding(.horizontal, 32)
 
                 // Pipeline visualization
-                PipelineStripView()
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
+                PipelineStripView(selectedStage: $selectedPipelineStage)
 
                 // Current transcription (if any)
                 if !appState.currentTranscription.isEmpty {
                     TranscriptionCard(text: appState.currentTranscription)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 16)
-                }
-
-                // History section - vertical scrollable list
-                if !appState.transcriptionHistory.isEmpty {
-                    HistoryList(entries: appState.transcriptionHistory, selectedItem: $selectedHistoryItem)
-                        .padding(.top, 16)
-                } else {
-                    Spacer()
+                        .frame(maxWidth: 340)
                 }
             }
+            .frame(maxWidth: 360)
 
-            // History detail slide-over panel
-            if let item = selectedHistoryItem {
-                HistoryDetailView(entry: item, onClose: {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        selectedHistoryItem = nil
-                    }
-                })
-                .transition(.move(edge: .trailing))
+            Spacer()
+
+            // History section - at the bottom
+            if !appState.transcriptionHistory.isEmpty {
+                HistoryList(entries: appState.transcriptionHistory, selectedItem: $selectedHistoryItem)
+                    .frame(maxHeight: 180)
             }
         }
+        .padding(.horizontal, 24)
     }
 }
 
@@ -279,13 +303,12 @@ struct TabIconButton: View {
 
 struct WelcomeView: View {
     @Environment(AppState.self) private var appState
-    @State private var animationPhase: CGFloat = 0
     @State private var contentOpacity: Double = 0
     @State private var contentScale: Double = 0.95
     @State private var contentOffset: CGFloat = 20
-    @State private var animationTimer: Timer?
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+    private let circleSize: CGFloat = 100
 
     var body: some View {
         ZStack {
@@ -293,24 +316,36 @@ struct WelcomeView: View {
             Color(nsColor: NSColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0))
                 .ignoresSafeArea()
 
-            VStack(spacing: 28) {
+            VStack(spacing: 24) {
                 Spacer()
 
-                // Animated waveform logo
-                LogoWaveform(phase: animationPhase)
-                    .frame(width: 120, height: 60)
+                // Animated ring with Japanese character
+                ZStack {
+                    AnimatedRing(
+                        isActive: true,
+                        audioLevel: 0,
+                        color: accentColor,
+                        segmentCount: 48,
+                        maxAmplitude: 16,
+                        strokeWidth: 3
+                    )
+                    .frame(width: circleSize + 50, height: circleSize + 50)
 
-                // App name with Japanese character
-                VStack(spacing: 12) {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: circleSize, height: circleSize)
+                        .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+
                     Text("声")
-                        .font(.system(size: 40, weight: .thin))
-                        .foregroundColor(accentColor.opacity(0.7))
-
-                    Text("koe")
-                        .font(.system(size: 32, weight: .light, design: .rounded))
+                        .font(.system(size: 44, weight: .light))
                         .foregroundColor(accentColor)
-                        .tracking(6)
                 }
+
+                // App name
+                Text("koe")
+                    .font(.system(size: 28, weight: .light, design: .rounded))
+                    .foregroundColor(accentColor)
+                    .tracking(6)
 
                 Spacer()
             }
@@ -326,65 +361,13 @@ struct WelcomeView: View {
                 contentOffset = 0
             }
 
-            // Start continuous waveform animation using Timer for reliable animation
-            startWaveformAnimation()
-
-            // Advance to next state after 12 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+            // Advance to next state after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 withAnimation(.easeOut(duration: 0.6)) {
                     appState.advanceReadinessState()
                 }
             }
         }
-        .onDisappear {
-            stopWaveformAnimation()
-        }
-    }
-
-    private func startWaveformAnimation() {
-        // Use Timer for reliable animation at 30fps
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/30.0, repeats: true) { _ in
-            animationPhase += 0.12
-            if animationPhase > .pi * 2 {
-                animationPhase = 0
-            }
-        }
-    }
-
-    private func stopWaveformAnimation() {
-        animationTimer?.invalidate()
-        animationTimer = nil
-    }
-}
-
-// MARK: - Logo Waveform
-
-struct LogoWaveform: View {
-    let phase: CGFloat
-    private let barCount = 9
-    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<barCount, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(accentColor)
-                    .frame(width: 6, height: barHeight(for: index))
-            }
-        }
-    }
-
-    private func barHeight(for index: Int) -> CGFloat {
-        let minHeight: CGFloat = 12
-        let maxHeight: CGFloat = 56
-        let centerIndex = CGFloat(barCount - 1) / 2
-        let distanceFromCenter = abs(CGFloat(index) - centerIndex) / centerIndex
-
-        // Create wave pattern from center outward
-        let baseHeight = maxHeight - (distanceFromCenter * (maxHeight - minHeight) * 0.6)
-        let waveOffset = sin(phase + CGFloat(index) * 0.7) * 0.3 + 0.7
-
-        return baseHeight * waveOffset
     }
 }
 
@@ -431,7 +414,8 @@ struct MicButton: View {
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
 
     // Fixed container size to prevent layout shifts
-    private let containerSize: CGFloat = 180
+    private let containerSize: CGFloat = 160
+    private let circleSize: CGFloat = 80
 
     var body: some View {
         Button(action: {
@@ -447,37 +431,26 @@ struct MicButton: View {
                 Color.clear
                     .frame(width: containerSize, height: containerSize)
 
-                // Outer ring - audio visualization (always present but invisible when not recording)
-                Circle()
-                    .stroke(state == .recording ? accentColor.opacity(0.3) : Color.clear, lineWidth: 2)
-                    .frame(width: 140 + CGFloat(state == .recording ? audioLevel : 0) * 40,
-                           height: 140 + CGFloat(state == .recording ? audioLevel : 0) * 40)
-                    .animation(.easeOut(duration: 0.1), value: audioLevel)
+                // Animated ring
+                AnimatedRing(
+                    isActive: state != .idle,
+                    audioLevel: state == .recording ? audioLevel : 0,
+                    color: stateColor,
+                    maxAmplitude: 18,
+                    strokeWidth: 3
+                )
+                .frame(width: circleSize + 60, height: circleSize + 60)
 
                 // Main circle
                 Circle()
                     .fill(backgroundColor)
-                    .frame(width: 120, height: 120)
-                    .shadow(color: .black.opacity(isHovered ? 0.12 : 0.08), radius: isHovered ? 24 : 20, x: 0, y: isHovered ? 10 : 8)
+                    .frame(width: circleSize, height: circleSize)
+                    .shadow(color: .black.opacity(isHovered ? 0.15 : 0.10), radius: isHovered ? 16 : 12, x: 0, y: isHovered ? 6 : 4)
 
-                // Inner content
-                Group {
-                    switch state {
-                    case .idle:
-                        Image(systemName: "mic.fill")
-                            .font(.system(size: 40, weight: .light))
-                            .foregroundColor(accentColor)
-
-                    case .recording:
-                        WaveformView(audioLevel: audioLevel, color: .white)
-                            .frame(width: 60, height: 40)
-
-                    case .transcribing, .refining:
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(1.5)
-                    }
-                }
+                // Inner content - icon
+                Image(systemName: stageIcon)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundColor(iconColor)
             }
             .scaleEffect(isPressed ? 0.95 : (isHovered ? 1.03 : 1.0))
         }
@@ -495,14 +468,31 @@ struct MicButton: View {
         .animation(.spring(response: 0.3), value: state)
     }
 
+    private var stageIcon: String {
+        switch state {
+        case .idle, .recording:
+            return "mic.fill"
+        case .transcribing:
+            return "text.bubble"
+        case .refining:
+            return "sparkles"
+        }
+    }
+
+    private var stateColor: Color {
+        KoeColors.color(for: state)
+    }
+
+    private var iconColor: Color {
+        state == .idle ? accentColor : .white
+    }
+
     private var backgroundColor: Color {
         switch state {
         case .idle:
             return Color.white
-        case .recording:
-            return accentColor.opacity(0.95)
-        case .transcribing, .refining:
-            return accentColor
+        case .recording, .transcribing, .refining:
+            return stateColor.opacity(0.95)
         }
     }
 }
@@ -557,34 +547,6 @@ struct StatusText: View {
         case .refining:
             return "refining..."
         }
-    }
-}
-
-// MARK: - Hotkey Hint
-
-struct HotkeyHint: View {
-    private let lightGray = Color(nsColor: NSColor(red: 0.70, green: 0.68, blue: 0.66, alpha: 1.0))
-
-    var body: some View {
-        HStack(spacing: 4) {
-            KeyCap(text: "⌥")
-            KeyCap(text: "space")
-        }
-        .padding(.top, 8)
-    }
-}
-
-struct KeyCap: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 10, weight: .medium, design: .rounded))
-            .foregroundColor(Color(nsColor: NSColor(red: 0.50, green: 0.48, blue: 0.46, alpha: 1.0)))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0)))
-            .cornerRadius(4)
     }
 }
 
@@ -671,40 +633,113 @@ struct HistoryList: View {
     let entries: [Transcription]
     @Binding var selectedItem: Transcription?
 
-    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             // Header
             HStack {
                 Text("Recent")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(lightGray)
                     .tracking(0.5)
 
                 Spacer()
 
-                Text("\(entries.count) items")
-                    .font(.system(size: 11))
+                Text("\(entries.count)")
+                    .font(.system(size: 10))
                     .foregroundColor(lightGray.opacity(0.7))
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 16)
 
-            // Scrollable list
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 10) {
+            // Horizontal scrollable list
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
                     ForEach(entries.prefix(20)) { entry in
-                        HistoryRow(entry: entry, onTap: {
+                        HistoryCard(entry: entry, onTap: {
                             withAnimation(.easeOut(duration: 0.25)) {
                                 selectedItem = entry
                             }
                         })
                     }
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
             }
+        }
+    }
+}
+
+// MARK: - History Card (Horizontal)
+
+struct HistoryCard: View {
+    let entry: Transcription
+    var onTap: (() -> Void)?
+
+    @State private var isHovered = false
+    @State private var appeared = false
+
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+    private let textColor = Color(nsColor: NSColor(red: 0.25, green: 0.25, blue: 0.27, alpha: 1.0))
+
+    var body: some View {
+        Button(action: { onTap?() }) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Transcription text preview
+                Text(entry.text.prefix(60) + (entry.text.count > 60 ? "..." : ""))
+                    .font(.system(size: 12))
+                    .foregroundColor(textColor)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer()
+
+                // Timestamp
+                Text(formatTimestamp(entry.timestamp))
+                    .font(.system(size: 10))
+                    .foregroundColor(lightGray)
+            }
+            .padding(12)
+            .frame(width: 160, height: 100)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white)
+                    .shadow(color: .black.opacity(isHovered ? 0.10 : 0.05), radius: isHovered ? 8 : 4, y: isHovered ? 3 : 2)
+            )
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .opacity(appeared ? 1 : 0)
+        .offset(x: appeared ? 0 : -20)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                appeared = true
+            }
+        }
+    }
+
+    private func formatTimestamp(_ date: Date) -> String {
+        let now = Date()
+        let interval = now.timeIntervalSince(date)
+
+        if interval < 60 {
+            return "Just now"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes)m ago"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return "\(hours)h ago"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return formatter.string(from: date)
         }
     }
 }
@@ -1102,6 +1137,236 @@ struct HistoryDetailView: View {
     }
 
     /// Check if this element is an action (side effect) vs a transformation
+    private func isAction(for typeId: String) -> Bool {
+        switch typeId {
+        case "auto-type", "auto-enter": return true
+        default: return false
+        }
+    }
+
+    private func actionDescription(for typeId: String) -> String? {
+        switch typeId {
+        case "auto-type": return "Typed to active window"
+        case "auto-enter": return "Pressed Enter"
+        default: return nil
+        }
+    }
+
+    private func settingsSummary(for typeId: String) -> String? {
+        guard let settings = entry.refinementSettings else { return nil }
+        switch typeId {
+        case "text-improve":
+            var parts: [String] = []
+            if settings.cleanup { parts.append("cleanup") }
+            if settings.tone != "none" { parts.append(settings.tone) }
+            if settings.promptMode { parts.append("prompt") }
+            return parts.isEmpty ? nil : parts.joined(separator: " + ")
+        case "language-improvement":
+            var parts: [String] = []
+            if settings.cleanup { parts.append("cleanup") }
+            if settings.tone != "none" { parts.append(settings.tone) }
+            return parts.isEmpty ? nil : parts.joined(separator: " + ")
+        case "prompt-optimizer":
+            return settings.promptMode ? "enabled" : nil
+        default:
+            return nil
+        }
+    }
+
+    private func copyText() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(entry.text, forType: .string)
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            showCopied = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation(.easeOut(duration: 0.3)) {
+                showCopied = false
+            }
+        }
+    }
+
+    private func formatFullTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - History Detail Content (for modal)
+
+/// Content view for history detail - used inside SettingsModal
+struct HistoryDetailContent: View {
+    let entry: Transcription
+
+    @Environment(AppState.self) private var appState
+    @State private var showCopied = false
+
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+    private let textColor = Color(nsColor: NSColor(red: 0.20, green: 0.20, blue: 0.22, alpha: 1.0))
+    private let transcribingColor = Color(nsColor: NSColor(red: 0.95, green: 0.75, blue: 0.20, alpha: 1.0))
+    private let refiningColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
+    private let actionColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+
+    private var executionRecord: PipelineExecutionRecord? {
+        guard let runId = entry.pipelineRunId else { return nil }
+        return appState.pipelineExecutionHistory.first { $0.id == runId }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Timestamp and duration
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(formatFullTimestamp(entry.timestamp))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(textColor)
+
+                    if entry.duration > 0 {
+                        Text("Total: \(String(format: "%.1fs", entry.duration))")
+                            .font(.system(size: 12))
+                            .foregroundColor(lightGray)
+                    }
+                }
+
+                // Dynamic Pipeline steps
+                VStack(alignment: .leading, spacing: 12) {
+                    // Transcription step
+                    PipelineStepCard(
+                        stepName: "Transcription",
+                        stepIcon: "waveform",
+                        stepColor: transcribingColor,
+                        inputDescription: "Audio input",
+                        outputText: entry.originalText ?? entry.text,
+                        status: .completed,
+                        duration: nil
+                    )
+
+                    // Dynamic stages from pipeline execution
+                    if let record = executionRecord {
+                        ForEach(record.elementMetrics.sorted(by: { $0.startTime < $1.startTime }), id: \.elementType) { metrics in
+                            PipelineStepCard(
+                                stepName: displayName(for: metrics.elementType),
+                                stepIcon: icon(for: metrics.elementType),
+                                stepColor: color(for: metrics.elementType),
+                                inputDescription: inputDescription(for: metrics.elementType),
+                                outputText: outputText(for: metrics.elementType, record: record),
+                                isAction: isAction(for: metrics.elementType),
+                                actionDescription: actionDescription(for: metrics.elementType),
+                                status: metrics.status == .success ? .completed : .failed,
+                                duration: metrics.durationMs / 1000.0,
+                                settingsSummary: settingsSummary(for: metrics.elementType)
+                            )
+                        }
+                    } else if entry.wasRefined {
+                        PipelineStepCard(
+                            stepName: "AI Refinement",
+                            stepIcon: "sparkles",
+                            stepColor: refiningColor,
+                            inputDescription: entry.originalText ?? "Transcribed text",
+                            outputText: entry.text,
+                            status: .completed,
+                            duration: entry.refinementSettings?.durationSeconds,
+                            settingsSummary: entry.refinementSettings?.summary
+                        )
+                    }
+                }
+
+                // Final text section
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Final Text")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(lightGray)
+
+                    Text(entry.text)
+                        .font(.system(size: 14))
+                        .foregroundColor(textColor)
+                        .textSelection(.enabled)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(KoeColors.surface)
+                        .cornerRadius(8)
+                }
+
+                // Copy button
+                Button(action: copyText) {
+                    HStack {
+                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 12))
+                        Text(showCopied ? "Copied!" : "Copy Text")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(KoeColors.accent)
+                    .cornerRadius(20)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxHeight: 400)
+    }
+
+    // MARK: - Helpers
+
+    private func displayName(for typeId: String) -> String {
+        switch typeId {
+        case "text-improve": return "Improve"
+        case "language-improvement": return "Language Improve"
+        case "prompt-optimizer": return "Prompt Optimizer"
+        case "auto-type": return "Auto Type"
+        case "auto-enter": return "Auto Enter"
+        default: return typeId.replacingOccurrences(of: "-", with: " ").capitalized
+        }
+    }
+
+    private func icon(for typeId: String) -> String {
+        switch typeId {
+        case "text-improve": return "sparkles"
+        case "language-improvement": return "text.badge.checkmark"
+        case "prompt-optimizer": return "sparkles"
+        case "auto-type": return "keyboard"
+        case "auto-enter": return "return"
+        default: return "gearshape"
+        }
+    }
+
+    private func color(for typeId: String) -> Color {
+        switch typeId {
+        case "text-improve": return refiningColor
+        case "language-improvement": return refiningColor
+        case "prompt-optimizer": return Color.orange
+        case "auto-type": return actionColor
+        case "auto-enter": return actionColor
+        default: return lightGray
+        }
+    }
+
+    private func inputDescription(for typeId: String) -> String {
+        switch typeId {
+        case "text-improve", "language-improvement": return "Raw transcription"
+        case "prompt-optimizer": return "Improved text"
+        case "auto-type": return executionRecord?.outputText ?? entry.text
+        case "auto-enter": return "Sends Enter key"
+        default: return "Previous output"
+        }
+    }
+
+    private func outputText(for typeId: String, record: PipelineExecutionRecord) -> String? {
+        switch typeId {
+        case "text-improve", "language-improvement", "prompt-optimizer":
+            return record.outputText
+        case "auto-type", "auto-enter":
+            return nil
+        default:
+            return nil
+        }
+    }
+
     private func isAction(for typeId: String) -> Bool {
         switch typeId {
         case "auto-type", "auto-enter": return true

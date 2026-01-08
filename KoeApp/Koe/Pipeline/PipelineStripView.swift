@@ -5,46 +5,34 @@ import KoePipeline
 /// Main container that displays the horizontal pipeline visualization
 struct PipelineStripView: View {
     @Environment(AppState.self) private var appState
-    @State private var selectedStage: PipelineStageInfo? = nil
+    @Binding var selectedStage: PipelineStageInfo?
 
     var body: some View {
-        VStack(spacing: 8) {
-            // Pipeline strip with nodes
-            HStack(spacing: 0) {
-                ForEach(Array(PipelineStageInfo.visibleStages.enumerated()), id: \.element.id) { index, stage in
-                    HStack(spacing: 0) {
-                        // Connector (skip for first node)
-                        if index > 0 {
-                            PipelineConnector(isActive: isConnectorActive(beforeIndex: index))
-                        }
-
-                        // Node
-                        PipelineNodeView(
-                            stage: stage,
-                            isEnabled: binding(for: stage),
-                            isSelected: selectedStage == stage,
-                            isRunning: isStageRunning(stage),
-                            metrics: metricsFor(stage),
-                            onTap: { handleNodeTap(stage) }
-                        )
+        // Pipeline strip with nodes
+        HStack(spacing: 0) {
+            ForEach(Array(PipelineStageInfo.visibleStages.enumerated()), id: \.element.id) { index, stage in
+                HStack(spacing: 0) {
+                    // Connector (skip for first node)
+                    if index > 0 {
+                        PipelineConnector(isActive: isConnectorActive(beforeIndex: index))
                     }
+
+                    // Node
+                    PipelineNodeView(
+                        stage: stage,
+                        isEnabled: binding(for: stage),
+                        isSelected: selectedStage == stage,
+                        isRunning: isStageRunning(stage),
+                        metrics: metricsFor(stage),
+                        onTap: { handleNodeTap(stage) }
+                    )
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(KoeColors.surface.opacity(0.5))
-            .cornerRadius(16)
-
-            // Settings panel (expands below when a toggleable node is selected)
-            if let selected = selectedStage, selected.isToggleable || selected.hasSettings {
-                NodeSettingsPanel(
-                    stage: selected,
-                    onClose: { withAnimation { selectedStage = nil } }
-                )
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
         }
-        .animation(.easeOut(duration: 0.2), value: selectedStage)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(KoeColors.surface.opacity(0.5))
+        .cornerRadius(16)
     }
 
     // MARK: - Helpers
@@ -174,11 +162,19 @@ struct PipelineMetricsDebugView: View {
 }
 
 #Preview {
-    VStack {
-        PipelineStripView()
-            .environment(AppState.shared)
+    struct PreviewWrapper: View {
+        @State private var selectedStage: PipelineStageInfo? = nil
+
+        var body: some View {
+            VStack {
+                PipelineStripView(selectedStage: $selectedStage)
+                    .environment(AppState.shared)
+            }
+            .padding()
+            .background(KoeColors.background)
+            .frame(width: 400)
+        }
     }
-    .padding()
-    .background(KoeColors.background)
-    .frame(width: 400)
+
+    return PreviewWrapper()
 }
