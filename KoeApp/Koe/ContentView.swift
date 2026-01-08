@@ -137,7 +137,6 @@ struct TabToggle: View {
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
-    private let selectedRed = Color.red.opacity(0.85)
 
     var body: some View {
         HStack(spacing: 8) {
@@ -145,7 +144,7 @@ struct TabToggle: View {
             TabIconButton(
                 icon: "waveform",
                 isSelected: selectedTab == .dictation,
-                selectedColor: selectedRed,
+                selectedColor: accentColor,
                 unselectedColor: lightGray
             ) {
                 withAnimation(.easeOut(duration: 0.2)) {
@@ -378,7 +377,7 @@ struct MicButton: View {
 
                 // Outer ring - audio visualization (always present but invisible when not recording)
                 Circle()
-                    .stroke(state == .recording ? Color.red.opacity(0.3) : Color.clear, lineWidth: 2)
+                    .stroke(state == .recording ? accentColor.opacity(0.3) : Color.clear, lineWidth: 2)
                     .frame(width: 140 + CGFloat(state == .recording ? audioLevel : 0) * 40,
                            height: 140 + CGFloat(state == .recording ? audioLevel : 0) * 40)
                     .animation(.easeOut(duration: 0.1), value: audioLevel)
@@ -429,7 +428,7 @@ struct MicButton: View {
         case .idle:
             return Color.white
         case .recording:
-            return Color.red.opacity(0.9)
+            return accentColor.opacity(0.95)
         case .processing:
             return accentColor
         }

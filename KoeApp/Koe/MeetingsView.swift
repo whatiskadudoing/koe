@@ -55,7 +55,7 @@ struct MeetingsView: View {
                                         .frame(width: 14, height: 14)
                                 } else {
                                     Circle()
-                                        .fill(Color.red)
+                                        .fill(Color.white)
                                         .frame(width: 10, height: 10)
                                 }
                                 Text(isStartingRecording ? "Starting..." : "Start Recording")
@@ -64,15 +64,9 @@ struct MeetingsView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 18)
                             .padding(.vertical, 10)
-                            .background(
-                                LinearGradient(
-                                    colors: [Color.red, Color.red.opacity(0.85)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
+                            .background(accentColor)
                             .cornerRadius(20)
-                            .shadow(color: Color.red.opacity(0.3), radius: 8, y: 4)
+                            .shadow(color: accentColor.opacity(0.15), radius: 4, y: 2)
                         }
                         .buttonStyle(.plain)
                         .disabled(isStartingRecording)
@@ -125,13 +119,7 @@ struct MeetingsView: View {
 
                 Image(systemName: "waveform.circle.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [accentColor, accentColor.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .foregroundColor(accentColor)
             }
 
             VStack(spacing: 10) {
@@ -247,13 +235,7 @@ struct RecordingStatusBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(
-            LinearGradient(
-                colors: [Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0)), Color(nsColor: NSColor(red: 0.34, green: 0.40, blue: 0.56, alpha: 1.0))],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        )
+        .background(Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0)))
     }
 
     private func barHeight(for index: Int) -> CGFloat {
@@ -348,7 +330,7 @@ struct MeetingRow: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(lightGray.opacity(0.5))
             }
-            .padding(16)
+            .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.white)
@@ -367,13 +349,7 @@ struct MeetingRow: View {
     private var appIcon: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [accentColor.opacity(0.15), accentColor.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(accentColor.opacity(0.1))
                 .frame(width: 44, height: 44)
 
             Image(systemName: appIconName)

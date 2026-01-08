@@ -107,11 +107,14 @@ class RecordingOverlayViewModel: ObservableObject {
 struct OverlayContentView: View {
     @ObservedObject private var viewModel = RecordingOverlayViewModel.shared
 
+    // Japanese indigo accent color
+    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+
     var body: some View {
         ZStack {
-            // Dark rounded background
+            // Dark accent background (Japanese indigo)
             RoundedRectangle(cornerRadius: 25)
-                .fill(Color.black.opacity(0.85))
+                .fill(accentColor.opacity(0.92))
 
             if viewModel.state == .processing {
                 // Processing: show spinner + text

@@ -22,9 +22,9 @@ struct LoadingView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Animated blue waveform
+                // Animated waveform - matching WelcomeView style
                 LoadingWaveform(phase: animationPhase)
-                    .frame(width: 140, height: 70)
+                    .frame(width: 120, height: 60)
 
                 Spacer()
                     .frame(height: 36)
@@ -152,27 +152,28 @@ struct LoadingView: View {
 struct LoadingWaveform: View {
     let phase: CGFloat
     private let barCount = 9
-    private let blueColor = Color(nsColor: NSColor.systemBlue)
+    // Japanese indigo accent color - matching WelcomeView
+    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             ForEach(0..<barCount, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(blueColor)
-                    .frame(width: 8, height: barHeight(for: index))
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(accentColor)
+                    .frame(width: 6, height: barHeight(for: index))
             }
         }
     }
 
     private func barHeight(for index: Int) -> CGFloat {
-        let minHeight: CGFloat = 16
-        let maxHeight: CGFloat = 68
+        let minHeight: CGFloat = 12
+        let maxHeight: CGFloat = 56
         let centerIndex = CGFloat(barCount - 1) / 2
         let distanceFromCenter = abs(CGFloat(index) - centerIndex) / centerIndex
 
-        // Create wave pattern from center outward
-        let baseHeight = maxHeight - (distanceFromCenter * (maxHeight - minHeight) * 0.5)
-        let waveOffset = sin(phase + CGFloat(index) * 0.7) * 0.35 + 0.65
+        // Create wave pattern from center outward - matching LogoWaveform style
+        let baseHeight = maxHeight - (distanceFromCenter * (maxHeight - minHeight) * 0.6)
+        let waveOffset = sin(phase + CGFloat(index) * 0.7) * 0.3 + 0.7
 
         return baseHeight * waveOffset
     }

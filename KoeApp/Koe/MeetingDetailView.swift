@@ -112,13 +112,7 @@ struct MeetingDetailView: View {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(
-                            LinearGradient(
-                                colors: [accentColor.opacity(0.2), accentColor.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(accentColor.opacity(0.1))
                         .frame(width: 56, height: 56)
 
                     Image(systemName: appIconName)
@@ -165,7 +159,7 @@ struct MeetingDetailView: View {
             .background(pageBackground)
             .cornerRadius(12)
         }
-        .padding(18)
+        .padding(20)
         .background(cardBackground)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
@@ -205,15 +199,9 @@ struct MeetingDetailView: View {
                 Button(action: togglePlayback) {
                     ZStack {
                         Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [accentColor, accentColor.opacity(0.8)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .fill(accentColor)
                             .frame(width: 48, height: 48)
-                            .shadow(color: accentColor.opacity(0.3), radius: 8, y: 4)
+                            .shadow(color: accentColor.opacity(0.15), radius: 4, y: 2)
 
                         Image(systemName: isPlayingAudio ? "pause.fill" : "play.fill")
                             .font(.system(size: 18))
@@ -238,11 +226,11 @@ struct MeetingDetailView: View {
 
                 Spacer()
             }
-            .padding(14)
+            .padding(16)
             .background(pageBackground)
             .cornerRadius(12)
         }
-        .padding(18)
+        .padding(20)
         .background(cardBackground)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
@@ -335,15 +323,9 @@ struct MeetingDetailView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 24)
                             .padding(.vertical, 12)
-                            .background(
-                                LinearGradient(
-                                    colors: [accentColor, accentColor.opacity(0.85)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .background(accentColor)
                             .cornerRadius(22)
-                            .shadow(color: accentColor.opacity(0.3), radius: 10, y: 4)
+                            .shadow(color: accentColor.opacity(0.15), radius: 4, y: 2)
                         }
                         .buttonStyle(.plain)
                     }
@@ -354,7 +336,7 @@ struct MeetingDetailView: View {
                 .cornerRadius(12)
             }
         }
-        .padding(18)
+        .padding(20)
         .background(cardBackground)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.05), radius: 10, y: 4)
