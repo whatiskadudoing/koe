@@ -97,12 +97,17 @@ bundle: build-release
 	EXECUTABLE=$$(find .build -name "Koe" -type f -path "*release*" | grep -v dSYM | head -1) && \
 	mkdir -p dist/Koe.app/Contents/MacOS && \
 	mkdir -p dist/Koe.app/Contents/Resources && \
+	mkdir -p dist/Koe.app/Contents/Frameworks && \
 	cp "$$EXECUTABLE" dist/Koe.app/Contents/MacOS/Koe && \
 	cp Koe/Info.plist dist/Koe.app/Contents/Info.plist && \
 	/usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Koe" dist/Koe.app/Contents/Info.plist 2>/dev/null || \
 	/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Koe" dist/Koe.app/Contents/Info.plist && \
 	echo -n "APPL????" > dist/Koe.app/Contents/PkgInfo && \
 	chmod +x dist/Koe.app/Contents/MacOS/Koe && \
+	if [ -d ".build/arm64-apple-macosx/release/llama.framework" ]; then \
+		cp -R .build/arm64-apple-macosx/release/llama.framework dist/Koe.app/Contents/Frameworks/ && \
+		install_name_tool -add_rpath @executable_path/../Frameworks dist/Koe.app/Contents/MacOS/Koe 2>/dev/null || true; \
+	fi && \
 	codesign --force --deep --sign - --identifier "com.koe.voice" --entitlements Koe.entitlements \
 		--requirements '=designated => identifier "com.koe.voice"' dist/Koe.app && \
 	echo "App bundle created at KoeApp/dist/Koe.app"

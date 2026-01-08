@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import KoeDomain
+import KoeUI
 
 // MARK: - Overlay Window Controller
 
@@ -48,7 +49,7 @@ class RecordingOverlayController {
         RecordingOverlayViewModel.shared.audioLevel = audioLevel
         RecordingOverlayViewModel.shared.state = state
 
-        if state == .recording || state == .processing {
+        if state.isBusy {
             self.show()
         } else {
             self.hide()
@@ -107,21 +108,21 @@ class RecordingOverlayViewModel: ObservableObject {
 struct OverlayContentView: View {
     @ObservedObject private var viewModel = RecordingOverlayViewModel.shared
 
-    // Japanese indigo accent color
-    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+    // Dark neutral background
+    private let backgroundColor = Color(nsColor: NSColor(red: 0.15, green: 0.15, blue: 0.18, alpha: 1.0))
 
     var body: some View {
         ZStack {
-            // Dark accent background (Japanese indigo)
+            // Dark background
             RoundedRectangle(cornerRadius: 25)
-                .fill(accentColor.opacity(0.92))
+                .fill(backgroundColor.opacity(0.92))
 
-            if viewModel.state == .processing {
-                // Processing: show spinner + text
-                ProcessingIndicator()
-            } else {
-                // Recording: show waveform
-                SimpleWaveform(audioLevel: viewModel.audioLevel)
+            if viewModel.state.isProcessing {
+                // Processing: show progress waveform with state color
+                ProcessingIndicator(state: viewModel.state)
+            } else if viewModel.state == .recording {
+                // Recording: show live waveform in red
+                SimpleWaveform(audioLevel: viewModel.audioLevel, state: viewModel.state)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
             }
@@ -133,8 +134,10 @@ struct OverlayContentView: View {
 // MARK: - Processing Indicator (Waveform Progress)
 
 struct ProcessingIndicator: View {
+    let state: RecordingState
+
     var body: some View {
-        WaveformProgress()
+        WaveformProgress(state: state)
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
     }
@@ -143,7 +146,12 @@ struct ProcessingIndicator: View {
 // MARK: - Waveform Progress Animation
 
 struct WaveformProgress: View {
+    let state: RecordingState
     private let barCount = 20
+
+    private var stateColor: Color {
+        KoeColors.color(for: state)
+    }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 0.04)) { timeline in
@@ -198,13 +206,13 @@ struct WaveformProgress: View {
                     let path = RoundedRectangle(cornerRadius: 1.5)
                         .path(in: rect)
 
-                    // Color: white for processed, dim gray for unprocessed
+                    // Color: state color for processed, dim gray for unprocessed
                     if isProcessed {
                         // Glow effect at the leading edge
                         let edgeDist = abs(barProgress - progress) * CGFloat(barCount)
                         let glowIntensity = max(0, 1.0 - edgeDist / 2.0)
                         let brightness = 0.9 + glowIntensity * 0.1
-                        context.fill(path, with: .color(Color.white.opacity(brightness)))
+                        context.fill(path, with: .color(stateColor.opacity(brightness)))
                     } else {
                         context.fill(path, with: .color(Color.white.opacity(0.25)))
                     }
@@ -214,12 +222,17 @@ struct WaveformProgress: View {
     }
 }
 
-// MARK: - Simple White Waveform
+// MARK: - Simple Waveform (Live Recording)
 
 struct SimpleWaveform: View {
     let audioLevel: Float
+    let state: RecordingState
 
     private let barCount = 16
+
+    private var stateColor: Color {
+        KoeColors.color(for: state)
+    }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 0.03)) { timeline in
@@ -267,7 +280,8 @@ struct SimpleWaveform: View {
                     let path = RoundedRectangle(cornerRadius: 2)
                         .path(in: rect)
 
-                    context.fill(path, with: .color(.white))
+                    // Use state-based color (red for recording)
+                    context.fill(path, with: .color(stateColor))
                 }
             }
         }

@@ -208,6 +208,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        // Observe hotkey changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleHotkeyChanged),
+            name: .hotkeyChanged,
+            object: nil
+        )
+
         // Start with loading animation (blue waveform)
         menuBarState = .loading
         downloadProgress = 0.0
@@ -225,6 +233,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupGlobalHotkey()
         coordinator.initializeWhenReady()
         // Note: Meeting monitoring is started in applicationDidFinishLaunching
+    }
+
+    @objc func handleHotkeyChanged() {
+        coordinator.updateHotkey()
     }
 
     @objc func selectLanguage(_ sender: NSMenuItem) {
@@ -510,6 +522,9 @@ extension Notification.Name {
     static let requestResumeMeetingDetection = Notification.Name("requestResumeMeetingDetection")
     static let meetingDetectedSwitchTab = Notification.Name("meetingDetectedSwitchTab")
     static let meetingEndedSwitchTab = Notification.Name("meetingEndedSwitchTab")
+
+    // Hotkey configuration
+    static let hotkeyChanged = Notification.Name("hotkeyChanged")
 }
 
 // MARK: - NSMenuDelegate

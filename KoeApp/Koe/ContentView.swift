@@ -1,6 +1,8 @@
 import SwiftUI
 import KoeDomain
 import KoeMeeting
+import KoeRefinement
+import KoePipeline
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
@@ -156,15 +158,16 @@ struct ContentView: View {
                         HotkeyHint()
                     }
 
-                    // Mode toggle, auto enter toggle, and AI refinement toggle
-                    HStack(spacing: 16) {
-                        ModeToggle()
-                        AutoEnterToggle()
-                        RefinementToggle()
-                    }
+                    // Mode toggle removed - "while speaking" mode not worth it for now
+                    // ModeToggle()
                 }
                 .padding(.top, 8)
                 .padding(.horizontal, 32)
+
+                // Pipeline visualization
+                PipelineStripView()
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
 
                 // Current transcription (if any)
                 if !appState.currentTranscription.isEmpty {
@@ -892,6 +895,7 @@ struct HistoryDetailView: View {
     let entry: Transcription
     let onClose: () -> Void
 
+    @Environment(AppState.self) private var appState
     @State private var showCopied = false
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
@@ -902,6 +906,13 @@ struct HistoryDetailView: View {
     // State colors
     private let transcribingColor = Color(nsColor: NSColor(red: 0.95, green: 0.75, blue: 0.20, alpha: 1.0))
     private let refiningColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
+    private let actionColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+
+    /// Get the pipeline execution record for this transcription
+    private var executionRecord: PipelineExecutionRecord? {
+        guard let runId = entry.pipelineRunId else { return nil }
+        return appState.pipelineExecutionHistory.first { $0.id == runId }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -935,7 +946,7 @@ struct HistoryDetailView: View {
                             .foregroundColor(textColor)
 
                         if entry.duration > 0 {
-                            Text("Duration: \(String(format: "%.1fs", entry.duration))")
+                            Text("Total: \(String(format: "%.1fs", entry.duration))")
                                 .font(.system(size: 12))
                                 .foregroundColor(lightGray)
                         }
@@ -943,31 +954,48 @@ struct HistoryDetailView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
 
-                    // Pipeline steps
+                    // Dynamic Pipeline steps
                     VStack(alignment: .leading, spacing: 12) {
-                        // Transcription step (always present)
+                        // Transcription step (always present - not part of pipeline record)
                         PipelineStepCard(
                             stepName: "Transcription",
                             stepIcon: "waveform",
                             stepColor: transcribingColor,
                             inputDescription: "Audio input",
-                            outputText: entry.text,
+                            outputText: entry.originalText ?? entry.text,
                             status: .completed,
-                            duration: entry.duration > 0 ? entry.duration : nil
+                            duration: nil  // Transcription duration not tracked separately
                         )
 
-                        // Refinement step (if refinement was enabled)
-                        // For now, check if there's a ProcessingResult linked
-                        // Since we don't have that yet, show as skipped if refinement disabled
-                        PipelineStepCard(
-                            stepName: "AI Refinement",
-                            stepIcon: "sparkles",
-                            stepColor: refiningColor,
-                            inputDescription: "Transcribed text",
-                            outputText: nil,
-                            status: .skipped,
-                            duration: nil
-                        )
+                        // Dynamic stages from pipeline execution (sorted by execution order)
+                        if let record = executionRecord {
+                            ForEach(record.elementMetrics.sorted(by: { $0.startTime < $1.startTime }), id: \.elementType) { metrics in
+                                PipelineStepCard(
+                                    stepName: displayName(for: metrics.elementType),
+                                    stepIcon: icon(for: metrics.elementType),
+                                    stepColor: color(for: metrics.elementType),
+                                    inputDescription: inputDescription(for: metrics.elementType),
+                                    outputText: outputText(for: metrics.elementType, record: record),
+                                    isAction: isAction(for: metrics.elementType),
+                                    actionDescription: actionDescription(for: metrics.elementType),
+                                    status: metrics.status == .success ? .completed : .failed,
+                                    duration: metrics.durationMs / 1000.0,
+                                    settingsSummary: settingsSummary(for: metrics.elementType)
+                                )
+                            }
+                        } else if entry.wasRefined {
+                            // Fallback for old entries without pipeline record
+                            PipelineStepCard(
+                                stepName: "AI Refinement",
+                                stepIcon: "sparkles",
+                                stepColor: refiningColor,
+                                inputDescription: entry.originalText ?? "Transcribed text",
+                                outputText: entry.text,
+                                status: .completed,
+                                duration: entry.refinementSettings?.durationSeconds,
+                                settingsSummary: entry.refinementSettings?.summary
+                            )
+                        }
                     }
                     .padding(.horizontal, 16)
 
@@ -1014,6 +1042,92 @@ struct HistoryDetailView: View {
         .shadow(color: .black.opacity(0.15), radius: 20, x: -5, y: 0)
     }
 
+    // MARK: - Helpers for dynamic pipeline display
+
+    private func displayName(for typeId: String) -> String {
+        switch typeId {
+        case "language-improvement": return "Language Improve"
+        case "prompt-optimizer": return "Prompt Optimizer"
+        case "auto-type": return "Auto Type"
+        case "auto-enter": return "Auto Enter"
+        default: return typeId.replacingOccurrences(of: "-", with: " ").capitalized
+        }
+    }
+
+    private func icon(for typeId: String) -> String {
+        switch typeId {
+        case "language-improvement": return "text.badge.checkmark"
+        case "prompt-optimizer": return "sparkles"
+        case "auto-type": return "keyboard"
+        case "auto-enter": return "return"
+        default: return "gearshape"
+        }
+    }
+
+    private func color(for typeId: String) -> Color {
+        switch typeId {
+        case "language-improvement": return refiningColor
+        case "prompt-optimizer": return Color.orange
+        case "auto-type": return actionColor
+        case "auto-enter": return actionColor
+        default: return lightGray
+        }
+    }
+
+    private func inputDescription(for typeId: String) -> String {
+        switch typeId {
+        case "language-improvement": return "Raw transcription"
+        case "prompt-optimizer": return "Improved text"
+        case "auto-type": return executionRecord?.outputText ?? entry.text  // Show actual text that was typed
+        case "auto-enter": return "Sends Enter key"
+        default: return "Previous output"
+        }
+    }
+
+    private func outputText(for typeId: String, record: PipelineExecutionRecord) -> String? {
+        switch typeId {
+        case "language-improvement", "prompt-optimizer":
+            // For text transformations, show the output
+            return record.outputText
+        case "auto-type", "auto-enter":
+            // Actions don't have output - they perform side effects
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    /// Check if this element is an action (side effect) vs a transformation
+    private func isAction(for typeId: String) -> Bool {
+        switch typeId {
+        case "auto-type", "auto-enter": return true
+        default: return false
+        }
+    }
+
+    private func actionDescription(for typeId: String) -> String? {
+        switch typeId {
+        case "auto-type": return "Typed to active window"
+        case "auto-enter": return "Pressed Enter"
+        default: return nil
+        }
+    }
+
+    private func settingsSummary(for typeId: String) -> String? {
+        guard let settings = entry.refinementSettings else { return nil }
+        switch typeId {
+        case "language-improvement":
+            var parts: [String] = []
+            if settings.cleanup { parts.append("cleanup") }
+            if settings.tone != "none" { parts.append(settings.tone) }
+            return parts.isEmpty ? nil : parts.joined(separator: " + ")
+        case "prompt-optimizer":
+            return settings.promptMode ? "enabled" : nil
+        default:
+            return nil
+        }
+    }
+
     private func copyText() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(entry.text, forType: .string)
@@ -1044,8 +1158,11 @@ struct PipelineStepCard: View {
     let stepColor: Color
     let inputDescription: String
     let outputText: String?
+    var isAction: Bool = false
+    var actionDescription: String? = nil
     let status: StepStatus
     let duration: Double?
+    var settingsSummary: String? = nil
 
     enum StepStatus {
         case completed
@@ -1081,26 +1198,40 @@ struct PipelineStepCard: View {
             // Content based on status
             if status == .completed {
                 VStack(alignment: .leading, spacing: 6) {
-                    // Input
-                    HStack(spacing: 4) {
-                        Text("Input:")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(lightGray)
-                        Text(inputDescription)
-                            .font(.system(size: 11))
-                            .foregroundColor(lightGray)
-                    }
-
-                    // Output preview
-                    if let output = outputText {
-                        HStack(alignment: .top, spacing: 4) {
-                            Text("Output:")
+                    if isAction {
+                        // Action display - show what action was performed
+                        if let action = actionDescription {
+                            HStack(spacing: 4) {
+                                Text("Action:")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(lightGray)
+                                Text(action)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(textColor)
+                            }
+                        }
+                    } else {
+                        // Transformation display - show input/output
+                        HStack(spacing: 4) {
+                            Text("Input:")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(lightGray)
-                            Text(output.prefix(80) + (output.count > 80 ? "..." : ""))
+                            Text(inputDescription)
                                 .font(.system(size: 11))
-                                .foregroundColor(textColor)
-                                .lineLimit(2)
+                                .foregroundColor(lightGray)
+                        }
+
+                        // Output preview
+                        if let output = outputText {
+                            HStack(alignment: .top, spacing: 4) {
+                                Text("Output:")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(lightGray)
+                                Text(output.prefix(80) + (output.count > 80 ? "..." : ""))
+                                    .font(.system(size: 11))
+                                    .foregroundColor(textColor)
+                                    .lineLimit(2)
+                            }
                         }
                     }
 
@@ -1117,6 +1248,18 @@ struct PipelineStepCard: View {
                     .font(.system(size: 11))
                     .foregroundColor(lightGray)
                     .padding(.leading, 28)
+            }
+
+            // Settings summary (if present)
+            if let settings = settingsSummary, status == .completed {
+                HStack(spacing: 4) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 9))
+                    Text(settings)
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(stepColor.opacity(0.8))
+                .padding(.leading, 28)
             }
         }
         .padding(12)
@@ -1173,52 +1316,312 @@ struct PipelineStepCard: View {
 
 struct RefinementToggle: View {
     @Environment(AppState.self) private var appState
-    @State private var isHovered = false
+    @State private var isWorking = false
+    @State private var statusMessage: String = ""
 
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let purpleColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
-
-    // Refinement is currently disabled on macOS 26 due to MLX/Metal issues
-    private var isAvailable: Bool {
-        false  // TODO: Enable when macOS 26 MLX compatibility is fixed
-    }
 
     var body: some View {
         @Bindable var appState = appState
 
         VStack(spacing: 6) {
             HStack(spacing: 6) {
-                // AI icon
-                Image(systemName: "sparkles")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(appState.isRefinementEnabled && isAvailable ? purpleColor : lightGray)
+                // AI icon or loading indicator
+                if isWorking {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 11, height: 11)
+                } else {
+                    Image(systemName: appState.currentAITier.icon)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(appState.isRefinementEnabled ? purpleColor : lightGray)
+                }
 
                 // Toggle
-                Toggle("", isOn: $appState.isRefinementEnabled)
+                Toggle("", isOn: Binding(
+                    get: { appState.isRefinementEnabled },
+                    set: { newValue in
+                        handleToggle(newValue)
+                    }
+                ))
                     .toggleStyle(.switch)
                     .scaleEffect(0.65)
-                    .disabled(!isAvailable)
-                    .opacity(isAvailable ? 1.0 : 0.5)
+                    .disabled(isWorking)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0)))
             .cornerRadius(14)
 
-            // Status text
+            // Status text - show tier and mode when enabled
             Text(statusText)
                 .font(.system(size: 10))
-                .foregroundColor(lightGray)
+                .foregroundColor(statusColor)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
-        .help(isAvailable ? "AI refinement improves transcription quality" : "AI refinement unavailable on macOS 26")
+        .help(appState.isRefinementEnabled
+            ? "AI: \(appState.currentAITier.displayName) • \(appState.currentRefinementMode.displayName)"
+            : "Enable AI refinement")
+    }
+
+    private func handleToggle(_ newValue: Bool) {
+        if newValue {
+            // Turning ON - prepare the appropriate provider based on tier
+            isWorking = true
+            statusMessage = "Loading..."
+
+            Task {
+                let tier = appState.currentAITier
+
+                if tier == .custom {
+                    // Custom tier uses Ollama
+                    await prepareOllama()
+                } else {
+                    // Fast/Smart/Best use local models via AIService
+                    await prepareLocalAI(tier: tier)
+                }
+            }
+        } else {
+            // Turning OFF
+            appState.isRefinementEnabled = false
+            statusMessage = ""
+
+            Task {
+                // Shutdown AIService
+                await AIService.shared.shutdown()
+
+                // Also stop Ollama if it was running
+                if appState.currentAITier == .custom {
+                    OllamaManager.shared.stopServer()
+                    await MainActor.run {
+                        appState.isOllamaConnected = false
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func prepareLocalAI(tier: AITier) async {
+        let aiService = AIService.shared
+
+        NSLog("[AI Toggle] Starting prepareLocalAI for tier: %@", tier.displayName)
+
+        statusMessage = "Preparing..."
+        NSLog("[AI Toggle] Status set to Preparing")
+
+        // Set tier if different, then always prepare
+        NSLog("[AI Toggle] Current tier: %@, isReady: %d", aiService.currentTier.displayName, aiService.isReady)
+        if aiService.currentTier != tier {
+            NSLog("[AI Toggle] Calling setTier...")
+            await aiService.setTier(tier)
+        } else {
+            // Same tier but not ready - just prepare
+            NSLog("[AI Toggle] Calling prepare...")
+            await aiService.prepare()
+        }
+
+        NSLog("[AI Toggle] After prepare - isReady: %d", aiService.isReady)
+
+        isWorking = false
+        if aiService.isReady {
+            NSLog("[AI Toggle] SUCCESS - enabling refinement")
+            appState.isRefinementEnabled = true
+            statusMessage = ""
+        } else {
+            NSLog("[AI Toggle] FAILED - aiService not ready, status: %@", String(describing: aiService.status))
+            statusMessage = "Setup failed"
+            appState.errorMessage = "Failed to prepare AI model"
+        }
+    }
+
+    private func prepareOllama() async {
+        let manager = OllamaManager.shared
+
+        // Check installation
+        manager.checkInstallation()
+
+        if !manager.isInstalled {
+            await MainActor.run {
+                isWorking = false
+                statusMessage = ""
+                manager.showInstallDialog()
+            }
+            return
+        }
+
+        await MainActor.run {
+            statusMessage = "Starting Ollama..."
+        }
+
+        // Start server (will auto-pull model if needed)
+        let modelName = appState.ollamaModel.isEmpty ? OllamaManager.defaultModel : appState.ollamaModel
+        let success = await manager.startServer(modelName: modelName)
+
+        await MainActor.run {
+            isWorking = false
+            if success {
+                appState.isRefinementEnabled = true
+                appState.isOllamaConnected = true
+                appState.ollamaModel = modelName
+                statusMessage = ""
+            } else {
+                if case .error(let msg) = manager.status {
+                    appState.errorMessage = "AI setup failed: \(msg)"
+                }
+                statusMessage = "Setup failed"
+            }
+        }
     }
 
     private var statusText: String {
-        if !isAvailable {
-            return "unavailable"
+        if isWorking && !statusMessage.isEmpty {
+            return statusMessage
         }
-        return appState.isRefinementEnabled ? "AI on" : "AI off"
+        if appState.isRefinementEnabled {
+            return optionsSummary
+        }
+        return "AI off"
+    }
+
+    private var optionsSummary: String {
+        var parts: [String] = []
+
+        if appState.isCleanupEnabled {
+            parts.append("cleanup")
+        }
+
+        if appState.isPromptImproverEnabled {
+            parts.append("prompt")
+        } else if appState.toneStyle == "formal" {
+            parts.append("formal")
+        } else if appState.toneStyle == "casual" {
+            parts.append("casual")
+        }
+
+        return parts.isEmpty ? "AI on" : parts.joined(separator: "+")
+    }
+
+    private var statusColor: Color {
+        if isWorking || appState.isRefinementEnabled {
+            return purpleColor
+        }
+        return lightGray
+    }
+}
+
+// MARK: - Refinement Options Panel
+
+struct RefinementOptionsPanel: View {
+    @Environment(AppState.self) private var appState
+
+    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
+    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+    private let purpleColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
+    private let chipBg = Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0))
+
+    var body: some View {
+        @Bindable var appState = appState
+
+        VStack(spacing: 8) {
+            // Row 1: Clean Up + Prompt Mode toggles
+            HStack(spacing: 8) {
+                OptionChip(
+                    label: "Clean Up",
+                    icon: "wand.and.stars",
+                    isSelected: $appState.isCleanupEnabled,
+                    accentColor: purpleColor,
+                    chipBg: chipBg
+                )
+
+                OptionChip(
+                    label: "Prompt",
+                    icon: "sparkles",
+                    isSelected: $appState.isPromptImproverEnabled,
+                    accentColor: Color.orange,
+                    chipBg: chipBg
+                )
+            }
+
+            // Row 2: Tone options (mutually exclusive, disabled when Prompt is on)
+            HStack(spacing: 6) {
+                Text("Tone:")
+                    .font(.system(size: 10))
+                    .foregroundColor(lightGray)
+
+                ToneChip(label: "None", isSelected: appState.toneStyle == "none", isDisabled: appState.isPromptImproverEnabled, accentColor: accentColor, chipBg: chipBg) {
+                    appState.toneStyle = "none"
+                }
+
+                ToneChip(label: "Formal", isSelected: appState.toneStyle == "formal", isDisabled: appState.isPromptImproverEnabled, accentColor: accentColor, chipBg: chipBg) {
+                    appState.toneStyle = "formal"
+                }
+
+                ToneChip(label: "Casual", isSelected: appState.toneStyle == "casual", isDisabled: appState.isPromptImproverEnabled, accentColor: accentColor, chipBg: chipBg) {
+                    appState.toneStyle = "casual"
+                }
+            }
+            .opacity(appState.isPromptImproverEnabled ? 0.4 : 1.0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(chipBg.opacity(0.5))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Option Chip (Toggle style)
+
+private struct OptionChip: View {
+    let label: String
+    let icon: String
+    @Binding var isSelected: Bool
+    let accentColor: Color
+    let chipBg: Color
+
+    var body: some View {
+        Button(action: { isSelected.toggle() }) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(isSelected ? .white : accentColor)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isSelected ? accentColor : chipBg)
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Tone Chip (Radio style)
+
+private struct ToneChip: View {
+    let label: String
+    let isSelected: Bool
+    let isDisabled: Bool
+    let accentColor: Color
+    let chipBg: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? .white : accentColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(isSelected ? accentColor : chipBg)
+                .cornerRadius(10)
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 }
 

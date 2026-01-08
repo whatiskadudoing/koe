@@ -12,7 +12,8 @@ let package = Package(
     dependencies: [
         .package(path: "../KoeDomain"),
         .package(path: "../KoeCore"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "2.29.1")
+        // LLM.swift - Local fork with Metal GPU acceleration enabled
+        .package(path: "../LLM")
     ],
     targets: [
         .target(
@@ -20,7 +21,7 @@ let package = Package(
             dependencies: [
                 "KoeDomain",
                 "KoeCore",
-                .product(name: "MLXLLM", package: "mlx-swift-lm")
+                .product(name: "LLM", package: "LLM")
             ]
         )
     ]

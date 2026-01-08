@@ -3,6 +3,7 @@ import AVFoundation
 import ApplicationServices
 import KoeDomain
 import CoreGraphics
+import KoePipeline
 
 @Observable
 @MainActor
@@ -38,6 +39,12 @@ public final class AppState {
     // History
     public var transcriptionHistory: [Transcription] = []
     public var processingHistory: [ProcessingResult] = []
+
+    // Pipeline execution history
+    public var pipelineExecutionHistory: [PipelineExecutionRecord] = []
+
+    /// Most recent metrics for each pipeline stage (for quick UI access)
+    public var lastStageMetrics: [String: ElementExecutionMetrics] = [:]
 
     // Error handling
     public var errorMessage: String?
@@ -82,6 +89,51 @@ public final class AppState {
         set { UserDefaults.standard.set(newValue, forKey: "isAutoEnterEnabled") }
     }
 
+    // Ollama settings
+    @ObservationIgnored
+    private var _ollamaEndpoint: String {
+        get { UserDefaults.standard.string(forKey: "ollamaEndpoint") ?? "http://localhost:11434" }
+        set { UserDefaults.standard.set(newValue, forKey: "ollamaEndpoint") }
+    }
+
+    @ObservationIgnored
+    private var _ollamaModel: String {
+        get { UserDefaults.standard.string(forKey: "ollamaModel") ?? "mistral:7b-instruct" }
+        set { UserDefaults.standard.set(newValue, forKey: "ollamaModel") }
+    }
+
+    @ObservationIgnored
+    private var _refinementModeRaw: String {
+        get { UserDefaults.standard.string(forKey: "refinementMode") ?? "cleanup" }
+        set { UserDefaults.standard.set(newValue, forKey: "refinementMode") }
+    }
+
+    @ObservationIgnored
+    private var _customRefinementPrompt: String {
+        get { UserDefaults.standard.string(forKey: "customRefinementPrompt") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "customRefinementPrompt") }
+    }
+
+    // Hotkey settings
+    @ObservationIgnored
+    private var _hotkeyKeyCode: UInt32 {
+        get { UInt32(UserDefaults.standard.integer(forKey: "hotkeyKeyCode")) == 0 ? 49 : UInt32(UserDefaults.standard.integer(forKey: "hotkeyKeyCode")) }
+        set { UserDefaults.standard.set(Int(newValue), forKey: "hotkeyKeyCode") }
+    }
+
+    @ObservationIgnored
+    private var _hotkeyModifiers: Int {
+        get {
+            // Default to Option (2) if not set
+            if UserDefaults.standard.object(forKey: "hotkeyModifiers") == nil {
+                return 2  // .option
+            }
+            return UserDefaults.standard.integer(forKey: "hotkeyModifiers")
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "hotkeyModifiers") }
+    }
+
+
     // Public accessors that trigger observation
     public var selectedModel: String {
         get { _selectedModel }
@@ -108,6 +160,95 @@ public final class AppState {
         set { _isAutoEnterEnabled = newValue }
     }
 
+    // Ollama settings
+    public var ollamaEndpoint: String {
+        get { _ollamaEndpoint }
+        set { _ollamaEndpoint = newValue }
+    }
+
+    public var ollamaModel: String {
+        get { _ollamaModel }
+        set { _ollamaModel = newValue }
+    }
+
+    public var refinementModeRaw: String {
+        get { _refinementModeRaw }
+        set { _refinementModeRaw = newValue }
+    }
+
+    public var customRefinementPrompt: String {
+        get { _customRefinementPrompt }
+        set { _customRefinementPrompt = newValue }
+    }
+
+    // Hotkey settings
+    public var hotkeyKeyCode: UInt32 {
+        get { _hotkeyKeyCode }
+        set {
+            _hotkeyKeyCode = newValue
+            NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
+        }
+    }
+
+    public var hotkeyModifiers: Int {
+        get { _hotkeyModifiers }
+        set {
+            _hotkeyModifiers = newValue
+            NotificationCenter.default.post(name: .hotkeyChanged, object: nil)
+        }
+    }
+
+    /// Display string for current hotkey
+    public var hotkeyDisplayString: String {
+        var parts: [String] = []
+
+        if hotkeyModifiers & 4 != 0 { parts.append("⌃") }  // control
+        if hotkeyModifiers & 2 != 0 { parts.append("⌥") }  // option
+        if hotkeyModifiers & 8 != 0 { parts.append("⇧") }  // shift
+        if hotkeyModifiers & 1 != 0 { parts.append("⌘") }  // command
+
+        // Key name
+        switch hotkeyKeyCode {
+        case 49: parts.append("Space")
+        case 36: parts.append("Return")
+        case 96: parts.append("F5")
+        case 97: parts.append("F6")
+        case 98: parts.append("F7")
+        default: parts.append("Key\(hotkeyKeyCode)")
+        }
+
+        return parts.joined()
+    }
+
+    // New combinable refinement options - use stored properties for observation to work
+    public var isCleanupEnabled: Bool = true {
+        didSet {
+            UserDefaults.standard.set(isCleanupEnabled, forKey: "isCleanupEnabled")
+        }
+    }
+
+    public var toneStyle: String = "none" {
+        didSet {
+            UserDefaults.standard.set(toneStyle, forKey: "toneStyle")
+        }
+    }
+
+    public var isPromptImproverEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isPromptImproverEnabled, forKey: "isPromptImproverEnabled")
+        }
+    }
+
+    // AI tier - stored property for observation to work
+    public var aiTierRaw: String = "best" {
+        didSet {
+            UserDefaults.standard.set(aiTierRaw, forKey: "aiTier")
+        }
+    }
+
+    /// Runtime state for Ollama connection (not persisted)
+    public var isOllamaConnected: Bool = false
+
     // Computed properties for typed access
     public var currentKoeModel: KoeModel {
         KoeModel(rawValue: selectedModel) ?? .tiny
@@ -121,12 +262,40 @@ public final class AppState {
         TranscriptionMode(rawValue: transcriptionMode) ?? .vad
     }
 
+    public var currentRefinementMode: RefinementMode {
+        get { RefinementMode(rawValue: refinementModeRaw) ?? .cleanup }
+        set { refinementModeRaw = newValue.rawValue }
+    }
+
+    public var currentAITier: AITier {
+        get { AITier(rawValue: aiTierRaw) ?? .best }
+        set { aiTierRaw = newValue.rawValue }
+    }
+
     public var hasAllPermissions: Bool {
         hasMicrophonePermission && hasAccessibilityPermission && hasScreenRecordingPermission
     }
 
     private init() {
         loadHistory()
+        loadRefinementOptions()
+        loadPipelineHistory()
+    }
+
+    private func loadRefinementOptions() {
+        // Load saved refinement options
+        if UserDefaults.standard.object(forKey: "isCleanupEnabled") != nil {
+            isCleanupEnabled = UserDefaults.standard.bool(forKey: "isCleanupEnabled")
+        }
+        if let saved = UserDefaults.standard.string(forKey: "toneStyle") {
+            toneStyle = saved
+        }
+        if UserDefaults.standard.object(forKey: "isPromptImproverEnabled") != nil {
+            isPromptImproverEnabled = UserDefaults.standard.bool(forKey: "isPromptImproverEnabled")
+        }
+        if let savedTier = UserDefaults.standard.string(forKey: "aiTier") {
+            aiTierRaw = savedTier
+        }
     }
 
     // MARK: - Permission Management
@@ -203,13 +372,17 @@ public final class AppState {
 
     // MARK: - History Management
 
-    public func addTranscription(_ text: String, duration: TimeInterval) {
+    public func addTranscription(_ text: String, duration: TimeInterval, wasRefined: Bool = false, originalText: String? = nil, refinementSettings: RefinementSettings? = nil, pipelineRunId: UUID? = nil) {
         let entry = Transcription(
             text: text,
             duration: duration,
             timestamp: Date(),
             language: currentLanguage,
-            model: currentKoeModel
+            model: currentKoeModel,
+            wasRefined: wasRefined,
+            originalText: originalText,
+            refinementSettings: refinementSettings,
+            pipelineRunId: pipelineRunId
         )
         transcriptionHistory.insert(entry, at: 0)
 
@@ -267,6 +440,66 @@ public final class AppState {
     private func saveProcessingHistory() {
         if let data = try? JSONEncoder().encode(processingHistory) {
             UserDefaults.standard.set(data, forKey: "processingHistory")
+        }
+    }
+
+    // MARK: - Pipeline Execution History
+
+    /// Add a pipeline execution record
+    public func addPipelineExecution(_ record: PipelineExecutionRecord) {
+        NSLog("[Pipeline Metrics] Adding execution record with %d element metrics", record.elementMetrics.count)
+
+        pipelineExecutionHistory.insert(record, at: 0)
+
+        // Update last stage metrics for quick access
+        // Replace whole dictionary to trigger @Observable update
+        var newMetrics: [String: ElementExecutionMetrics] = [:]
+        for metrics in record.elementMetrics {
+            NSLog("[Pipeline Metrics] Recording metric for '%@': %@", metrics.elementType, metrics.formattedDuration)
+            newMetrics[metrics.elementType] = metrics
+        }
+        lastStageMetrics = newMetrics
+
+        // Keep only last 100 executions
+        if pipelineExecutionHistory.count > 100 {
+            pipelineExecutionHistory = Array(pipelineExecutionHistory.prefix(100))
+        }
+
+        savePipelineHistory()
+        NSLog("[Pipeline Metrics] Stored %d stage metrics", lastStageMetrics.count)
+    }
+
+    /// Get metrics for a specific stage from the last execution
+    public func lastMetrics(for stageTypeId: String) -> ElementExecutionMetrics? {
+        lastStageMetrics[stageTypeId]
+    }
+
+    /// Clear all pipeline execution history
+    public func clearPipelineHistory() {
+        pipelineExecutionHistory.removeAll()
+        lastStageMetrics.removeAll()
+        UserDefaults.standard.removeObject(forKey: "pipelineExecutionHistory")
+    }
+
+    private func loadPipelineHistory() {
+        if let data = UserDefaults.standard.data(forKey: "pipelineExecutionHistory"),
+           let history = try? JSONDecoder().decode([PipelineExecutionRecord].self, from: data) {
+            // Filter out entries older than 7 days
+            let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+            pipelineExecutionHistory = history.filter { $0.timestamp > cutoff }
+
+            // Rebuild last stage metrics from most recent execution
+            if let latest = pipelineExecutionHistory.first {
+                for metrics in latest.elementMetrics {
+                    lastStageMetrics[metrics.elementType] = metrics
+                }
+            }
+        }
+    }
+
+    private func savePipelineHistory() {
+        if let data = try? JSONEncoder().encode(pipelineExecutionHistory) {
+            UserDefaults.standard.set(data, forKey: "pipelineExecutionHistory")
         }
     }
 }

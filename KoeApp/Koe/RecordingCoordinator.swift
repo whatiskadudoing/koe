@@ -6,7 +6,8 @@ import KoeTranscription
 import KoeTextInsertion
 import KoeHotkey
 import KoeCore
-// import KoeRefinement - disabled due to macOS 26 MLX/Metal issues
+import KoeRefinement
+import KoePipeline
 
 /// Coordinates recording, transcription, and text insertion
 /// This replaces the monolithic RecordingService with a clean, modular approach
@@ -24,7 +25,7 @@ public final class RecordingCoordinator {
     private let textInserter: TextInsertionServiceImpl
     private let vadProcessor: VADProcessor
     private let hotkeyManager: KoeHotkeyManager
-    // refinementService disabled due to macOS 26 MLX/Metal issues
+    private let aiService: AIService
 
     // MARK: - State
     public private(set) var isRecording = false
@@ -50,18 +51,26 @@ public final class RecordingCoordinator {
         transcriber: WhisperKitTranscriber = WhisperKitTranscriber(),
         textInserter: TextInsertionServiceImpl = TextInsertionServiceImpl(),
         vadProcessor: VADProcessor = VADProcessor(),
-        hotkeyManager: KoeHotkeyManager = KoeHotkeyManager()
+        hotkeyManager: KoeHotkeyManager = KoeHotkeyManager(),
+        aiService: AIService = AIService.shared
     ) {
         self.audioRecorder = audioRecorder
         self.transcriber = transcriber
         self.textInserter = textInserter
         self.vadProcessor = vadProcessor
         self.hotkeyManager = hotkeyManager
+        self.aiService = aiService
     }
 
     // MARK: - Hotkey Setup
 
     public func setupHotkey() {
+        // Configure hotkey from AppState settings
+        hotkeyManager.setShortcut(
+            keyCode: AppState.shared.hotkeyKeyCode,
+            modifiers: AppState.shared.hotkeyModifiers
+        )
+
         hotkeyManager.register(
             onKeyDown: { [weak self] in
                 Task { @MainActor [weak self] in
@@ -82,7 +91,16 @@ public final class RecordingCoordinator {
                 }
             }
         )
-        logger.info("Hotkey registered: Option+Space")
+        logger.info("Hotkey registered: \(AppState.shared.hotkeyDisplayString)")
+    }
+
+    /// Update hotkey when settings change
+    public func updateHotkey() {
+        hotkeyManager.setShortcut(
+            keyCode: AppState.shared.hotkeyKeyCode,
+            modifiers: AppState.shared.hotkeyModifiers
+        )
+        logger.info("Hotkey updated: \(AppState.shared.hotkeyDisplayString)")
     }
 
     public func unregisterHotkey() {
@@ -139,25 +157,36 @@ public final class RecordingCoordinator {
         AppState.shared.isModelLoaded = false
     }
 
-    // MARK: - Refinement Model Loading (disabled due to macOS 26 issues)
+    // MARK: - AI Refinement
 
-    public var isRefinementModelLoaded: Bool {
-        false  // Refinement disabled due to macOS 26 MLX/Metal issues
+    public var isRefinementReady: Bool {
+        aiService.isReady
     }
 
-    public var refinementModelProgress: Double {
-        0.0  // Refinement disabled due to macOS 26 MLX/Metal issues
+    public var isOllamaConnected: Bool {
+        OllamaRefinementService.shared.isConnected
     }
 
-    public func loadRefinementModel() async {
-        // Refinement disabled due to macOS 26 MLX/Metal compatibility issues
-        // The mlx-swift-lm library crashes during model download due to
-        // NSURLSession continuation handling bugs in macOS 26
-        logger.info("Refinement model loading disabled on macOS 26")
+    public func checkOllamaConnection() async -> Bool {
+        logger.info("Checking Ollama connection...")
+        let connected = await OllamaRefinementService.shared.checkConnection()
+        AppState.shared.isOllamaConnected = connected
+        return connected
     }
 
-    public func unloadRefinementModel() {
-        // Refinement disabled
+    public func configureRefinement() async {
+        // Set the AI tier from app state
+        let tier = AppState.shared.currentAITier
+        await aiService.setTier(tier)
+
+        // For custom tier, configure Ollama settings
+        if tier == .custom {
+            let endpoint = AppState.shared.ollamaEndpoint
+            let model = AppState.shared.ollamaModel
+
+            OllamaRefinementService.shared.setEndpoint(endpoint)
+            OllamaRefinementService.shared.setModel(model)
+        }
     }
 
     // MARK: - Recording
@@ -338,49 +367,68 @@ public final class RecordingCoordinator {
                 language: lang
             )
 
-            let finalText = rawText.trimmingCharacters(in: .whitespaces)
+            let transcribedText = rawText.trimmingCharacters(in: .whitespaces)
 
-            guard !finalText.isEmpty else {
+            guard !transcribedText.isEmpty else {
                 return
             }
 
-            // Note: Refinement disabled due to macOS 26 MLX/Metal issues
-            // When re-enabled, the refinement step would be:
-            // if AppState.shared.isRefinementEnabled && isRefinementModelLoaded {
-            //     AppState.shared.recordingState = .refining
-            //     RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .refining)
-            //     let refinedText = try await refinementService.refine(finalText)
-            //     finalText = refinedText
-            // }
+            // Use pipeline for post-transcription processing
+            // Pipeline handles: Language Improvement → Prompt Optimizer → Auto Type → Auto Enter
+            if AppState.shared.isRefinementEnabled {
+                AppState.shared.recordingState = .refining
+                RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .refining)
 
-            // Insert text
-            var insertionSucceeded = false
+                // Configure AI service with current tier
+                await configureRefinement()
+            }
+
+            var finalText = transcribedText
+            var wasRefined = false
+            var refinementDuration: TimeInterval = 0
+            var pipelineRunId: UUID? = nil
 
             do {
-                if mode == .realtime {
-                    // Type only new text not already typed
-                    let newText = getNewText(previous: lastTypedText, current: finalText)
-                    if !newText.isEmpty {
-                        try await textInserter.insertText(newText)
-                        insertionSucceeded = true
-                    }
-                } else {
-                    // VAD mode - paste all text at once
-                    try await textInserter.insertText(finalText)
-                    insertionSucceeded = true
+                let result = try await PipelineManager.shared.processText(transcribedText)
+                finalText = result.processedText
+                wasRefined = result.wasRefined
+                refinementDuration = result.summary.elapsedTime
+                pipelineRunId = result.pipelineRunId
+
+                if wasRefined {
+                    logger.info("Pipeline completed: \(transcribedText.count) → \(finalText.count) chars in \(result.summary.formattedElapsedTime)")
                 }
 
-                // Press Enter after insertion if auto-enter is enabled
-                if insertionSucceeded && AppState.shared.isAutoEnterEnabled {
-                    try await textInserter.pressEnter()
-                }
+                // Pipeline handles text insertion and auto-enter
+                // Play success sound
+                NSSound(named: "Pop")?.play()
+
             } catch {
-                logger.error("Text insertion failed", error: error)
-                // Fallback: copy to clipboard
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(finalText, forType: .string)
-                AppState.shared.errorMessage = "Text copied to clipboard (press Cmd+V to paste)"
-                NSSound(named: "Funk")?.play()
+                logger.error("Pipeline failed, falling back to direct insertion", error: error)
+
+                // Fallback: insert text directly
+                do {
+                    if mode == .realtime {
+                        let newText = getNewText(previous: lastTypedText, current: transcribedText)
+                        if !newText.isEmpty {
+                            try await textInserter.insertText(newText)
+                        }
+                    } else {
+                        try await textInserter.insertText(transcribedText)
+                    }
+
+                    if AppState.shared.isAutoEnterEnabled {
+                        try await textInserter.pressEnter()
+                    }
+
+                    NSSound(named: "Pop")?.play()
+                } catch {
+                    // Last resort: copy to clipboard
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(transcribedText, forType: .string)
+                    AppState.shared.errorMessage = "Text copied to clipboard (press Cmd+V to paste)"
+                    NSSound(named: "Funk")?.play()
+                }
             }
 
             accumulatedTranscription = finalText
@@ -388,12 +436,22 @@ public final class RecordingCoordinator {
 
             // Save to transcription history
             let duration = Date().timeIntervalSince(startTime)
-            AppState.shared.addTranscription(finalText, duration: duration)
-
-            // Play success sound if insertion worked
-            if insertionSucceeded {
-                NSSound(named: "Pop")?.play()
-            }
+            let settings = wasRefined ? RefinementSettings(
+                cleanup: AppState.shared.isCleanupEnabled,
+                tone: AppState.shared.toneStyle,
+                promptMode: AppState.shared.isPromptImproverEnabled,
+                customInstructions: AppState.shared.customRefinementPrompt.isEmpty ? nil : AppState.shared.customRefinementPrompt,
+                aiTier: AppState.shared.currentAITier.rawValue,
+                durationSeconds: refinementDuration
+            ) : nil
+            AppState.shared.addTranscription(
+                finalText,
+                duration: duration,
+                wasRefined: wasRefined,
+                originalText: wasRefined ? transcribedText : nil,
+                refinementSettings: settings,
+                pipelineRunId: pipelineRunId
+            )
         } catch {
             logger.error("Final transcription failed", error: error)
             AppState.shared.errorMessage = "Transcription failed: \(error.localizedDescription)"
@@ -406,6 +464,65 @@ public final class RecordingCoordinator {
             return String(current.dropFirst(previous.count))
         }
         return current
+    }
+
+    // MARK: - Refinement Prompt Building
+
+    /// Build combined system prompt from enabled refinement options
+    private func buildRefinementPrompt() -> String {
+        var tasks: [String] = []
+
+        // Collect what to do
+        if AppState.shared.isCleanupEnabled {
+            tasks.append("fix grammar, remove filler words like um/uh/like/you know")
+        }
+
+        if AppState.shared.isPromptImproverEnabled {
+            tasks.append("reformat as a clear AI prompt with good structure")
+        } else {
+            switch AppState.shared.toneStyle {
+            case "formal":
+                tasks.append("make it formal and professional")
+            case "casual":
+                tasks.append("make it casual and friendly")
+            default:
+                break
+            }
+        }
+
+        let custom = AppState.shared.customRefinementPrompt
+        if !custom.isEmpty {
+            tasks.append(custom)
+        }
+
+        let taskList = tasks.isEmpty ? "clean up the text" : tasks.joined(separator: ", ")
+
+        // Simple, direct prompt that small models can follow
+        return """
+        Edit this text: \(taskList).
+        Reply with ONLY the edited text. No explanations. No quotes. Just the text.
+        """
+    }
+
+    /// Build summary of enabled options for logging
+    private func buildRefinementSummary() -> String {
+        var parts: [String] = []
+
+        if AppState.shared.isCleanupEnabled {
+            parts.append("cleanup")
+        }
+
+        if AppState.shared.isPromptImproverEnabled {
+            parts.append("prompt")
+        } else if AppState.shared.toneStyle != "none" {
+            parts.append(AppState.shared.toneStyle)
+        }
+
+        if !AppState.shared.customRefinementPrompt.isEmpty {
+            parts.append("custom")
+        }
+
+        return parts.isEmpty ? "none" : parts.joined(separator: "+")
     }
 }
 
