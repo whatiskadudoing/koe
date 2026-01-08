@@ -18,13 +18,16 @@ struct PipelineStripView: View {
                     }
 
                     // Node
+                    // - Single tap: toggles on/off (if toggleable)
+                    // - Double tap: opens settings (if has settings)
                     PipelineNodeView(
                         stage: stage,
                         isEnabled: binding(for: stage),
                         isSelected: selectedStage == stage,
                         isRunning: isStageRunning(stage),
                         metrics: metricsFor(stage),
-                        onTap: { handleNodeTap(stage) }
+                        onToggle: { toggleStage(stage) },
+                        onOpenSettings: { selectedStage = stage }
                     )
                 }
             }
@@ -36,21 +39,6 @@ struct PipelineStripView: View {
     }
 
     // MARK: - Helpers
-
-    private func handleNodeTap(_ stage: PipelineStageInfo) {
-        if stage.isToggleable {
-            if selectedStage == stage {
-                // Toggle the stage on/off when tapping selected node
-                toggleStage(stage)
-            } else {
-                // Select the node to show settings
-                selectedStage = stage
-            }
-        } else if stage.hasSettings {
-            // Non-toggleable but has settings - just show settings
-            selectedStage = selectedStage == stage ? nil : stage
-        }
-    }
 
     private func toggleStage(_ stage: PipelineStageInfo) {
         switch stage {
