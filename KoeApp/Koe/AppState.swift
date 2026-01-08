@@ -4,6 +4,8 @@ import ApplicationServices
 import KoeDomain
 import CoreGraphics
 import KoePipeline
+import KoeCommands
+import UserNotifications
 
 @Observable
 @MainActor
@@ -35,6 +37,7 @@ public final class AppState {
     public var hasMicrophonePermission: Bool = false
     public var hasAccessibilityPermission: Bool = false
     public var hasScreenRecordingPermission: Bool = false
+    public var hasNotificationPermission: Bool = false
 
     // History
     public var transcriptionHistory: [Transcription] = []
@@ -249,6 +252,35 @@ public final class AppState {
         set { ringAnimationStyleRaw = newValue.rawValue }
     }
 
+    // Voice Commands settings
+    public var isCommandListeningEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isCommandListeningEnabled, forKey: "isCommandListeningEnabled")
+            NotificationCenter.default.post(name: .commandListeningChanged, object: nil)
+        }
+    }
+
+    /// Voice profile - stored property for @Observable tracking
+    public var voiceProfile: VoiceProfile? {
+        didSet {
+            // Sync to VoiceProfileManager when set
+            if voiceProfile != oldValue {
+                VoiceProfileManager.shared.currentProfile = voiceProfile
+            }
+        }
+    }
+
+    public var hasVoiceProfile: Bool {
+        voiceProfile != nil
+    }
+
+    /// Reload voice profile from storage (call on app launch or after external changes)
+    public func reloadVoiceProfile() {
+        let loaded = VoiceProfileManager.shared.currentProfile
+        voiceProfile = loaded
+        print("[AppState] reloadVoiceProfile: loaded=\(loaded != nil), hasProfile=\(hasVoiceProfile)")
+    }
+
     /// Runtime state for Ollama connection (not persisted)
     public var isOllamaConnected: Bool = false
 
@@ -276,7 +308,7 @@ public final class AppState {
     }
 
     public var hasAllPermissions: Bool {
-        hasMicrophonePermission && hasAccessibilityPermission && hasScreenRecordingPermission
+        hasMicrophonePermission && hasAccessibilityPermission && hasScreenRecordingPermission && hasNotificationPermission
     }
 
     private init() {
@@ -284,6 +316,17 @@ public final class AppState {
         loadRefinementOptions()
         loadHotkeySettings()
         loadPipelineHistory()
+        loadCommandSettings()
+    }
+
+    private func loadCommandSettings() {
+        // Load voice profile from storage
+        reloadVoiceProfile()
+
+        // Load voice command settings
+        if UserDefaults.standard.object(forKey: "isCommandListeningEnabled") != nil {
+            isCommandListeningEnabled = UserDefaults.standard.bool(forKey: "isCommandListeningEnabled")
+        }
     }
 
     private func loadHotkeySettings() {
@@ -359,10 +402,19 @@ public final class AppState {
         hasScreenRecordingPermission = false
     }
 
+    public func checkNotificationPermission() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.hasNotificationPermission = (settings.authorizationStatus == .authorized)
+            }
+        }
+    }
+
     public func checkAllPermissions() {
         checkMicrophonePermission()
         checkAccessibilityPermission()
         checkScreenRecordingPermission()
+        checkNotificationPermission()
     }
 
     public func advanceReadinessState() {

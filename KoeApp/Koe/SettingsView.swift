@@ -1,12 +1,14 @@
 import SwiftUI
 import KoeDomain
 import KoeRefinement
+import KoeCommands
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var isLoadingModel = false
     @State private var isTestingConnection = false
     @State private var availableModels: [OllamaModel] = []
+    @State private var showVoiceTraining = false
 
     // Japanese-inspired color palette
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
@@ -136,6 +138,15 @@ struct SettingsView: View {
                         testConnection: testConnection
                     )
 
+                    // Voice Commands section
+                    VoiceCommandsSettingsSection(
+                        appState: appState,
+                        accentColor: accentColor,
+                        lightGray: lightGray,
+                        cardBackground: cardBackground,
+                        showVoiceTraining: $showVoiceTraining
+                    )
+
                     // History section
                     VStack(alignment: .leading, spacing: 16) {
                         Text("History")
@@ -220,6 +231,13 @@ struct SettingsView: View {
             }
         }
         .frame(width: 400, height: 680)
+        .sheet(isPresented: $showVoiceTraining) {
+            VoiceTrainingView { profile in
+                appState.voiceProfile = profile
+                // Notify the app that a new profile was trained
+                NotificationCenter.default.post(name: .voiceProfileTrained, object: profile)
+            }
+        }
     }
 
     private func testConnection() {
@@ -781,6 +799,108 @@ struct AppearanceSettingsSection: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
+            }
+            .background(cardBackground)
+            .cornerRadius(12)
+            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+        }
+    }
+}
+
+// MARK: - Voice Commands Settings Section
+
+struct VoiceCommandsSettingsSection: View {
+    @Bindable var appState: AppState
+    let accentColor: Color
+    let lightGray: Color
+    let cardBackground: Color
+    @Binding var showVoiceTraining: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Voice Commands")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(lightGray)
+                .textCase(.uppercase)
+                .tracking(1)
+
+            VStack(spacing: 0) {
+                // Enable toggle
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Voice Activation")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(accentColor)
+
+                        Text("Say \"kon\" to trigger actions")
+                            .font(.system(size: 12))
+                            .foregroundColor(lightGray)
+                    }
+
+                    Spacer()
+
+                    Toggle("", isOn: $appState.isCommandListeningEnabled)
+                        .toggleStyle(.switch)
+                        .tint(accentColor)
+                        .disabled(!appState.hasVoiceProfile)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+
+                Divider()
+                    .padding(.horizontal, 16)
+
+                // Voice profile status
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Voice Profile")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(accentColor)
+
+                        if appState.hasVoiceProfile {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 8, height: 8)
+                                Text("Trained")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(lightGray)
+                            }
+                        } else {
+                            Text("Not trained yet")
+                                .font(.system(size: 12))
+                                .foregroundColor(lightGray)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button(action: { showVoiceTraining = true }) {
+                        Text(appState.hasVoiceProfile ? "Retrain" : "Train Voice")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(accentColor)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(accentColor.opacity(0.1))
+                            .cornerRadius(16)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+
+                // Info text
+                if !appState.hasVoiceProfile {
+                    Divider()
+                        .padding(.horizontal, 16)
+
+                    Text("Train your voice to enable hands-free activation. Koe will only respond to your voice.")
+                        .font(.system(size: 11))
+                        .foregroundColor(lightGray)
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                }
             }
             .background(cardBackground)
             .cornerRadius(12)

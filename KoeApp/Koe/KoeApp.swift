@@ -8,6 +8,10 @@ import KoeStorage
 import KoeUI
 import KoeCore
 import KoeMeeting
+import KoeCommands
+import os.log
+
+private let logger = Logger(subsystem: "com.koe.voice", category: "AppDelegate")
 
 @main
 struct KoeApp: App {
@@ -59,13 +63,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarState: MenuBarState = .loading
     private var downloadProgress: Float = 0.0
 
+    // Voice command detector
+    private let commandDetector = CommandDetector()
+
     // Use the shared coordinator
     private var coordinator: RecordingCoordinator {
         RecordingCoordinator.shared
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSLog("🚀 Koe app launched!")
         setupMenuBar()
+        setupCommandDetector()
         // NOTE: Model loading is now triggered by LoadingView when permissions are granted
         // This prevents file access dialogs from appearing before the user goes through permissions
 
@@ -75,8 +84,57 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func setupCommandDetector() {
+        // Observe command listening state changes
+        NotificationCenter.default.addObserver(
+            forName: .commandListeningChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                await self.updateCommandListening()
+            }
+        }
+
+        // Observe voice profile training completion
+        NotificationCenter.default.addObserver(
+            forName: .voiceProfileTrained,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            self.commandDetector.reloadProfile()
+            logger.notice("[AppDelegate] Voice profile reloaded after training")
+        }
+
+        // Set up command handler
+        commandDetector.onCommandDetected = { result in
+            print("[CommandDetector] Command detected: \(result.command.trigger) (confidence: \(result.confidence))")
+        }
+
+        // Start listening if enabled and profile exists
+        Task {
+            await updateCommandListening()
+        }
+    }
+
+    private func updateCommandListening() async {
+        let appState = AppState.shared
+        logger.notice("[AppDelegate] updateCommandListening: enabled=\(appState.isCommandListeningEnabled), hasProfile=\(appState.hasVoiceProfile)")
+
+        if appState.isCommandListeningEnabled && appState.hasVoiceProfile {
+            logger.notice("[AppDelegate] Starting command detection...")
+            await commandDetector.startDetection()
+        } else {
+            logger.notice("[AppDelegate] Stopping command detection")
+            commandDetector.stopDetection()
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         coordinator.unregisterHotkey()
+        commandDetector.stopDetection()
         menuBarAnimationTimer?.invalidate()
     }
 
@@ -525,6 +583,10 @@ extension Notification.Name {
 
     // Hotkey configuration
     static let hotkeyChanged = Notification.Name("hotkeyChanged")
+
+    // Voice commands
+    static let commandListeningChanged = Notification.Name("commandListeningChanged")
+    static let voiceProfileTrained = Notification.Name("voiceProfileTrained")
 }
 
 // MARK: - NSMenuDelegate
