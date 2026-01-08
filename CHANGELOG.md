@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/whatiskadudoing/koe/compare/v1.4.11...v1.5.0) (2026-01-08)
+
+
+### Features
+
+* add development workflow automation ([#34](https://github.com/whatiskadudoing/koe/issues/34)) ([c565f98](https://github.com/whatiskadudoing/koe/commit/c565f98780eb7321028890c0e6cf118ada11d517))
+* Meeting Recording & Mode Coordination System ([#36](https://github.com/whatiskadudoing/koe/issues/36)) ([5b9c6f6](https://github.com/whatiskadudoing/koe/commit/5b9c6f6af099600b4d6ab64d1b22e8c3f933a422))
+
 ## [1.4.11](https://github.com/whatiskadudoing/koe/compare/v1.4.10...v1.4.11) (2026-01-07)
 
 
