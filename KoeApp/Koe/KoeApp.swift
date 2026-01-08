@@ -16,6 +16,8 @@ struct KoeApp: App {
     // Use the shared coordinator instance
     @State private var coordinator = RecordingCoordinator.shared
     @State private var meetingCoordinator = MeetingCoordinator.shared
+    // Mode manager for coordinating dictation and meeting modes
+    @State private var modeManager = ModeManager.shared
 
     var body: some Scene {
         WindowGroup {
@@ -23,6 +25,7 @@ struct KoeApp: App {
                 .environment(appState)
                 .environment(coordinator)
                 .environment(meetingCoordinator)
+                .environment(modeManager)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
@@ -33,6 +36,7 @@ struct KoeApp: App {
                 .environment(appState)
                 .environment(coordinator)
                 .environment(meetingCoordinator)
+                .environment(modeManager)
         }
     }
 }
@@ -455,6 +459,14 @@ extension Notification.Name {
     static let modelLoaded = Notification.Name("modelLoaded")
     static let modelDownloadProgress = Notification.Name("modelDownloadProgress")
     static let appReady = Notification.Name("appReady")
+
+    // Mode coordination notifications
+    static let dictationStarted = Notification.Name("dictationStarted")
+    static let dictationEnded = Notification.Name("dictationEnded")
+    static let requestPauseMeetingDetection = Notification.Name("requestPauseMeetingDetection")
+    static let requestResumeMeetingDetection = Notification.Name("requestResumeMeetingDetection")
+    static let meetingDetectedSwitchTab = Notification.Name("meetingDetectedSwitchTab")
+    static let meetingEndedSwitchTab = Notification.Name("meetingEndedSwitchTab")
 }
 
 // MARK: - NSMenuDelegate

@@ -47,6 +47,9 @@ public final class MeetingCoordinator {
     /// Cooldown period after a recording attempt (in seconds)
     private let recordingCooldownSeconds: TimeInterval = 30.0
 
+    /// Whether detection is temporarily paused (due to dictation)
+    private var isDetectionPaused: Bool = false
+
     // MARK: - Init
 
     public init(
@@ -67,6 +70,41 @@ public final class MeetingCoordinator {
         // Load existing meetings
         Task {
             await loadMeetings()
+        }
+
+        // Observe mode coordination notifications
+        setupModeCoordinationObservers()
+    }
+
+    private func setupModeCoordinationObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePauseDetection),
+            name: NSNotification.Name("requestPauseMeetingDetection"),
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleResumeDetection),
+            name: NSNotification.Name("requestResumeMeetingDetection"),
+            object: nil
+        )
+    }
+
+    @objc private func handlePauseDetection() {
+        Task { @MainActor in
+            isDetectionPaused = true
+            debugLog("Meeting detection PAUSED (dictation active)")
+            KoeLogger.meeting.info("Meeting detection paused (dictation active)")
+        }
+    }
+
+    @objc private func handleResumeDetection() {
+        Task { @MainActor in
+            isDetectionPaused = false
+            debugLog("Meeting detection RESUMED")
+            KoeLogger.meeting.info("Meeting detection resumed")
         }
     }
 
@@ -276,7 +314,13 @@ public final class MeetingCoordinator {
         switch event {
         case .meetingStarted(let bundleId, let appName):
             debugLog("Received meeting started event: \(appName) (\(bundleId))")
-            debugLog("autoRecordMeetings=\(autoRecordMeetings), isRecording=\(meetingState.isRecording)")
+            debugLog("autoRecordMeetings=\(autoRecordMeetings), isRecording=\(meetingState.isRecording), isDetectionPaused=\(isDetectionPaused)")
+
+            // Skip if detection is paused (dictation is active)
+            if isDetectionPaused {
+                debugLog("Meeting detection PAUSED - ignoring: \(appName)")
+                return
+            }
 
             // Only auto-record if enabled and not already recording
             if autoRecordMeetings && !meetingState.isRecording {
@@ -299,6 +343,13 @@ public final class MeetingCoordinator {
                 do {
                     try await startRecording(appName: appName, appBundleId: bundleId)
                     debugLog("Recording started successfully")
+
+                    // Notify to switch to meetings tab
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("meetingDetectedSwitchTab"),
+                        object: nil,
+                        userInfo: ["appName": appName, "bundleId": bundleId]
+                    )
                 } catch {
                     debugLog("Failed to auto-start recording: \(error)")
                     KoeLogger.meeting.error("Failed to auto-start recording", error: error)
@@ -311,6 +362,12 @@ public final class MeetingCoordinator {
             if case .recording(let meeting) = meetingState, meeting.appBundleId == bundleId {
                 do {
                     try await stopRecording()
+
+                    // Notify to switch back to dictation tab
+                    NotificationCenter.default.post(
+                        name: NSNotification.Name("meetingEndedSwitchTab"),
+                        object: nil
+                    )
                 } catch {
                     KoeLogger.meeting.error("Failed to stop recording", error: error)
                 }

@@ -9,6 +9,9 @@ struct ContentView: View {
 
     @State private var selectedTab: AppTab = .dictation
 
+    /// Track if we auto-switched to meetings (to know if we should auto-return)
+    @State private var didAutoSwitchToMeetings: Bool = false
+
     enum AppTab {
         case dictation
         case meetings
@@ -44,6 +47,42 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 380, minHeight: 520)
+        .onAppear {
+            setupTabSwitchObservers()
+        }
+    }
+
+    // MARK: - Tab Switch Observers
+
+    private func setupTabSwitchObservers() {
+        // Observe meeting detected - switch to meetings tab
+        NotificationCenter.default.addObserver(
+            forName: .meetingDetectedSwitchTab,
+            object: nil,
+            queue: .main
+        ) { _ in
+            // Only auto-switch if we're on dictation and not recording
+            if selectedTab == .dictation && appState.recordingState == .idle {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    selectedTab = .meetings
+                    didAutoSwitchToMeetings = true
+                }
+            }
+        }
+
+        // Observe meeting ended - return to dictation if we auto-switched
+        NotificationCenter.default.addObserver(
+            forName: .meetingEndedSwitchTab,
+            object: nil,
+            queue: .main
+        ) { _ in
+            if didAutoSwitchToMeetings {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    selectedTab = .dictation
+                    didAutoSwitchToMeetings = false
+                }
+            }
+        }
     }
 
     // MARK: - Main UI
@@ -55,7 +94,7 @@ struct ContentView: View {
                 Spacer()
 
                 // Tab toggle
-                TabToggle(selectedTab: $selectedTab)
+                TabToggle(selectedTab: $selectedTab, onManualSwitch: handleManualTabSwitch)
 
                 Spacer()
             }
@@ -68,6 +107,15 @@ struct ContentView: View {
             case .meetings:
                 MeetingsView()
             }
+        }
+    }
+
+    /// Handle manual tab switch - clear auto-switch flag
+    private func handleManualTabSwitch(_ tab: AppTab) {
+        // If user manually switches away from meetings during auto-switch, clear the flag
+        if tab == .dictation && didAutoSwitchToMeetings {
+            didAutoSwitchToMeetings = false
+            ModeManager.shared.userDidSwitchTab(to: "dictation")
         }
     }
 
@@ -132,6 +180,8 @@ struct ContentView: View {
 
 struct TabToggle: View {
     @Binding var selectedTab: ContentView.AppTab
+    /// Binding to clear auto-switch flag when user manually switches
+    var onManualSwitch: ((ContentView.AppTab) -> Void)?
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
@@ -147,6 +197,7 @@ struct TabToggle: View {
             ) {
                 withAnimation(.easeOut(duration: 0.2)) {
                     selectedTab = .dictation
+                    onManualSwitch?(.dictation)
                 }
             }
 
@@ -159,6 +210,7 @@ struct TabToggle: View {
             ) {
                 withAnimation(.easeOut(duration: 0.2)) {
                     selectedTab = .meetings
+                    onManualSwitch?(.meetings)
                 }
             }
         }
