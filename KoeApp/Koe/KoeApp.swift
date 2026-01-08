@@ -42,17 +42,19 @@ struct KoeApp: App {
 }
 
 enum MenuBarState {
-    case loading    // Blue - model loading
-    case idle       // White - ready
-    case recording  // Red - recording
-    case processing // Orange - transcribing
+    case loading      // Blue - model loading
+    case idle         // White - ready
+    case recording    // Red - recording
+    case transcribing // Yellow - transcribing audio
+    case refining     // Purple - AI refinement
 }
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     private var menuBarAnimationTimer: Timer?
-    private var animationStartTime: Date = Date()
+    private var animationStartTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    private var currentTimerInterval: TimeInterval?
     private var currentAudioLevel: Float = 0.0
     private var menuBarState: MenuBarState = .loading
     private var downloadProgress: Float = 0.0
@@ -209,7 +211,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Start with loading animation (blue waveform)
         menuBarState = .loading
         downloadProgress = 0.0
-        animationStartTime = Date()
+        animationStartTime = CFAbsoluteTimeGetCurrent()
         startMenuBarAnimation()
     }
 
@@ -256,7 +258,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func openSettings() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        // Try multiple approaches for macOS compatibility
+        if #available(macOS 14.0, *) {
+            // Modern approach for macOS 14+
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
+
+        // Fallback: Try the older selector
+        if NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil) {
+            return
+        }
+
+        // Final fallback: Use keyboard shortcut simulation
+        let event = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: .command,
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: ",",
+            charactersIgnoringModifiers: ",",
+            isARepeat: false,
+            keyCode: 43
+        )
+        if let event = event {
+            NSApp.sendEvent(event)
+        }
     }
 
     @objc func quitApp() {
@@ -329,8 +357,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .recording:
             menuBarState = .recording
 
-        case .processing:
-            menuBarState = .processing
+        case .transcribing:
+            menuBarState = .transcribing
+
+        case .refining:
+            menuBarState = .refining
         }
 
         // Optimize timer: fast animation when active, slow when idle
@@ -338,42 +369,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func adjustTimerForState() {
-        let needsFastAnimation = (menuBarState == .loading || menuBarState == .recording || menuBarState == .processing)
+        let needsFastAnimation = (menuBarState == .loading || menuBarState == .recording || menuBarState == .transcribing || menuBarState == .refining)
 
         if needsFastAnimation {
-            // Fast animation (20fps) for active states
-            startMenuBarAnimation(interval: 0.05)
+            // Smooth animation (30fps) for active states
+            startMenuBarAnimation(interval: 1.0 / 30.0)
         } else {
-            // Slow animation (2fps) when idle - just subtle breathing
-            startMenuBarAnimation(interval: 0.5)
+            // Slow animation (4fps) when idle - subtle breathing
+            startMenuBarAnimation(interval: 0.25)
         }
     }
 
-    private func startMenuBarAnimation(interval: TimeInterval = 0.05) {
-        // If timer exists with same interval, keep it
-        if menuBarAnimationTimer != nil {
-            // Check if we need to change interval by stopping and restarting
-            menuBarAnimationTimer?.invalidate()
+    private func startMenuBarAnimation(interval: TimeInterval = 1.0 / 30.0) {
+        // Only recreate timer if interval actually changed
+        if currentTimerInterval == interval && menuBarAnimationTimer != nil {
+            return
         }
 
-        animationStartTime = Date()
-        menuBarAnimationTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+        menuBarAnimationTimer?.invalidate()
+        currentTimerInterval = interval
+        animationStartTime = CFAbsoluteTimeGetCurrent()
+
+        // Use RunLoop.main directly for lower latency
+        menuBarAnimationTimer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            DispatchQueue.main.async {
                 self?.updateAnimatedIcon()
             }
         }
+        RunLoop.main.add(menuBarAnimationTimer!, forMode: .common)
     }
 
     private func stopMenuBarAnimation() {
         menuBarAnimationTimer?.invalidate()
         menuBarAnimationTimer = nil
+        currentTimerInterval = nil
     }
 
     private func updateAnimatedIcon() {
         guard let button = statusItem?.button else { return }
 
-        // Use continuous time for smooth animation
-        let time = Date().timeIntervalSince(animationStartTime)
+        // Use continuous time for smooth animation (CFAbsoluteTime is more efficient than Date)
+        let time = CFAbsoluteTimeGetCurrent() - animationStartTime
 
         // Determine color and speed based on state
         let color: NSColor
@@ -390,11 +426,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             audioLevel = 0.3
             speed = 1.5  // Slow, subtle
         case .recording:
-            color = .systemRed
+            // Red for recording
+            color = KoeColors.nsColor(for: .recording)
             audioLevel = max(0.4, currentAudioLevel)  // Minimum visibility
             speed = 4.0  // Fast, responsive
-        case .processing:
-            color = .systemOrange
+        case .transcribing:
+            // Yellow for transcribing
+            color = KoeColors.nsColor(for: .transcribing)
+            audioLevel = 0.6
+            speed = 3.0  // Active
+        case .refining:
+            // Purple for AI refinement
+            color = KoeColors.nsColor(for: .refining)
             audioLevel = 0.6
             speed = 3.0  // Active
         }
