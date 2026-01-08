@@ -28,9 +28,8 @@ struct LoadingView: View {
                         isActive: true,
                         audioLevel: 0,
                         color: accentColor,
-                        segmentCount: 48,
-                        maxAmplitude: 14,
-                        strokeWidth: 3
+                        style: appState.currentRingAnimationStyle,
+                        maxAmplitude: 14
                     )
                     .frame(width: circleSize + 44, height: circleSize + 44)
 

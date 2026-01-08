@@ -114,11 +114,12 @@ struct OverlayContentView: View {
 
     var body: some View {
         ZStack {
-            // Animated ring (Siri-style)
+            // Animated ring (user-selected style)
             AnimatedRing(
                 isActive: viewModel.state != .idle,
                 audioLevel: viewModel.state == .recording ? viewModel.audioLevel : 0,
-                color: stateColor
+                color: stateColor,
+                style: AppState.shared.currentRingAnimationStyle
             )
             .frame(width: circleSize + 48, height: circleSize + 48)
 

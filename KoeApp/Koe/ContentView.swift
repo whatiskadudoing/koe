@@ -320,9 +320,8 @@ struct WelcomeView: View {
                         isActive: true,
                         audioLevel: 0,
                         color: accentColor,
-                        segmentCount: 48,
-                        maxAmplitude: 16,
-                        strokeWidth: 3
+                        style: AppState.shared.currentRingAnimationStyle,
+                        maxAmplitude: 16
                     )
                     .frame(width: circleSize + 50, height: circleSize + 50)
 
@@ -431,8 +430,8 @@ struct MicButton: View {
                     isActive: state != .idle,
                     audioLevel: state == .recording ? audioLevel : 0,
                     color: stateColor,
-                    maxAmplitude: 18,
-                    strokeWidth: 3
+                    style: AppState.shared.currentRingAnimationStyle,
+                    maxAmplitude: 18
                 )
                 .frame(width: circleSize + 60, height: circleSize + 60)
 

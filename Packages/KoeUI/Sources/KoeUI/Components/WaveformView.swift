@@ -1,147 +1,208 @@
 import SwiftUI
+import KoeDomain
 
-// MARK: - Animated Ring (Siri-style)
+// MARK: - Animated Ring (Main Component)
 
-/// Siri-style animated ring with smooth multi-layer waves
-/// Based on Apple's Siri visualization with parabolic scaling and flowing animation
+/// Audio-reactive animated ring with multiple style options
 public struct AnimatedRing: View {
     public let isActive: Bool
     public let audioLevel: Float
     public let color: Color
-    public let segmentCount: Int
-    public let baseRadius: CGFloat
+    public let style: RingAnimationStyle
     public let maxAmplitude: CGFloat
-    public let strokeWidth: CGFloat
 
     public init(
         isActive: Bool = true,
         audioLevel: Float = 0,
         color: Color,
-        segmentCount: Int = 80,
-        baseRadius: CGFloat? = nil,
-        maxAmplitude: CGFloat = 14,
-        strokeWidth: CGFloat = 2
+        style: RingAnimationStyle = .wave,
+        maxAmplitude: CGFloat = 14
     ) {
         self.isActive = isActive
         self.audioLevel = audioLevel
         self.color = color
-        self.segmentCount = segmentCount
-        self.baseRadius = baseRadius ?? 0
+        self.style = style
         self.maxAmplitude = maxAmplitude
-        self.strokeWidth = strokeWidth
     }
 
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+        switch style {
+        case .wave:
+            WaveRingAnimation(isActive: isActive, audioLevel: audioLevel, color: color, maxAmplitude: maxAmplitude)
+        case .blob:
+            BlobRingAnimation(isActive: isActive, audioLevel: audioLevel, color: color, maxAmplitude: maxAmplitude)
+        }
+    }
+}
+
+// MARK: - Wave Ring Animation (Siri-style)
+
+struct WaveRingAnimation: View {
+    let isActive: Bool
+    let audioLevel: Float
+    let color: Color
+    let maxAmplitude: CGFloat
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 120.0)) { timeline in
             Canvas { context, size in
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                let radius = baseRadius > 0 ? baseRadius : min(size.width, size.height) / 2 - maxAmplitude - 2
+                let radius = min(size.width, size.height) / 2 - maxAmplitude - 4
                 let time = timeline.date.timeIntervalSinceReferenceDate
 
-                // Draw 3 wave layers for depth effect
-                for layer in 0..<3 {
-                    let layerOffset = Double(layer) * 0.3
-                    let layerOpacity = 1.0 - Double(layer) * 0.25
-                    let layerWidth = strokeWidth * (1.0 - CGFloat(layer) * 0.2)
-
-                    drawSmoothWave(
+                // Draw 3 wave layers for depth - outer to inner
+                for layer in (0..<3).reversed() {
+                    drawWaveLayer(
                         context: context,
                         center: center,
                         radius: radius,
                         time: time,
-                        phaseOffset: layerOffset,
-                        opacity: layerOpacity,
-                        lineWidth: layerWidth
+                        layer: layer
                     )
                 }
             }
+            .drawingGroup() // GPU acceleration for smoother rendering
         }
     }
 
-    private func drawSmoothWave(
+    private func drawWaveLayer(
         context: GraphicsContext,
         center: CGPoint,
         radius: CGFloat,
         time: Double,
-        phaseOffset: Double,
-        opacity: Double,
-        lineWidth: CGFloat
+        layer: Int
     ) {
+        let layerOffset = Double(layer) * 0.4
+        let layerScale = 1.0 - Double(layer) * 0.08
+        let lineWidth: CGFloat = layer == 0 ? 2.5 : (layer == 1 ? 2.0 : 1.5)
+
         var path = Path()
-
-        // Phase creates flowing animation
-        let phase = -time * 2.0 + phaseOffset * .pi
-
-        // Normalized audio with boost for sensitivity
-        let normalizedAudio = CGFloat(min(audioLevel * 1.8, 1.0))
+        let phase = -time * 2.5 + layerOffset * .pi
+        let normalizedAudio = CGFloat(min(audioLevel * 2.5, 1.0))
+        let segmentCount = 120 // More segments for smoother curves
 
         for i in 0...segmentCount {
             let t = Double(i) / Double(segmentCount)
             let angle = t * 2.0 * .pi
 
-            // Multi-frequency sine waves (like Siri)
-            let freq1 = 3.0  // Primary wave
-            let freq2 = 5.0  // Secondary
-            let freq3 = 7.0  // Tertiary for detail
+            // Multi-frequency waves for organic feel
+            let wave1 = sin(3.0 * angle + phase) * 0.5
+            let wave2 = sin(5.0 * angle - phase * 1.2) * 0.3
+            let wave3 = sin(7.0 * angle + phase * 0.7) * 0.2
+            let wave4 = sin(11.0 * angle - phase * 0.5) * 0.1
+            let waveValue = wave1 + wave2 + wave3 + wave4
 
-            let wave1 = sin(freq1 * angle + phase)
-            let wave2 = sin(freq2 * angle - phase * 1.3) * 0.6
-            let wave3 = sin(freq3 * angle + phase * 0.8) * 0.3
-
-            // Combined wave value
-            let waveValue = (wave1 + wave2 + wave3) / 2.0
-
-            // Calculate amplitude based on state
             var amplitude: CGFloat
-            if audioLevel > 0.01 {
-                // Audio reactive - dramatic response to voice
-                let baseAmp = 0.25 + normalizedAudio * 0.75
-                amplitude = CGFloat(waveValue) * baseAmp * maxAmplitude
+            if audioLevel > 0.005 {
+                // Smooth audio response
+                let smoothAudio = pow(normalizedAudio, 0.7) // Softer response curve
+                let baseAmp = 0.3 + smoothAudio * 0.7
+                amplitude = CGFloat(waveValue) * baseAmp * maxAmplitude * layerScale
 
-                // Extra peaks for loud sounds
-                if normalizedAudio > 0.5 {
-                    let boost = sin(angle * 4 + phase * 2.5) * normalizedAudio * 0.3
+                // Add harmonic boost for louder audio
+                if normalizedAudio > 0.3 {
+                    let boost = sin(angle * 6 + phase * 2) * smoothAudio * 0.25
                     amplitude += CGFloat(boost) * maxAmplitude
                 }
             } else if isActive {
-                // Idle/processing - gentle flowing wave
-                amplitude = CGFloat(waveValue) * 0.4 * maxAmplitude
+                // Gentle idle animation
+                let idleWave = sin(time * 1.5 + angle * 2) * 0.15
+                amplitude = CGFloat(waveValue * 0.4 + idleWave) * maxAmplitude * layerScale
             } else {
-                // Inactive - very subtle
-                amplitude = CGFloat(waveValue) * 0.1 * maxAmplitude
+                // Subtle static wave
+                amplitude = CGFloat(waveValue) * 0.2 * maxAmplitude * layerScale
             }
 
-            let r = radius + amplitude
+            let r = radius * layerScale + amplitude
             let cgAngle = CGFloat(angle)
-            let point = CGPoint(
-                x: center.x + cos(cgAngle) * r,
-                y: center.y + sin(cgAngle) * r
-            )
+            let point = CGPoint(x: center.x + cos(cgAngle) * r, y: center.y + sin(cgAngle) * r)
 
-            if i == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
-            }
+            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
         }
-
         path.closeSubpath()
 
-        // Calculate final opacity
-        let finalOpacity: Double
-        if audioLevel > 0.01 {
-            finalOpacity = (0.6 + Double(normalizedAudio) * 0.4) * opacity
+        // Layer opacity - inner layers more transparent
+        let baseOpacity: Double
+        if audioLevel > 0.005 {
+            baseOpacity = 0.7 + Double(normalizedAudio) * 0.3
         } else if isActive {
-            finalOpacity = 0.5 * opacity
+            baseOpacity = 0.6
         } else {
-            finalOpacity = 0.25 * opacity
+            baseOpacity = 0.4
         }
+        let layerOpacity = baseOpacity * (1.0 - Double(layer) * 0.25)
 
-        context.stroke(
-            path,
-            with: .color(color.opacity(finalOpacity)),
-            lineWidth: lineWidth
-        )
+        context.stroke(path, with: .color(color.opacity(layerOpacity)), lineWidth: lineWidth)
+    }
+}
+
+// MARK: - Blob Ring Animation (Organic)
+
+struct BlobRingAnimation: View {
+    let isActive: Bool
+    let audioLevel: Float
+    let color: Color
+    let maxAmplitude: CGFloat
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 120.0)) { timeline in
+            Canvas { context, size in
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let radius = min(size.width, size.height) / 2 - maxAmplitude - 4
+                let time = timeline.date.timeIntervalSinceReferenceDate
+
+                let normalizedAudio = CGFloat(min(audioLevel * 2.2, 1.0))
+                let segmentCount = 150 // More segments for ultra-smooth blob
+
+                // Draw multiple blob layers
+                for layer in (0..<2).reversed() {
+                    let layerScale = 1.0 - CGFloat(layer) * 0.05
+                    let layerTimeOffset = Double(layer) * 0.3
+
+                    var path = Path()
+
+                    for i in 0...segmentCount {
+                        let t = Double(i) / Double(segmentCount)
+                        let angle = t * 2.0 * .pi
+
+                        // Organic blob with multiple noise frequencies
+                        let noise1 = sin(angle * 2 + (time + layerTimeOffset) * 1.2) * 0.35
+                        let noise2 = sin(angle * 3 - (time + layerTimeOffset) * 1.8) * 0.25
+                        let noise3 = sin(angle * 5 + (time + layerTimeOffset) * 0.9) * 0.15
+                        let noise4 = cos(angle * 4 - (time + layerTimeOffset) * 1.4) * 0.1
+                        let blobNoise = noise1 + noise2 + noise3 + noise4
+
+                        var amplitude: CGFloat
+                        if audioLevel > 0.005 {
+                            let smoothAudio = pow(normalizedAudio, 0.6)
+                            amplitude = CGFloat(blobNoise) * (0.5 + smoothAudio * 0.7) * maxAmplitude * layerScale
+                        } else if isActive {
+                            amplitude = CGFloat(blobNoise) * 0.55 * maxAmplitude * layerScale
+                        } else {
+                            amplitude = CGFloat(blobNoise) * 0.25 * maxAmplitude * layerScale
+                        }
+
+                        let r = radius * layerScale + amplitude
+                        let cgAngle = CGFloat(angle)
+                        let point = CGPoint(x: center.x + cos(cgAngle) * r, y: center.y + sin(cgAngle) * r)
+
+                        if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                    }
+                    path.closeSubpath()
+
+                    let baseOpacity = audioLevel > 0.005 ? (0.65 + Double(normalizedAudio) * 0.35) : (isActive ? 0.55 : 0.35)
+                    let layerOpacity = baseOpacity * (1.0 - Double(layer) * 0.3)
+                    let lineWidth: CGFloat = layer == 0 ? 2.5 : 1.5
+
+                    // Subtle fill for inner layer
+                    if layer == 0 {
+                        context.fill(path, with: .color(color.opacity(layerOpacity * 0.08)))
+                    }
+                    context.stroke(path, with: .color(color.opacity(layerOpacity)), lineWidth: lineWidth)
+                }
+            }
+            .drawingGroup()
+        }
     }
 }
 

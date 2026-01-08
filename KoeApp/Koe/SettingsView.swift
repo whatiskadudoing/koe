@@ -115,6 +115,14 @@ struct SettingsView: View {
                         cardBackground: cardBackground
                     )
 
+                    // Appearance section
+                    AppearanceSettingsSection(
+                        appState: appState,
+                        accentColor: accentColor,
+                        lightGray: lightGray,
+                        cardBackground: cardBackground
+                    )
+
                     // AI Refinement section
                     AIRefinementSettingsSection(
                         appState: appState,
@@ -725,5 +733,58 @@ struct ShortcutPresetChip: View {
                 .cornerRadius(8)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Appearance Settings Section
+
+struct AppearanceSettingsSection: View {
+    @Bindable var appState: AppState
+    let accentColor: Color
+    let lightGray: Color
+    let cardBackground: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Appearance")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(lightGray)
+                .textCase(.uppercase)
+                .tracking(1)
+
+            VStack(spacing: 0) {
+                // Animation style picker
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Ring Animation")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(accentColor)
+
+                        Text(appState.currentRingAnimationStyle.description)
+                            .font(.system(size: 12))
+                            .foregroundColor(lightGray)
+                    }
+
+                    Spacer()
+
+                    Picker("", selection: $appState.ringAnimationStyleRaw) {
+                        ForEach(RingAnimationStyle.allCases, id: \.rawValue) { style in
+                            HStack {
+                                Image(systemName: style.icon)
+                                Text(style.displayName)
+                            }
+                            .tag(style.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(accentColor)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
+            .background(cardBackground)
+            .cornerRadius(12)
+            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+        }
     }
 }

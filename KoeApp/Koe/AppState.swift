@@ -237,6 +237,18 @@ public final class AppState {
         }
     }
 
+    // Ring animation style - stored property for observation to work
+    public var ringAnimationStyleRaw: String = "wave" {
+        didSet {
+            UserDefaults.standard.set(ringAnimationStyleRaw, forKey: "ringAnimationStyle")
+        }
+    }
+
+    public var currentRingAnimationStyle: RingAnimationStyle {
+        get { RingAnimationStyle(rawValue: ringAnimationStyleRaw) ?? .wave }
+        set { ringAnimationStyleRaw = newValue.rawValue }
+    }
+
     /// Runtime state for Ollama connection (not persisted)
     public var isOllamaConnected: Bool = false
 
@@ -298,6 +310,9 @@ public final class AppState {
         }
         if let savedTier = UserDefaults.standard.string(forKey: "aiTier") {
             aiTierRaw = savedTier
+        }
+        if let savedAnimStyle = UserDefaults.standard.string(forKey: "ringAnimationStyle") {
+            ringAnimationStyleRaw = savedAnimStyle
         }
     }
 
