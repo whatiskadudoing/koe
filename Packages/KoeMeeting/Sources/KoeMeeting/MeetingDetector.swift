@@ -216,18 +216,15 @@ public final class MeetingDetector: @unchecked Sendable {
 
         // Detect new meeting apps
         let newApps = connectedApps.subtracting(audioConnectedMeetings)
+        var eventsToEmit: [MeetingEvent] = []
+
         for bundleId in newApps {
             audioConnectedMeetings.insert(bundleId)
 
             if !activeMeetings.contains(bundleId) {
                 activeMeetings.insert(bundleId)
                 let appName = getAppDisplayName(for: bundleId)
-                let event = MeetingEvent.meetingStarted(appBundleId: bundleId, appName: appName)
-
-                for continuation in continuations.values {
-                    continuation.yield(event)
-                }
-
+                eventsToEmit.append(.meetingStarted(appBundleId: bundleId, appName: appName))
                 debugLog("🟢 MEETING DETECTED (audio process): \(appName) (\(bundleId))")
                 KoeLogger.meeting.info("Meeting detected (audio process): \(appName) (\(bundleId))")
             }
@@ -240,15 +237,18 @@ public final class MeetingDetector: @unchecked Sendable {
 
             if activeMeetings.contains(bundleId) {
                 activeMeetings.remove(bundleId)
-                let event = MeetingEvent.meetingEnded(appBundleId: bundleId)
-
-                for continuation in continuations.values {
-                    continuation.yield(event)
-                }
-
+                eventsToEmit.append(.meetingEnded(appBundleId: bundleId))
                 let appName = getAppDisplayName(for: bundleId)
                 debugLog("🔴 MEETING ENDED (audio process): \(appName) (\(bundleId))")
                 KoeLogger.meeting.info("Meeting ended (audio process): \(appName) (\(bundleId))")
+            }
+        }
+
+        // Copy continuations and emit events outside the main logic
+        let continuationsCopy = Array(continuations.values)
+        for event in eventsToEmit {
+            for continuation in continuationsCopy {
+                continuation.yield(event)
             }
         }
     }
@@ -263,33 +263,34 @@ public final class MeetingDetector: @unchecked Sendable {
             let bundleId = self.getParentBundleId(for: rawBundleId)
 
             self.lock.lock()
-            defer { self.lock.unlock() }
+
+            var eventToEmit: MeetingEvent?
 
             if started {
                 // App started using microphone
                 if !self.activeMeetings.contains(bundleId) {
                     self.activeMeetings.insert(bundleId)
                     let appName = self.getAppDisplayName(for: bundleId)
-                    let event = MeetingEvent.meetingStarted(appBundleId: bundleId, appName: appName)
-
-                    for continuation in self.continuations.values {
-                        continuation.yield(event)
-                    }
-
+                    eventToEmit = .meetingStarted(appBundleId: bundleId, appName: appName)
                     KoeLogger.meeting.info("Meeting detected (microphone): \(appName) (\(bundleId))")
                 }
             } else {
                 // App stopped using microphone
                 if self.activeMeetings.contains(bundleId) {
                     self.activeMeetings.remove(bundleId)
-                    let event = MeetingEvent.meetingEnded(appBundleId: bundleId)
-
-                    for continuation in self.continuations.values {
-                        continuation.yield(event)
-                    }
-
+                    eventToEmit = .meetingEnded(appBundleId: bundleId)
                     let appName = self.getAppDisplayName(for: bundleId)
                     KoeLogger.meeting.info("Meeting ended (microphone stopped): \(appName) (\(bundleId))")
+                }
+            }
+
+            // Copy continuations and unlock before emitting
+            let continuationsCopy = Array(self.continuations.values)
+            self.lock.unlock()
+
+            if let event = eventToEmit {
+                for continuation in continuationsCopy {
+                    continuation.yield(event)
                 }
             }
         }
@@ -367,6 +368,9 @@ public final class MeetingDetector: @unchecked Sendable {
         }
         debugLog("Checking \(windowList.count) windows (\(titledWindows) with titles)")
 
+        // Collect events to emit
+        var eventsToEmit: [MeetingEvent] = []
+
         // Look for meeting window patterns
         for window in windowList {
             guard let ownerName = window[kCGWindowOwnerName as String] as? String else {
@@ -399,12 +403,7 @@ public final class MeetingDetector: @unchecked Sendable {
                                 activeMeetings.insert(bundleId)
                                 windowDetectedMeetings.insert(bundleId)
                                 let appName = getAppDisplayName(for: bundleId)
-                                let event = MeetingEvent.meetingStarted(appBundleId: bundleId, appName: appName)
-
-                                for continuation in continuations.values {
-                                    continuation.yield(event)
-                                }
-
+                                eventsToEmit.append(.meetingStarted(appBundleId: bundleId, appName: appName))
                                 debugLog("🟢 MEETING DETECTED: \(appName) - '\(windowName)'")
                                 KoeLogger.meeting.info("Meeting detected (window title): \(appName) - '\(windowName)'")
                             }
@@ -423,17 +422,20 @@ public final class MeetingDetector: @unchecked Sendable {
             windowDetectedMeetings.remove(bundleId)
             if activeMeetings.contains(bundleId) {
                 activeMeetings.remove(bundleId)
-                let event = MeetingEvent.meetingEnded(appBundleId: bundleId)
-
-                for continuation in continuations.values {
-                    continuation.yield(event)
-                }
-
+                eventsToEmit.append(.meetingEnded(appBundleId: bundleId))
                 let appName = getAppDisplayName(for: bundleId)
                 KoeLogger.meeting.info("Meeting ended (window closed): \(appName)")
             }
         }
+        let continuationsCopy = Array(continuations.values)
         lock.unlock()
+
+        // Emit all events outside the lock
+        for event in eventsToEmit {
+            for continuation in continuationsCopy {
+                continuation.yield(event)
+            }
+        }
     }
 
     /// Get display name for a bundle ID

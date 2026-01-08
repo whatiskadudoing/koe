@@ -517,14 +517,18 @@ public final class SystemAudioRecorder: @unchecked Sendable {
         let rms = sqrt(sum / Float(max(sampleCount, 1)))
         let level = min(1.0, rms * 5.0)
 
-        // Emit audio level
+        // Emit audio level - copy continuations under lock then yield outside lock
+        // This minimizes lock time on the audio IO thread and prevents iteration crashes
         lock.lock()
-        for continuation in audioLevelContinuations.values {
-            continuation.yield(level)
-        }
+        let continuationsCopy = Array(audioLevelContinuations.values)
         let currentFile = systemAudioFile
         let currentFormat = streamFormat
         lock.unlock()
+
+        // Yield outside the lock to avoid blocking the audio thread
+        for continuation in continuationsCopy {
+            continuation.yield(level)
+        }
 
         // Log periodically
         if bufferCount == 1 || bufferCount % 500 == 0 {

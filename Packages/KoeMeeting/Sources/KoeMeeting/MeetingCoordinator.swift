@@ -38,6 +38,15 @@ public final class MeetingCoordinator {
     private var detectionTask: Task<Void, Never>?
     private var audioLevelTask: Task<Void, Never>?
 
+    /// Debounce: Timestamp of last recording attempt (to prevent rapid re-triggering)
+    private var lastRecordingAttemptTime: Date?
+
+    /// Debounce: Bundle ID of the meeting we last attempted to record
+    private var lastRecordingAttemptBundleId: String?
+
+    /// Cooldown period after a recording attempt (in seconds)
+    private let recordingCooldownSeconds: TimeInterval = 30.0
+
     // MARK: - Init
 
     public init(
@@ -271,6 +280,21 @@ public final class MeetingCoordinator {
 
             // Only auto-record if enabled and not already recording
             if autoRecordMeetings && !meetingState.isRecording {
+                // Check debounce: skip if we recently attempted to record this same meeting
+                if let lastTime = lastRecordingAttemptTime,
+                   let lastBundleId = lastRecordingAttemptBundleId,
+                   lastBundleId == bundleId {
+                    let elapsed = Date().timeIntervalSince(lastTime)
+                    if elapsed < recordingCooldownSeconds {
+                        debugLog("Debounce: Skipping recording attempt for \(appName) - cooldown active (\(Int(recordingCooldownSeconds - elapsed))s remaining)")
+                        return
+                    }
+                }
+
+                // Record the attempt time and bundle ID for debouncing
+                lastRecordingAttemptTime = Date()
+                lastRecordingAttemptBundleId = bundleId
+
                 debugLog("Auto-starting recording...")
                 do {
                     try await startRecording(appName: appName, appBundleId: bundleId)
@@ -290,6 +314,12 @@ public final class MeetingCoordinator {
                 } catch {
                     KoeLogger.meeting.error("Failed to stop recording", error: error)
                 }
+            }
+
+            // Clear debounce state when meeting ends
+            if lastRecordingAttemptBundleId == bundleId {
+                lastRecordingAttemptTime = nil
+                lastRecordingAttemptBundleId = nil
             }
         }
     }
