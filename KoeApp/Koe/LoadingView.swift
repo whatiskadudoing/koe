@@ -90,8 +90,11 @@ struct LoadingView: View {
             Task {
                 await RecordingCoordinator.shared.loadModel(name: AppState.shared.selectedModel)
 
-                // Also load refinement model if enabled
-                await RecordingCoordinator.shared.loadRefinementModel()
+                // TODO: Re-enable once macOS 26 NSURLSession/async-await bug is fixed
+                // Both LocalLLMClient and mlx-swift-lm crash during model download
+                // due to NSURLSession continuation handling issues on macOS 26
+                // Bug occurs in FileDownloader.download(onProgress:) -> HuggingFaceAPI
+                // await RecordingCoordinator.shared.loadRefinementModel()
             }
         }
     }

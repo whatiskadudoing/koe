@@ -12,7 +12,7 @@ let package = Package(
     dependencies: [
         .package(path: "../KoeDomain"),
         .package(path: "../KoeCore"),
-        .package(url: "https://github.com/tattn/LocalLLMClient.git", branch: "main")
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "2.29.1")
     ],
     targets: [
         .target(
@@ -20,8 +20,7 @@ let package = Package(
             dependencies: [
                 "KoeDomain",
                 "KoeCore",
-                .product(name: "LocalLLMClient", package: "LocalLLMClient"),
-                .product(name: "LocalLLMClientMLX", package: "LocalLLMClient")
+                .product(name: "MLXLLM", package: "mlx-swift-lm")
             ]
         )
     ]

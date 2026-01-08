@@ -20,8 +20,9 @@ let package = Package(
         .package(path: "../Packages/KoeTextInsertion"),
         .package(path: "../Packages/KoeStorage"),
         .package(path: "../Packages/KoeUI"),
-        .package(path: "../Packages/KoeMeeting"),
-        .package(path: "../Packages/KoeRefinement")
+        .package(path: "../Packages/KoeMeeting")
+        // KoeRefinement temporarily disabled due to macOS 26 Metal/MLX compatibility issues
+        // .package(path: "../Packages/KoeRefinement")
     ],
     targets: [
         .executableTarget(
@@ -37,8 +38,8 @@ let package = Package(
                 "KoeTextInsertion",
                 "KoeStorage",
                 "KoeUI",
-                "KoeMeeting",
-                "KoeRefinement"
+                "KoeMeeting"
+                // "KoeRefinement" - disabled due to macOS 26 issues
             ],
             path: "Koe"
         )

@@ -1,14 +1,14 @@
 import Foundation
 import KoeDomain
 import KoeCore
-import LocalLLMClient
-import LocalLLMClientMLX
+import MLXLLM
+import MLXLMCommon
+import MLX
 
 /// MLX-based text refinement service for grammar correction and cleanup
-/// Uses LocalLLMClient with MLX backend for fast on-device inference
+/// Uses Apple's mlx-swift-lm for fast on-device inference
 public final class MLXRefinementService: TextRefinementService, @unchecked Sendable {
-    private var session: LLMSession?
-    private var downloadModel: LLMSession.DownloadModel?
+    private var modelContainer: ModelContainer?
     private var currentLoadingTask: Task<Void, Never>?
     private var currentLoadOperationId: UUID?
     private let lock = NSLock()
@@ -55,7 +55,10 @@ public final class MLXRefinementService: TextRefinementService, @unchecked Senda
         return _currentModel
     }
 
-    public init() {}
+    public init() {
+        // Note: GPU cache limit will be set when model is actually loaded
+        // to avoid Metal initialization issues on app startup
+    }
 
     // MARK: - Model Loading
 
@@ -91,7 +94,7 @@ public final class MLXRefinementService: TextRefinementService, @unchecked Senda
         _isReady = false
         _loadingProgress = 0.0
         _currentModel = model
-        session = nil
+        modelContainer = nil
         lock.unlock()
 
         notifyProgress(0.01)
@@ -114,19 +117,19 @@ public final class MLXRefinementService: TextRefinementService, @unchecked Senda
         if isCancelled { return }
 
         do {
+            // Set GPU cache limit on first model load
+            MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)
+
             logger.info("Loading refinement model: \(model.displayName)")
 
-            // Create MLX download model
-            // Using Qwen3 1.7B as the default small model
+            // Create model configuration
             let modelId = getModelId(for: model)
-            let dlModel = LLMSession.DownloadModel.mlx(id: modelId)
+            let modelConfig = ModelConfiguration(id: modelId)
 
-            lock.lock()
-            downloadModel = dlModel
-            lock.unlock()
-
-            // Download model with progress tracking
-            try await dlModel.downloadModel { [weak self] progress in
+            // Load model with progress tracking
+            let container = try await LLMModelFactory.shared.loadContainer(
+                configuration: modelConfig
+            ) { [weak self] progress in
                 guard let self = self else { return }
 
                 self.lock.lock()
@@ -135,7 +138,8 @@ public final class MLXRefinementService: TextRefinementService, @unchecked Senda
 
                 guard isCurrentOperation else { return }
 
-                let displayProgress = 0.01 + progress * 0.89
+                // Map progress to 0.01-0.95 range (leave room for final setup)
+                let displayProgress = 0.01 + progress.fractionCompleted * 0.94
 
                 self.lock.lock()
                 self._loadingProgress = displayProgress
@@ -149,19 +153,8 @@ public final class MLXRefinementService: TextRefinementService, @unchecked Senda
             lock.unlock()
             if isCancelledAfterDownload { return }
 
-            // Create session
             lock.lock()
-            _loadingProgress = 0.95
-            lock.unlock()
-            notifyProgress(0.95)
-
-            let newSession = LLMSession(
-                model: dlModel,
-                messages: [.system(systemPrompt)]
-            )
-
-            lock.lock()
-            session = newSession
+            modelContainer = container
             _isReady = true
             _loadingProgress = 1.0
             lock.unlock()
@@ -192,8 +185,7 @@ public final class MLXRefinementService: TextRefinementService, @unchecked Senda
         currentLoadingTask?.cancel()
         currentLoadingTask = nil
         currentLoadOperationId = nil
-        session = nil
-        downloadModel = nil
+        modelContainer = nil
         _isReady = false
         _loadingProgress = 0.0
         _currentModel = nil
@@ -206,10 +198,10 @@ public final class MLXRefinementService: TextRefinementService, @unchecked Senda
 
     public func refine(text: String) async throws -> String {
         lock.lock()
-        let currentSession = session
+        let container = modelContainer
         lock.unlock()
 
-        guard let currentSession = currentSession else {
+        guard let container = container else {
             throw RefinementError.modelNotLoaded
         }
 
@@ -224,15 +216,31 @@ public final class MLXRefinementService: TextRefinementService, @unchecked Senda
         do {
             let prompt = "Refine this transcribed speech:\n\n\(trimmedText)"
 
+            // Build messages for the model
+            let messages: [[String: String]] = [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": prompt]
+            ]
+
             var refinedText = ""
 
-            let stream = currentSession.streamResponse(to: prompt, attachments: [])
-            for try await chunk in stream {
-                refinedText += chunk
+            // Use the container to generate response
+            let result = try await container.perform { context in
+                let input = try await context.processor.prepare(input: .init(messages: messages))
+                return try MLXLMCommon.generate(
+                    input: input,
+                    parameters: .init(temperature: 0.3, topP: 0.9),
+                    context: context
+                ) { tokens in
+                    // Collect tokens - return .more to continue generation
+                    if tokens.count > 500 {
+                        return .stop
+                    }
+                    return .more
+                }
             }
 
-            // Clean up the response
-            refinedText = refinedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            refinedText = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
 
             // If the model returned something weird or empty, return original
             if refinedText.isEmpty || refinedText.count > trimmedText.count * 3 {

@@ -116,11 +116,11 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Text Improvement")
                                         .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(accentColor)
+                                        .foregroundColor(accentColor.opacity(0.5))
 
                                     Text("Fix grammar and remove filler words")
                                         .font(.system(size: 12))
-                                        .foregroundColor(lightGray)
+                                        .foregroundColor(lightGray.opacity(0.7))
                                 }
 
                                 Spacer()
@@ -128,41 +128,25 @@ struct SettingsView: View {
                                 Toggle("", isOn: $appState.isRefinementEnabled)
                                     .toggleStyle(.switch)
                                     .tint(accentColor)
+                                    .disabled(true)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
 
-                            if appState.isRefinementEnabled {
-                                Divider()
-                                    .padding(.horizontal, 16)
-
-                                HStack(spacing: 10) {
-                                    if appState.isRefinementModelLoaded {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.green)
-                                            .font(.system(size: 12))
-                                        Text("Model ready")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(lightGray)
-                                    } else if appState.refinementModelProgress > 0 {
-                                        ProgressView()
-                                            .scaleEffect(0.7)
-                                        Text("Loading model...")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(lightGray)
-                                    } else {
-                                        Image(systemName: "circle")
-                                            .foregroundColor(lightGray)
-                                            .font(.system(size: 12))
-                                        Text("Model not loaded")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(lightGray)
-                                    }
-                                    Spacer()
-                                }
+                            Divider()
                                 .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
+
+                            HStack(spacing: 10) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 12))
+                                Text("Temporarily unavailable on macOS 26")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(lightGray)
+                                Spacer()
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                         }
                         .background(cardBackground)
                         .cornerRadius(12)
