@@ -44,29 +44,18 @@ public final class PipelineManager {
         // Note: For the text refinement flow, we skip audio input and transcription
         // since those happen in RecordingCoordinator before pipeline execution
 
-        // Language Improvement stage (if refinement is enabled)
+        // Text Improve stage (combined: cleanup, tone, prompt mode) - single AI call
         if AppState.shared.isRefinementEnabled {
-            let langConfig = buildLanguageImprovementConfig()
+            let config = buildImproveConfig()
             elements.append(PipelineElementInstance(
-                typeId: "language-improvement",
+                typeId: "text-improve",
                 configuration: [
-                    "cleanupEnabled": AnyCodable(langConfig.cleanupEnabled),
-                    "tone": AnyCodable(langConfig.tone.rawValue),
-                    "model": AnyCodable(langConfig.model)
+                    "cleanupEnabled": AnyCodable(config.cleanupEnabled),
+                    "tone": AnyCodable(config.tone),
+                    "promptMode": AnyCodable(config.promptMode),
+                    "model": AnyCodable("qwen-3b")
                 ]
             ))
-
-            // Prompt Optimizer stage (if enabled)
-            if AppState.shared.isPromptImproverEnabled {
-                elements.append(PipelineElementInstance(
-                    typeId: "prompt-optimizer",
-                    configuration: [
-                        "addStructure": AnyCodable(true),
-                        "removeAmbiguity": AnyCodable(true),
-                        "makeSpecific": AnyCodable(true)
-                    ]
-                ))
-            }
         }
 
         // Auto Type action
@@ -166,20 +155,11 @@ public final class PipelineManager {
     /// Configure handlers for a specific element instance
     private func configureElement(_ element: any PipelineElement, typeId: String) {
         switch typeId {
-        case "language-improvement":
-            if let stage = element as? LanguageImprovementStage {
+        case "text-improve":
+            if let stage = element as? TextImproveStage {
                 stage.processHandler = { [weak self] text, config in
                     guard let self = self else { return text }
-                    let prompt = self.buildRefinementPrompt(config: config)
-                    return try await self.aiService.refine(text: text, mode: .custom, customPrompt: prompt)
-                }
-            }
-
-        case "prompt-optimizer":
-            if let stage = element as? PromptOptimizerStage {
-                stage.processHandler = { [weak self] text, config in
-                    guard let self = self else { return text }
-                    let prompt = self.buildPromptOptimizerPrompt(config: config)
+                    let prompt = self.buildImprovePrompt(config: config)
                     return try await self.aiService.refine(text: text, mode: .custom, customPrompt: prompt)
                 }
             }
@@ -208,57 +188,57 @@ public final class PipelineManager {
 
     // MARK: - Configuration Building
 
-    private func buildLanguageImprovementConfig() -> LanguageImprovementConfig {
-        let tone: ToneOption
-        switch AppState.shared.toneStyle {
-        case "formal": tone = .formal
-        case "casual": tone = .casual
-        default: tone = .none
-        }
+    /// Configuration for the combined Improve stage
+    struct ImproveConfig {
+        let cleanupEnabled: Bool
+        let tone: String  // "none", "formal", "casual"
+        let promptMode: Bool
+    }
 
-        return LanguageImprovementConfig(
+    private func buildImproveConfig() -> ImproveConfig {
+        return ImproveConfig(
             cleanupEnabled: AppState.shared.isCleanupEnabled,
-            tone: tone,
-            model: "qwen-3b"
+            tone: AppState.shared.toneStyle,
+            promptMode: AppState.shared.isPromptImproverEnabled
         )
     }
 
-    private func buildRefinementPrompt(config: LanguageImprovementConfig) -> String {
+    private func buildImprovePrompt(config: TextImproveConfig) -> String {
         var tasks: [String] = []
 
+        // Cleanup tasks
         if config.cleanupEnabled {
-            tasks.append("fix grammar, remove filler words like um/uh/like/you know")
+            tasks.append("fix grammar and remove filler words (um, uh, like, you know)")
         }
 
+        // Tone adjustment
         switch config.tone {
-        case .formal:
+        case "formal":
             tasks.append("make it formal and professional")
-        case .casual:
+        case "casual":
             tasks.append("make it casual and friendly")
-        case .none:
+        default:
             break
         }
 
+        // Prompt mode - improve clarity for AI prompts
+        if config.promptMode {
+            tasks.append("if this is a request or instruction, improve its clarity and specificity")
+        }
+
+        // Custom instructions
         let custom = AppState.shared.customRefinementPrompt
         if !custom.isEmpty {
             tasks.append(custom)
         }
 
+        // If nothing is enabled, just clean up
         let taskList = tasks.isEmpty ? "clean up the text" : tasks.joined(separator: ", ")
 
         return """
         Edit this text: \(taskList).
+        Keep the original meaning. Do NOT add bullet points or extra structure.
         Reply with ONLY the edited text. No explanations. No quotes. Just the text.
-        """
-    }
-
-    private func buildPromptOptimizerPrompt(config: PromptOptimizerConfig) -> String {
-        // More conservative prompt - only optimize if text is clearly a request/instruction
-        return """
-        If this text is a request or instruction for an AI, improve its clarity.
-        If it's just casual speech or a simple statement, return it unchanged.
-        Do NOT add bullet points, lists, or extra structure unless absolutely needed.
-        Reply with ONLY the text. No explanations.
         """
     }
 }

@@ -41,10 +41,8 @@ struct NodeSettingsPanel: View {
             switch stage {
             case .hotkey:
                 HotkeySettings(appState: appState)
-            case .languageImprovement:
-                LanguageImprovementSettings(appState: appState)
-            case .promptOptimizer:
-                PromptOptimizerSettings()
+            case .improve:
+                ImproveSettings(appState: appState)
             case .autoEnter:
                 AutoEnterSettings()
             default:
@@ -60,9 +58,9 @@ struct NodeSettingsPanel: View {
     }
 }
 
-// MARK: - Language Improvement Settings
+// MARK: - Improve Settings (Combined cleanup, tone, and prompt mode)
 
-struct LanguageImprovementSettings: View {
+struct ImproveSettings: View {
     @Bindable var appState: AppState
 
     var body: some View {
@@ -110,46 +108,30 @@ struct LanguageImprovementSettings: View {
                     }
                 }
             }
-            .opacity(appState.isPromptImproverEnabled ? 0.4 : 1.0)
-            .disabled(appState.isPromptImproverEnabled)
-        }
-    }
-}
 
-// MARK: - Prompt Optimizer Settings
+            Divider()
 
-struct PromptOptimizerSettings: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Optimizes text for AI prompts")
-                .font(.system(size: 12))
-                .foregroundColor(KoeColors.textSecondary)
+            // Prompt mode toggle
+            HStack {
+                Toggle(isOn: $appState.isPromptImproverEnabled) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12))
+                            .foregroundColor(appState.isPromptImproverEnabled ? .orange : KoeColors.textLight)
 
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(.green)
-                Text("Adds structure and clarity")
-                    .font(.system(size: 11))
-                    .foregroundColor(KoeColors.textTertiary)
-            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Prompt Mode")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(KoeColors.accent)
 
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(.green)
-                Text("Removes ambiguity")
-                    .font(.system(size: 11))
-                    .foregroundColor(KoeColors.textTertiary)
-            }
-
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(.green)
-                Text("Makes requirements specific")
-                    .font(.system(size: 11))
-                    .foregroundColor(KoeColors.textTertiary)
+                            Text("Optimize for AI assistant prompts")
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
             }
         }
     }
@@ -265,13 +247,13 @@ struct SettingsToneChip: View {
 #Preview {
     VStack(spacing: 20) {
         NodeSettingsPanel(
-            stage: .languageImprovement,
+            stage: .improve,
             onClose: {}
         )
         .environment(AppState.shared)
 
         NodeSettingsPanel(
-            stage: .promptOptimizer,
+            stage: .hotkey,
             onClose: {}
         )
         .environment(AppState.shared)

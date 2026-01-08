@@ -5,8 +5,7 @@ import KoeUI
 enum PipelineStageInfo: String, CaseIterable, Identifiable {
     case hotkey
     case transcription
-    case languageImprovement
-    case promptOptimizer
+    case improve  // Combined: cleanup, tone, and prompt optimization
     case autoType
     case autoEnter
 
@@ -16,8 +15,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         switch self {
         case .hotkey: return "Hotkey"
         case .transcription: return "Transcribe"
-        case .languageImprovement: return "Improve"
-        case .promptOptimizer: return "Prompt"
+        case .improve: return "Improve"
         case .autoType: return "Type"
         case .autoEnter: return "Enter"
         }
@@ -27,8 +25,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         switch self {
         case .hotkey: return "command"
         case .transcription: return "text.bubble"
-        case .languageImprovement: return "text.badge.checkmark"
-        case .promptOptimizer: return "sparkles"
+        case .improve: return "sparkles"
         case .autoType: return "keyboard"
         case .autoEnter: return "return"
         }
@@ -38,8 +35,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         switch self {
         case .hotkey: return KoeColors.accent
         case .transcription: return KoeColors.stateTranscribing
-        case .languageImprovement: return KoeColors.stateRefining
-        case .promptOptimizer: return .orange
+        case .improve: return KoeColors.stateRefining
         case .autoType: return KoeColors.accent
         case .autoEnter: return KoeColors.accent
         }
@@ -48,7 +44,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this stage can be toggled on/off by the user
     var isToggleable: Bool {
         switch self {
-        case .languageImprovement, .promptOptimizer, .autoEnter: return true
+        case .improve, .autoEnter: return true
         default: return false
         }
     }
@@ -61,7 +57,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this stage has settings that can be configured
     var hasSettings: Bool {
         switch self {
-        case .hotkey, .languageImprovement: return true
+        case .hotkey, .improve: return true
         default: return false
         }
     }
@@ -72,8 +68,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         switch self {
         case .hotkey: return nil  // Hotkey is a trigger, not a pipeline element
         case .transcription: return nil  // Transcription happens before pipeline
-        case .languageImprovement: return "language-improvement"
-        case .promptOptimizer: return "prompt-optimizer"
+        case .improve: return "text-improve"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
         }

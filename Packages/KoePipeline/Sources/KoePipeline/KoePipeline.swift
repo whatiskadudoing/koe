@@ -50,9 +50,10 @@ public func registerBuiltInElements() {
     registry.register(stage: TranscriptionStage.self) { TranscriptionStage() }
 
     // Processing stages
-    registry.register(stage: LanguageImprovementStage.self) { LanguageImprovementStage() }
-    registry.register(stage: PromptOptimizerStage.self) { PromptOptimizerStage() }
-    registry.register(stage: CleanupStage.self) { CleanupStage() }
+    registry.register(stage: TextImproveStage.self) { TextImproveStage() }
+    registry.register(stage: LanguageImprovementStage.self) { LanguageImprovementStage() }  // Legacy
+    registry.register(stage: PromptOptimizerStage.self) { PromptOptimizerStage() }  // Legacy
+    registry.register(stage: CleanupStage.self) { CleanupStage() }  // Legacy
 
     // Actions
     registry.register(action: AutoTypeAction.self) { AutoTypeAction() }

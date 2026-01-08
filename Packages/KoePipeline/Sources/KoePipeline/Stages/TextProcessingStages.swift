@@ -316,6 +316,171 @@ public final class PromptOptimizerStage: SleepableElementBase, SleepableElement,
     }
 }
 
+// MARK: - Combined Text Improve Stage
+
+/// Configuration for the combined Text Improve stage
+public struct TextImproveConfig: Codable, Sendable, Equatable {
+    /// Enable cleanup (remove fillers, fix grammar)
+    public var cleanupEnabled: Bool
+
+    /// Tone: "none", "formal", "casual"
+    public var tone: String
+
+    /// Enable prompt mode (optimize for AI prompts)
+    public var promptMode: Bool
+
+    /// Model to use
+    public var model: String
+
+    public static let `default` = TextImproveConfig(
+        cleanupEnabled: true,
+        tone: "none",
+        promptMode: false,
+        model: "qwen-3b"
+    )
+
+    public init(cleanupEnabled: Bool, tone: String, promptMode: Bool, model: String) {
+        self.cleanupEnabled = cleanupEnabled
+        self.tone = tone
+        self.promptMode = promptMode
+        self.model = model
+    }
+
+    /// Whether any processing is enabled
+    public var isActive: Bool {
+        cleanupEnabled || tone != "none" || promptMode
+    }
+
+    /// Summary of active settings
+    public var summary: String {
+        var parts: [String] = []
+        if cleanupEnabled { parts.append("cleanup") }
+        if tone != "none" { parts.append(tone) }
+        if promptMode { parts.append("prompt") }
+        return parts.isEmpty ? "none" : parts.joined(separator: " + ")
+    }
+}
+
+/// Combined Text Improve stage - cleanup, tone, and prompt mode in a single AI call
+public final class TextImproveStage: SleepableElementBase, SleepableElement, PipelineStage, ResourceTrackingElement, @unchecked Sendable {
+    // MARK: - PipelineStage Protocol
+
+    public let stageTypeId = "text-improve"
+    public var id: String { stageTypeId }
+    public let displayName = "Text Improve"
+    public let description = "Improve text: cleanup, tone, and prompt optimization"
+    public let icon = "sparkles"
+
+    public var constraints: ElementConstraints {
+        [.cannotBeLast, .optional]
+    }
+
+    public var connectionRules: ConnectionRules {
+        ConnectionRules(
+            acceptsInput: [.text, .richText],
+            producesOutput: .text
+        )
+    }
+
+    public var isEnabled: Bool = true
+
+    public var configuration: [String: Any] {
+        get {
+            [
+                "cleanupEnabled": config.cleanupEnabled,
+                "tone": config.tone,
+                "promptMode": config.promptMode,
+                "model": config.model
+            ]
+        }
+        set {
+            if let cleanup = newValue["cleanupEnabled"] as? Bool {
+                config.cleanupEnabled = cleanup
+            }
+            if let tone = newValue["tone"] as? String {
+                config.tone = tone
+            }
+            if let promptMode = newValue["promptMode"] as? Bool {
+                config.promptMode = promptMode
+            }
+            if let model = newValue["model"] as? String {
+                config.model = model
+            }
+        }
+    }
+
+    // MARK: - Stage-Specific
+
+    /// Stage configuration
+    public var config: TextImproveConfig = .default
+
+    /// Handler for text improvement (injected from app)
+    public var processHandler: ((String, TextImproveConfig) async throws -> String)?
+
+    // MARK: - Resource Tracking
+
+    private var _resourceUsage: ResourceUsage = .zero
+
+    public var resourceUsage: ResourceUsage { _resourceUsage }
+
+    public var estimatedResourceUsage: ResourceUsage {
+        ResourceUsage(
+            memoryBytes: 2_000_000_000,  // ~2GB for Qwen 3B
+            modelLoaded: false,
+            gpuMemoryBytes: 2_000_000_000
+        )
+    }
+
+    // MARK: - Initialization
+
+    public init(config: TextImproveConfig = .default, sleepConfig: SleepConfiguration = .default) {
+        self.config = config
+        super.init(sleepConfig: sleepConfig)
+    }
+
+    // MARK: - SleepableElement
+
+    public func wake() async throws {
+        _resourceUsage = estimatedResourceUsage
+    }
+
+    public func sleep() async {
+        setState(.shuttingDown)
+        _resourceUsage = .zero
+        setState(.sleeping)
+    }
+
+    // MARK: - Processing
+
+    public func prepare() async throws {
+        if !sleepConfig.enabled || sleepConfig.preWarm {
+            try await ensureAwake()
+        }
+    }
+
+    public func process(_ context: PipelineContext) async throws {
+        guard config.isActive else { return }
+        guard !context.text.isEmpty else { return }
+
+        try await ensureAwake()
+        setState(.processing)
+        defer { setState(.idle) }
+
+        if let handler = processHandler {
+            context.text = try await handler(context.text, config)
+        }
+
+        // Store what was applied
+        context.setCustomData(config.summary, forKey: "improve_settings")
+    }
+
+    public func cleanup() async {
+        if sleepConfig.enabled {
+            await sleep()
+        }
+    }
+}
+
 /// Simple cleanup stage (legacy, standalone)
 public final class CleanupStage: PipelineStage, @unchecked Sendable {
     public let stageTypeId = "cleanup"

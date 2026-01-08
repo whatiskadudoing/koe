@@ -181,7 +181,7 @@ struct MiniWaveform: View {
         )
 
         PipelineNodeView(
-            stage: .languageImprovement,
+            stage: .improve,
             isEnabled: .constant(true),
             isSelected: true,
             isRunning: false,
@@ -198,7 +198,7 @@ struct MiniWaveform: View {
         )
 
         PipelineNodeView(
-            stage: .promptOptimizer,
+            stage: .improve,
             isEnabled: .constant(false),
             isSelected: false,
             isRunning: false,

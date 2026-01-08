@@ -1046,8 +1046,9 @@ struct HistoryDetailView: View {
 
     private func displayName(for typeId: String) -> String {
         switch typeId {
-        case "language-improvement": return "Language Improve"
-        case "prompt-optimizer": return "Prompt Optimizer"
+        case "text-improve": return "Improve"
+        case "language-improvement": return "Language Improve"  // Legacy
+        case "prompt-optimizer": return "Prompt Optimizer"  // Legacy
         case "auto-type": return "Auto Type"
         case "auto-enter": return "Auto Enter"
         default: return typeId.replacingOccurrences(of: "-", with: " ").capitalized
@@ -1056,6 +1057,7 @@ struct HistoryDetailView: View {
 
     private func icon(for typeId: String) -> String {
         switch typeId {
+        case "text-improve": return "sparkles"
         case "language-improvement": return "text.badge.checkmark"
         case "prompt-optimizer": return "sparkles"
         case "auto-type": return "keyboard"
@@ -1066,6 +1068,7 @@ struct HistoryDetailView: View {
 
     private func color(for typeId: String) -> Color {
         switch typeId {
+        case "text-improve": return refiningColor
         case "language-improvement": return refiningColor
         case "prompt-optimizer": return Color.orange
         case "auto-type": return actionColor
@@ -1076,6 +1079,7 @@ struct HistoryDetailView: View {
 
     private func inputDescription(for typeId: String) -> String {
         switch typeId {
+        case "text-improve": return "Raw transcription"
         case "language-improvement": return "Raw transcription"
         case "prompt-optimizer": return "Improved text"
         case "auto-type": return executionRecord?.outputText ?? entry.text  // Show actual text that was typed
@@ -1086,7 +1090,7 @@ struct HistoryDetailView: View {
 
     private func outputText(for typeId: String, record: PipelineExecutionRecord) -> String? {
         switch typeId {
-        case "language-improvement", "prompt-optimizer":
+        case "text-improve", "language-improvement", "prompt-optimizer":
             // For text transformations, show the output
             return record.outputText
         case "auto-type", "auto-enter":
@@ -1116,6 +1120,12 @@ struct HistoryDetailView: View {
     private func settingsSummary(for typeId: String) -> String? {
         guard let settings = entry.refinementSettings else { return nil }
         switch typeId {
+        case "text-improve":
+            var parts: [String] = []
+            if settings.cleanup { parts.append("cleanup") }
+            if settings.tone != "none" { parts.append(settings.tone) }
+            if settings.promptMode { parts.append("prompt") }
+            return parts.isEmpty ? nil : parts.joined(separator: " + ")
         case "language-improvement":
             var parts: [String] = []
             if settings.cleanup { parts.append("cleanup") }

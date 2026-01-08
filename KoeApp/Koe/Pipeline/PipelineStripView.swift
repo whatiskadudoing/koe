@@ -66,10 +66,8 @@ struct PipelineStripView: View {
 
     private func toggleStage(_ stage: PipelineStageInfo) {
         switch stage {
-        case .languageImprovement:
+        case .improve:
             appState.isRefinementEnabled.toggle()
-        case .promptOptimizer:
-            appState.isPromptImproverEnabled.toggle()
         case .autoEnter:
             appState.isAutoEnterEnabled.toggle()
         default:
@@ -79,15 +77,10 @@ struct PipelineStripView: View {
 
     private func binding(for stage: PipelineStageInfo) -> Binding<Bool> {
         switch stage {
-        case .languageImprovement:
+        case .improve:
             return Binding(
                 get: { appState.isRefinementEnabled },
                 set: { appState.isRefinementEnabled = $0 }
-            )
-        case .promptOptimizer:
-            return Binding(
-                get: { appState.isPromptImproverEnabled },
-                set: { appState.isPromptImproverEnabled = $0 }
             )
         case .autoEnter:
             return Binding(
@@ -102,10 +95,8 @@ struct PipelineStripView: View {
 
     private func isStageEnabled(_ stage: PipelineStageInfo) -> Bool {
         switch stage {
-        case .languageImprovement:
+        case .improve:
             return appState.isRefinementEnabled
-        case .promptOptimizer:
-            return appState.isPromptImproverEnabled
         case .autoEnter:
             return appState.isAutoEnterEnabled
         default:
@@ -124,9 +115,8 @@ struct PipelineStripView: View {
         case .transcribing:
             return stage == .transcription
         case .refining:
-            // During refining, the AI stages are running
-            // We could track more granularly, but for now show Improve as running
-            return stage == .languageImprovement || stage == .promptOptimizer
+            // During refining, the AI improve stage is running
+            return stage == .improve
         }
     }
 
