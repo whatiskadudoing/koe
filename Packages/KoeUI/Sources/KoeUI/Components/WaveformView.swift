@@ -42,22 +42,31 @@ public struct AnimatedRing: View {
 
                     var amplitude: CGFloat
                     if audioLevel > 0.01 {
-                        // Reactive to audio level
-                        let wave1 = sin(time * 6 + angle * 4) * 0.5
-                        let wave2 = sin(time * 10 + angle * 6) * 0.4
-                        let wave3 = sin(time * 14 + angle * 2) * 0.3
-                        amplitude = CGFloat(audioLevel) * 1.2 + 0.3
-                        amplitude *= (1.0 + CGFloat(wave1 + wave2 + wave3))
+                        // Highly reactive to audio level - more dramatic response
+                        let normalizedAudio = CGFloat(min(audioLevel * 2.0, 1.0))  // Boost sensitivity
+                        let wave1 = sin(time * 8 + angle * 3) * 0.4
+                        let wave2 = sin(time * 12 + angle * 5) * 0.3
+                        let wave3 = cos(time * 6 - angle * 4) * 0.25
+
+                        // Base amplitude scales dramatically with audio
+                        amplitude = 0.2 + normalizedAudio * 1.5
+                        // Add wave variation
+                        amplitude *= (0.7 + CGFloat(wave1 + wave2 + wave3) * 0.5)
+                        // Extra boost for louder sounds
+                        if audioLevel > 0.3 {
+                            amplitude *= 1.2
+                        }
                     } else if isActive {
                         // Smooth rotating wave for processing/idle animation
-                        let wave = sin(time * 3 + angle * 3) * 0.5 + 0.5
-                        let wave2 = sin(time * 5 - angle * 2) * 0.3
-                        amplitude = 0.4 + (wave + wave2) * 0.6
+                        let wave = sin(time * 2.5 + angle * 2) * 0.5 + 0.5
+                        let wave2 = sin(time * 4 - angle * 3) * 0.3
+                        amplitude = 0.3 + (wave + wave2) * 0.5
                     } else {
-                        amplitude = 0.2
+                        // Subtle static ring when inactive
+                        amplitude = 0.15
                     }
 
-                    amplitude = min(1.2, max(0.15, amplitude))
+                    amplitude = min(1.5, max(0.1, amplitude))
 
                     let innerRadius = radius
                     let outerRadius = radius + amplitude * maxAmplitude
@@ -75,9 +84,11 @@ public struct AnimatedRing: View {
                     path.move(to: innerPoint)
                     path.addLine(to: outerPoint)
 
+                    // More visible opacity
+                    let opacity = isActive ? (0.75 + amplitude * 0.25) : 0.4
                     context.stroke(
                         path,
-                        with: .color(color.opacity(isActive ? (0.7 + amplitude * 0.3) : 0.3)),
+                        with: .color(color.opacity(opacity)),
                         lineWidth: strokeWidth
                     )
                 }

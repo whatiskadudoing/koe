@@ -14,13 +14,14 @@ struct PipelineNodeView: View {
     @State private var isHovered = false
 
     private let nodeSize: CGFloat = 44
+    private let cornerRadius: CGFloat = 10
 
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 4) {
-                ZStack {
-                    // Node background - circular
-                    Circle()
+                ZStack(alignment: .topTrailing) {
+                    // Node background - rounded square
+                    RoundedRectangle(cornerRadius: cornerRadius)
                         .fill(isRunning ? stage.color.opacity(0.15) : Color.white)
                         .frame(width: nodeSize, height: nodeSize)
                         .shadow(
@@ -33,10 +34,12 @@ struct PipelineNodeView: View {
                     if isRunning {
                         AnimatedWaveform(color: stage.color, barCount: 4, minHeight: 4, maxHeight: 12)
                             .frame(width: 24, height: 16)
+                            .frame(width: nodeSize, height: nodeSize)
                     } else {
                         Image(systemName: stage.icon)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(effectiveIconColor)
+                            .frame(width: nodeSize, height: nodeSize)
                     }
 
                     // Toggle indicator (only for toggleable stages)
@@ -44,7 +47,7 @@ struct PipelineNodeView: View {
                         Circle()
                             .fill(isEnabled ? Color.green : KoeColors.textLighter)
                             .frame(width: 8, height: 8)
-                            .offset(x: 14, y: -14)
+                            .offset(x: -4, y: 4)
                     }
 
                     // Status indicator for failed stages
@@ -52,11 +55,11 @@ struct PipelineNodeView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 10))
                             .foregroundColor(.red)
-                            .offset(x: 14, y: -14)
+                            .offset(x: -4, y: 4)
                     }
                 }
                 .overlay(
-                    Circle()
+                    RoundedRectangle(cornerRadius: cornerRadius)
                         .stroke(isRunning ? stage.color : (isSelected ? KoeColors.accent : Color.clear), lineWidth: 2)
                 )
 

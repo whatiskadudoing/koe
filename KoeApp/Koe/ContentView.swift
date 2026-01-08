@@ -194,11 +194,6 @@ struct ContentView: View {
                     }
                 )
 
-                // Status text (only shown when active)
-                if appState.recordingState != .idle {
-                    StatusText(state: appState.recordingState)
-                }
-
                 // Pipeline visualization
                 PipelineStripView(selectedStage: $selectedPipelineStage)
 
