@@ -3,18 +3,25 @@ import KoeUI
 
 /// Represents a stage in the visual pipeline editor
 enum PipelineStageInfo: String, CaseIterable, Identifiable {
-    case trigger  // Unified: hotkey + voice command triggers
-    case transcription
-    case improve  // Combined: cleanup, tone, and prompt optimization
-    case autoType
-    case autoEnter
+    // Parallel triggers (only one can be active at a time)
+    case hotkeyTrigger   // Keyboard shortcut trigger
+    case voiceTrigger    // Voice command trigger ("koe")
+
+    // Sequential pipeline stages
+    case recorder        // Records audio (behavior depends on trigger type)
+    case transcribe      // Converts audio to text (model selection)
+    case improve         // AI text improvement (cleanup, tone, prompt)
+    case autoType        // Types the text
+    case autoEnter       // Presses enter
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .trigger: return "Trigger"
-        case .transcription: return "Transcribe"
+        case .hotkeyTrigger: return "On Press"
+        case .voiceTrigger: return "On Voice"
+        case .recorder: return "Record"
+        case .transcribe: return "Transcribe"
         case .improve: return "Improve"
         case .autoType: return "Type"
         case .autoEnter: return "Enter"
@@ -23,8 +30,10 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .trigger: return "bolt.circle"
-        case .transcription: return "text.bubble"
+        case .hotkeyTrigger: return "command"
+        case .voiceTrigger: return "waveform"
+        case .recorder: return "mic"
+        case .transcribe: return "text.bubble"
         case .improve: return "sparkles"
         case .autoType: return "keyboard"
         case .autoEnter: return "return"
@@ -33,8 +42,10 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .trigger: return KoeColors.accent
-        case .transcription: return KoeColors.stateTranscribing
+        case .hotkeyTrigger: return KoeColors.accent
+        case .voiceTrigger: return KoeColors.accent
+        case .recorder: return KoeColors.stateRecording
+        case .transcribe: return KoeColors.stateTranscribing
         case .improve: return KoeColors.stateRefining
         case .autoType: return KoeColors.accent
         case .autoEnter: return KoeColors.accent
@@ -44,7 +55,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this stage can be toggled on/off by the user
     var isToggleable: Bool {
         switch self {
-        case .improve, .autoEnter: return true
+        case .hotkeyTrigger, .voiceTrigger, .improve, .autoEnter: return true
         default: return false
         }
     }
@@ -57,7 +68,15 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this stage has settings that can be configured
     var hasSettings: Bool {
         switch self {
-        case .trigger, .transcription, .improve: return true
+        case .hotkeyTrigger, .voiceTrigger, .recorder, .transcribe, .improve: return true
+        default: return false
+        }
+    }
+
+    /// Whether this is a trigger stage (part of parallel trigger group)
+    var isTrigger: Bool {
+        switch self {
+        case .hotkeyTrigger, .voiceTrigger: return true
         default: return false
         }
     }
@@ -66,12 +85,24 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Returns nil for stages that aren't tracked as pipeline elements
     var pipelineTypeId: String? {
         switch self {
-        case .trigger: return nil  // Trigger is not a pipeline element
-        case .transcription: return nil  // Transcription happens before pipeline
+        case .hotkeyTrigger: return nil
+        case .voiceTrigger: return nil
+        case .recorder: return nil
+        case .transcribe: return nil
         case .improve: return "text-improve"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
         }
+    }
+
+    /// Trigger stages shown in parallel at the start
+    static var triggerStages: [PipelineStageInfo] {
+        [.hotkeyTrigger, .voiceTrigger]
+    }
+
+    /// Sequential stages after triggers
+    static var sequentialStages: [PipelineStageInfo] {
+        [.recorder, .transcribe, .improve, .autoType, .autoEnter]
     }
 
     /// Stages to show in the pipeline strip (excludes implicit ones)

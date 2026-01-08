@@ -28,10 +28,10 @@ public struct VoiceCommand: Codable, Sendable, Identifiable, Equatable {
         self.isEnabled = isEnabled
     }
 
-    /// Default "kon" command that sends a notification
+    /// Default "kon" command that starts recording
     public static let koeDefault = VoiceCommand(
         trigger: "kon",
-        action: .notification(title: "Koe", body: "Hello World!"),
+        action: .startRecording,
         isEnabled: true
     )
 }

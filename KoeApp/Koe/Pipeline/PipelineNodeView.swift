@@ -88,10 +88,12 @@ struct PipelineNodeView: View {
                     .stroke(isRunning ? stage.color : (isSelected ? KoeColors.accent : Color.clear), lineWidth: 2)
             )
 
-            // Name label
+            // Name label - fixed size to prevent wrapping
             Text(stage.displayName)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(isRunning ? stage.color : (isEnabled ? KoeColors.textSecondary : KoeColors.textLight))
+                .fixedSize()
+                .lineLimit(1)
         }
         .opacity(effectiveOpacity)
         .scaleEffect(isHovered ? 1.05 : 1.0)
@@ -137,7 +139,7 @@ struct PipelineNodeView: View {
 #Preview {
     HStack(spacing: 20) {
         PipelineNodeView(
-            stage: .transcription,
+            stage: .transcribe,
             isEnabled: .constant(true),
             isSelected: false,
             isRunning: true,

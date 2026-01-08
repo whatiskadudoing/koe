@@ -140,10 +140,12 @@ struct OverlayContentView: View {
     /// Map recording state to pipeline stage to get the icon
     private var currentStage: PipelineStageInfo {
         switch viewModel.state {
-        case .idle, .recording:
-            return .trigger  // Mic/trigger stage
+        case .idle:
+            return .hotkeyTrigger
+        case .recording:
+            return .recorder
         case .transcribing:
-            return .transcription
+            return .transcribe
         case .refining:
             return .improve
         }

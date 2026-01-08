@@ -3,23 +3,38 @@ import KoeUI
 import KoePipeline
 
 /// Main container that displays the horizontal pipeline visualization
+/// Shows parallel triggers at the start, then sequential processing stages
 struct PipelineStripView: View {
     @Environment(AppState.self) private var appState
     @Binding var selectedStage: PipelineStageInfo?
 
     var body: some View {
-        // Pipeline strip with nodes
-        HStack(spacing: 0) {
-            ForEach(Array(PipelineStageInfo.visibleStages.enumerated()), id: \.element.id) { index, stage in
+        HStack(alignment: .center, spacing: 0) {
+            // Parallel triggers section (includes merge connector)
+            ParallelTriggersView(
+                selectedStage: $selectedStage,
+                isHotkeyEnabled: isHotkeyEnabled,
+                isVoiceEnabled: isVoiceEnabled,
+                isHotkeyRunning: isHotkeyRunning,
+                isVoiceRunning: isVoiceRunning,
+                isAnyTriggerEnabled: isAnyTriggerEnabled,
+                activeLineColor: activeTriggerColor,
+                onToggleHotkey: { toggleStage(.hotkeyTrigger) },
+                onToggleVoice: { toggleStage(.voiceTrigger) },
+                onOpenSettings: { stage in selectedStage = stage }
+            )
+
+            // Sequential stages (vertically centered)
+            ForEach(Array(PipelineStageInfo.sequentialStages.enumerated()), id: \.element.id) { index, stage in
                 HStack(spacing: 0) {
-                    // Connector (skip for first node)
+                    // Connector between sequential stages (skip first one - merge connector handles it)
                     if index > 0 {
-                        PipelineConnector(isActive: isConnectorActive(beforeIndex: index))
+                        PipelineConnector(
+                            isActive: isConnectorActive(stage: stage, previousIndex: index - 1),
+                            color: activeTriggerColor
+                        )
                     }
 
-                    // Node
-                    // - Single tap: toggles on/off (if toggleable)
-                    // - Double tap: opens settings (if has settings)
                     PipelineNodeView(
                         stage: stage,
                         isEnabled: binding(for: stage),
@@ -32,16 +47,52 @@ struct PipelineStripView: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(KoeColors.surface.opacity(0.5))
         .cornerRadius(16)
     }
 
-    // MARK: - Helpers
+    /// Color for active pipeline - consistent blue accent
+    private var activeTriggerColor: Color {
+        return KoeColors.accent
+    }
+
+    /// Whether any recording is in progress
+    private var isAnyRecording: Bool {
+        appState.recordingState != .idle
+    }
+
+    // MARK: - Trigger State
+
+    private var isHotkeyEnabled: Bool {
+        true // Hotkey is always available
+    }
+
+    private var isVoiceEnabled: Bool {
+        appState.isCommandListeningEnabled && appState.hasVoiceProfile
+    }
+
+    private var isAnyTriggerEnabled: Bool {
+        isHotkeyEnabled || isVoiceEnabled
+    }
+
+    private var isHotkeyRunning: Bool {
+        appState.recordingState == .recording && !appState.isVoiceCommandTriggered
+    }
+
+    private var isVoiceRunning: Bool {
+        appState.recordingState == .recording && appState.isVoiceCommandTriggered
+    }
+
+    // MARK: - Stage Helpers
 
     private func toggleStage(_ stage: PipelineStageInfo) {
         switch stage {
+        case .hotkeyTrigger:
+            break // Hotkey is always enabled for now
+        case .voiceTrigger:
+            appState.isCommandListeningEnabled.toggle()
         case .improve:
             appState.isRefinementEnabled.toggle()
         case .autoEnter:
@@ -53,6 +104,13 @@ struct PipelineStripView: View {
 
     private func binding(for stage: PipelineStageInfo) -> Binding<Bool> {
         switch stage {
+        case .hotkeyTrigger:
+            return .constant(true)
+        case .voiceTrigger:
+            return Binding(
+                get: { appState.isCommandListeningEnabled && appState.hasVoiceProfile },
+                set: { appState.isCommandListeningEnabled = $0 }
+            )
         case .improve:
             return Binding(
                 get: { appState.isRefinementEnabled },
@@ -64,13 +122,16 @@ struct PipelineStripView: View {
                 set: { appState.isAutoEnterEnabled = $0 }
             )
         default:
-            // Hotkey, Transcription, AutoType are always enabled
             return .constant(true)
         }
     }
 
     private func isStageEnabled(_ stage: PipelineStageInfo) -> Bool {
         switch stage {
+        case .hotkeyTrigger:
+            return true
+        case .voiceTrigger:
+            return appState.isCommandListeningEnabled && appState.hasVoiceProfile
         case .improve:
             return appState.isRefinementEnabled
         case .autoEnter:
@@ -80,52 +141,157 @@ struct PipelineStripView: View {
         }
     }
 
-    /// Determine if a stage is currently running based on recording state
     private func isStageRunning(_ stage: PipelineStageInfo) -> Bool {
         switch appState.recordingState {
         case .idle:
             return false
         case .recording:
-            // Recording means trigger is active (hotkey held or voice command)
-            return stage == .trigger
+            return stage == .recorder
         case .transcribing:
-            return stage == .transcription
+            return stage == .transcribe
         case .refining:
-            // During refining, the AI improve stage is running
             return stage == .improve
         }
     }
 
-    private func isConnectorActive(beforeIndex index: Int) -> Bool {
-        let stages = PipelineStageInfo.visibleStages
-        guard index > 0 && index < stages.count else { return false }
+    private func isConnectorActive(stage: PipelineStageInfo, previousIndex: Int) -> Bool {
+        let stages = PipelineStageInfo.sequentialStages
 
-        let previousStage = stages[index - 1]
-        let currentStage = stages[index]
+        // First connector connects from triggers to first sequential stage
+        if previousIndex < 0 {
+            return isAnyTriggerEnabled && isStageEnabled(stage)
+        }
 
-        return isStageEnabled(previousStage) && isStageEnabled(currentStage)
+        guard previousIndex < stages.count else { return false }
+
+        let previousStage = stages[previousIndex]
+        return isStageEnabled(previousStage) && isStageEnabled(stage)
     }
 
     private func metricsFor(_ stage: PipelineStageInfo) -> ElementExecutionMetrics? {
         guard let typeId = stage.pipelineTypeId else {
             return nil
         }
-        let metrics = appState.lastMetrics(for: typeId)
-        return metrics
+        return appState.lastMetrics(for: typeId)
     }
+}
 
-    private func shortName(_ typeId: String) -> String {
-        switch typeId {
-        case "language-improvement": return "Imp"
-        case "prompt-optimizer": return "Pmt"
-        case "auto-type": return "Typ"
-        case "auto-enter": return "Ent"
-        default: return String(typeId.prefix(3))
+// MARK: - Parallel Triggers View
+
+struct ParallelTriggersView: View {
+    @Binding var selectedStage: PipelineStageInfo?
+    let isHotkeyEnabled: Bool
+    let isVoiceEnabled: Bool
+    let isHotkeyRunning: Bool
+    let isVoiceRunning: Bool
+    let isAnyTriggerEnabled: Bool
+    let activeLineColor: Color
+    let onToggleHotkey: () -> Void
+    let onToggleVoice: () -> Void
+    let onOpenSettings: (PipelineStageInfo) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Triggers stacked vertically
+            VStack(spacing: 8) {
+                // Hotkey trigger - dimmed when voice is running
+                PipelineNodeView(
+                    stage: .hotkeyTrigger,
+                    isEnabled: .constant(isHotkeyEnabled && !isVoiceRunning),
+                    isSelected: selectedStage == .hotkeyTrigger,
+                    isRunning: isHotkeyRunning,
+                    metrics: nil,
+                    onToggle: onToggleHotkey,
+                    onOpenSettings: { onOpenSettings(.hotkeyTrigger) }
+                )
+                .opacity(isVoiceRunning ? 0.4 : 1.0)
+
+                // Voice trigger - dimmed when hotkey is running
+                PipelineNodeView(
+                    stage: .voiceTrigger,
+                    isEnabled: .constant(isVoiceEnabled && !isHotkeyRunning),
+                    isSelected: selectedStage == .voiceTrigger,
+                    isRunning: isVoiceRunning,
+                    metrics: nil,
+                    onToggle: onToggleVoice,
+                    onOpenSettings: { onOpenSettings(.voiceTrigger) }
+                )
+                .opacity(isHotkeyRunning ? 0.4 : 1.0)
+            }
+
+            // Merge lines from both triggers
+            PipelineMergeConnector(
+                isTopActive: isHotkeyRunning,
+                isBottomActive: isVoiceRunning,
+                isMergeActive: isAnyTriggerEnabled,
+                activeColor: activeLineColor
+            )
         }
     }
 }
 
-// Debug view to show current metrics state
+// MARK: - Merge Connector
+
+struct PipelineMergeConnector: View {
+    let isTopActive: Bool
+    let isBottomActive: Bool
+    let isMergeActive: Bool  // Whether the output line should be active
+    let activeColor: Color
+
+    // Match the actual node size (44) + label (~16) = 60
+    private let nodeHeight: CGFloat = 60
+    private let spacing: CGFloat = 8
+    private let mergeWidth: CGFloat = 16  // Width for the merge lines
+    private let outputWidth: CGFloat = 20 // Width for output line
+
+    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
+
+    var body: some View {
+        Canvas { context, size in
+            let midY = size.height / 2
+            // Position lines at the vertical center of each trigger node
+            let topY = nodeHeight / 2
+            let bottomY = size.height - (nodeHeight / 2)
+            let mergeX = mergeWidth  // X position where lines merge
+
+            // Line from top trigger to merge point
+            var topPath = Path()
+            topPath.move(to: CGPoint(x: 0, y: topY))
+            topPath.addLine(to: CGPoint(x: mergeX, y: topY))
+            topPath.addLine(to: CGPoint(x: mergeX, y: midY))
+            context.stroke(
+                topPath,
+                with: .color(isTopActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            )
+
+            // Line from bottom trigger to merge point
+            var bottomPath = Path()
+            bottomPath.move(to: CGPoint(x: 0, y: bottomY))
+            bottomPath.addLine(to: CGPoint(x: mergeX, y: bottomY))
+            bottomPath.addLine(to: CGPoint(x: mergeX, y: midY))
+            context.stroke(
+                bottomPath,
+                with: .color(isBottomActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            )
+
+            // Output line from merge point to next node
+            var outPath = Path()
+            outPath.move(to: CGPoint(x: mergeX, y: midY))
+            outPath.addLine(to: CGPoint(x: size.width, y: midY))
+            context.stroke(
+                outPath,
+                with: .color(isMergeActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round)
+            )
+        }
+        .frame(width: mergeWidth + outputWidth, height: (nodeHeight * 2) + spacing)
+    }
+}
+
+// MARK: - Debug View
+
 struct PipelineMetricsDebugView: View {
     @Environment(AppState.self) private var appState
 
@@ -160,7 +326,7 @@ struct PipelineMetricsDebugView: View {
             }
             .padding()
             .background(KoeColors.background)
-            .frame(width: 400)
+            .frame(width: 500)
         }
     }
 

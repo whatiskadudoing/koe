@@ -21,6 +21,9 @@ public final class AppState {
         }
     }
 
+    /// Whether the current recording was triggered by voice command (vs hotkey)
+    public var isVoiceCommandTriggered: Bool = false
+
     public var currentTranscription: String = ""
     public var audioLevel: Float = 0.0
 

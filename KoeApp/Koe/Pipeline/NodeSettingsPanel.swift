@@ -13,9 +13,13 @@ struct NodeSettingsContent: View {
         @Bindable var appState = appState
 
         switch stage {
-        case .trigger:
-            TriggerSettings(appState: appState)
-        case .transcription:
+        case .hotkeyTrigger:
+            HotkeyTriggerContent(appState: appState)
+        case .voiceTrigger:
+            VoiceCommandTriggerContent(appState: appState)
+        case .recorder:
+            RecorderSettings(appState: appState)
+        case .transcribe:
             TranscribeSettings(appState: appState)
         case .improve:
             ImproveSettings(appState: appState)
@@ -80,6 +84,55 @@ struct TranscribeSettings: View {
                     .font(.system(size: 10))
                     .foregroundColor(appState.isModelLoaded ? .green : KoeColors.textLight)
                 Text(appState.isModelLoaded ? "Model loaded" : "Loading model...")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textTertiary)
+            }
+        }
+    }
+}
+
+// MARK: - Recorder Settings
+
+struct RecorderSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Recording behavior info
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Recording Behavior")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(KoeColors.textTertiary)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "command")
+                            .font(.system(size: 10))
+                            .foregroundColor(KoeColors.accent)
+                        Text("Hotkey: Records while key is held")
+                            .font(.system(size: 11))
+                            .foregroundColor(KoeColors.textSecondary)
+                    }
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 10))
+                            .foregroundColor(KoeColors.accent)
+                        Text("Voice: Records until silence detected")
+                            .font(.system(size: 11))
+                            .foregroundColor(KoeColors.textSecondary)
+                    }
+                }
+            }
+
+            Divider()
+
+            // Audio level indicator
+            HStack(spacing: 6) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 10))
+                    .foregroundColor(KoeColors.textLight)
+                Text("Audio level: \(Int(appState.audioLevel * 100))%")
                     .font(.system(size: 11))
                     .foregroundColor(KoeColors.textTertiary)
             }
@@ -454,22 +507,32 @@ struct SettingsToneChip: View {
 #Preview {
     VStack(spacing: 20) {
         SettingsModal(
+            title: "Hotkey Settings",
+            icon: "command",
+            iconColor: KoeColors.accent,
+            onClose: {}
+        ) {
+            NodeSettingsContent(stage: .hotkeyTrigger)
+                .environment(AppState.shared)
+        }
+
+        SettingsModal(
+            title: "Recorder Settings",
+            icon: "mic",
+            iconColor: KoeColors.stateRecording,
+            onClose: {}
+        ) {
+            NodeSettingsContent(stage: .recorder)
+                .environment(AppState.shared)
+        }
+
+        SettingsModal(
             title: "Improve Settings",
             icon: "sparkles",
             iconColor: KoeColors.stateRefining,
             onClose: {}
         ) {
             NodeSettingsContent(stage: .improve)
-                .environment(AppState.shared)
-        }
-
-        SettingsModal(
-            title: "Trigger Settings",
-            icon: "bolt.circle",
-            iconColor: KoeColors.accent,
-            onClose: {}
-        ) {
-            NodeSettingsContent(stage: .trigger)
                 .environment(AppState.shared)
         }
     }

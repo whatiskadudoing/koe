@@ -4,13 +4,14 @@ import KoeUI
 /// Connecting line between pipeline nodes
 struct PipelineConnector: View {
     let isActive: Bool
+    var color: Color = KoeColors.accent
 
-    private let width: CGFloat = 16
+    private let width: CGFloat = 20
     private let height: CGFloat = 2
 
     var body: some View {
         Rectangle()
-            .fill(isActive ? KoeColors.accent.opacity(0.4) : KoeColors.textLighter.opacity(0.3))
+            .fill(isActive ? color : KoeColors.textLighter.opacity(0.4))
             .frame(width: width, height: height)
     }
 }

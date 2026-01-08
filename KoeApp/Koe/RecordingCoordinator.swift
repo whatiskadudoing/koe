@@ -8,6 +8,7 @@ import KoeHotkey
 import KoeCore
 import KoeRefinement
 import KoePipeline
+import KoeCommands
 
 /// Coordinates recording, transcription, and text insertion
 /// This replaces the monolithic RecordingService with a clean, modular approach
@@ -32,11 +33,35 @@ public final class RecordingCoordinator {
     public private(set) var audioLevel: Float = 0.0
     public private(set) var currentTranscription: String = ""
 
+    /// True when pipeline is processing (transcribing/refining/typing)
+    /// Prevents new recordings until the entire flow completes
+    public private(set) var isPipelineProcessing = false
+
     // Recording state
     private var recordingStartTime: Date?
     private var levelTimer: Timer?
     private var streamingTimer: Timer?
+    private var vadMonitorTimer: Timer?
     private var isTranscribing = false
+
+    // VAD state for voice command recordings
+    private var isSpeaking = false
+    private var silenceStartTime: Date?
+    private var speechStartIndex: Int = 0
+    private var totalSamplesRecorded: Int = 0
+    private var consecutiveNonUserVoiceCount: Int = 0
+
+    // Voice verifier for checking if speech is from trained user
+    private let voiceVerifier = VoiceVerifier()
+    private let voiceProfileManager = VoiceProfileManager()
+
+    // VAD processor with longer timeout for voice commands (3 seconds to allow thinking)
+    private let voiceCommandVADProcessor = VADProcessor(
+        silenceThreshold: 0.012,
+        silenceDuration: 3.0,  // Longer timeout for voice commands
+        minSpeechDuration: 0.5,
+        sampleRate: 16000
+    )
 
     // Transcription state
     private var accumulatedTranscription = ""
@@ -226,7 +251,13 @@ public final class RecordingCoordinator {
             return
         }
 
-        guard !isRecording else { return }
+        // Prevent starting a new recording if currently recording OR if pipeline is still processing
+        guard !isRecording && !isPipelineProcessing else {
+            if isPipelineProcessing {
+                logger.info("Ignoring start - pipeline still processing")
+            }
+            return
+        }
 
         logger.info("Starting recording - mode: \(mode.rawValue), language: \(language.code)")
 
@@ -256,6 +287,11 @@ public final class RecordingCoordinator {
                 startStreamingTimer(language: language)
             }
 
+            // If triggered by voice command, start VAD monitoring with voice verification
+            if AppState.shared.isVoiceCommandTriggered {
+                startVoiceAwareVADMonitoring(language: language)
+            }
+
         } catch {
             logger.error("Failed to start recording", error: error)
             AppState.shared.errorMessage = "Recording failed: \(error.localizedDescription)"
@@ -270,6 +306,8 @@ public final class RecordingCoordinator {
         // Stop timers
         levelTimer?.invalidate()
         levelTimer = nil
+        vadMonitorTimer?.invalidate()
+        vadMonitorTimer = nil
         streamingTimer?.invalidate()
         streamingTimer = nil
 
@@ -322,6 +360,94 @@ public final class RecordingCoordinator {
                 NotificationCenter.default.post(name: .audioLevelChanged, object: self.audioLevel)
             }
         }
+    }
+
+    /// Start VAD monitoring with voice verification for voice command triggered recordings
+    /// Automatically stops recording when silence or non-user voice is detected
+    private func startVoiceAwareVADMonitoring(language: Language) {
+        // Reset VAD state
+        isSpeaking = true  // Assume speaking since they just said the command
+        silenceStartTime = nil
+        speechStartIndex = 0
+        totalSamplesRecorded = 0
+        consecutiveNonUserVoiceCount = 0
+
+        // Load user's voice profile into verifier
+        if let profile = voiceProfileManager.currentProfile {
+            voiceVerifier.userEmbedding = profile.embedding
+            voiceVerifier.threshold = 0.5  // Lower threshold for continuous verification
+        }
+
+        logger.info("Starting voice-aware VAD monitoring for voice command recording")
+
+        // Check every 200ms
+        vadMonitorTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self, self.isRecording else { return }
+
+                // Get recent audio samples (last ~200ms = 3200 samples at 16kHz)
+                let samples = self.audioRecorder.getRecentSamples(count: 3200)
+                guard samples.count > 0 else { return }
+
+                self.totalSamplesRecorded += samples.count
+
+                // Check VAD result (using voice command VAD with longer silence timeout)
+                let vadResult = self.voiceCommandVADProcessor.analyze(
+                    samples: samples,
+                    isSpeaking: self.isSpeaking,
+                    speechStartIndex: self.speechStartIndex,
+                    silenceStartTime: self.silenceStartTime,
+                    totalSamples: self.totalSamplesRecorded
+                )
+
+                switch vadResult {
+                case .speaking:
+                    self.isSpeaking = true
+                    self.silenceStartTime = nil
+
+                    // Check if this is the user's voice
+                    let (isUserVoice, _) = self.voiceVerifier.verify(samples: samples)
+                    if !isUserVoice {
+                        self.consecutiveNonUserVoiceCount += 1
+                        self.logger.debug("Non-user voice detected (\(self.consecutiveNonUserVoiceCount)/5)")
+
+                        // If 5 consecutive checks (~1 second) show non-user voice, stop
+                        if self.consecutiveNonUserVoiceCount >= 5 {
+                            self.logger.info("Stopping: non-user voice detected for too long")
+                            await self.stopVoiceCommandRecording(language: language)
+                        }
+                    } else {
+                        self.consecutiveNonUserVoiceCount = 0
+                    }
+
+                case .silence(let startedAt):
+                    // Keep isSpeaking = true so VAD can detect speechEnded
+                    // Only update silenceStartTime
+                    if self.silenceStartTime == nil {
+                        self.silenceStartTime = startedAt
+                        self.logger.debug("Silence started")
+                    }
+
+                case .speechEnded:
+                    // VAD detected end of speech - stop recording
+                    self.logger.info("Stopping: VAD detected end of speech")
+                    self.isSpeaking = false
+                    await self.stopVoiceCommandRecording(language: language)
+                }
+            }
+        }
+    }
+
+    private func stopVoiceCommandRecording(language: Language) async {
+        // Stop the VAD monitor timer
+        vadMonitorTimer?.invalidate()
+        vadMonitorTimer = nil
+
+        // Stop recording
+        await stopRecording(mode: .vad, language: language)
+
+        // Clear voice command flag
+        AppState.shared.isVoiceCommandTriggered = false
     }
 
     private func startStreamingTimer(language: Language) {
@@ -383,6 +509,10 @@ public final class RecordingCoordinator {
             logger.info("Audio too short: \(samples.count) samples")
             return
         }
+
+        // Mark pipeline as processing to prevent new recordings
+        isPipelineProcessing = true
+        defer { isPipelineProcessing = false }
 
         do {
             _ = try await audioRecorder.stopRecording()

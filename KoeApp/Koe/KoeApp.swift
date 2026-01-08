@@ -142,6 +142,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // Observe voice command start recording notification
+        NotificationCenter.default.addObserver(
+            forName: .startRecordingFromVoiceCommand,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                // Mark this as a voice command triggered recording
+                AppState.shared.isVoiceCommandTriggered = true
+
+                // Start recording with VAD mode (voice command uses silence detection)
+                let langCode = AppState.shared.selectedLanguage
+                let language = Language.all.first { $0.code == langCode } ?? .auto
+                await self.coordinator.startRecording(mode: .vad, language: language)
+                logger.notice("[AppDelegate] Voice command triggered recording started")
+            }
+        }
+
+        // Observe voice command stop recording notification
+        NotificationCenter.default.addObserver(
+            forName: .stopRecordingFromVoiceCommand,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                let langCode = AppState.shared.selectedLanguage
+                let language = Language.all.first { $0.code == langCode } ?? .auto
+                await self.coordinator.stopRecording(mode: .vad, language: language)
+                AppState.shared.isVoiceCommandTriggered = false
+                logger.notice("[AppDelegate] Voice command triggered recording stopped")
+            }
+        }
+
         // Start listening if enabled and profile exists
         Task {
             await updateCommandListening()
