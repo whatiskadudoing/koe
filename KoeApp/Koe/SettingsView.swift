@@ -5,7 +5,6 @@ import KoeCommands
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
-    @State private var isLoadingModel = false
     @State private var isTestingConnection = false
     @State private var availableModels: [OllamaModel] = []
     @State private var showVoiceTraining = false
@@ -33,80 +32,6 @@ struct SettingsView: View {
                             .tracking(2)
                     }
                     .padding(.top, 8)
-
-                    // Transcription section
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Transcription")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(lightGray)
-                            .textCase(.uppercase)
-                            .tracking(1)
-
-                        VStack(spacing: 0) {
-                            // Model picker
-                            HStack {
-                                Text("Model")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(accentColor)
-
-                                Spacer()
-
-                                Picker("", selection: $appState.selectedModel) {
-                                    ForEach(KoeModel.allCases, id: \.rawValue) { model in
-                                        Text(model.displayName).tag(model.rawValue)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(accentColor)
-                                .onChange(of: appState.selectedModel) { _, newModel in
-                                    reloadModel(newModel)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-
-                            if isLoadingModel && !appState.isModelLoaded {
-                                Divider()
-                                    .padding(.horizontal, 16)
-
-                                HStack(spacing: 10) {
-                                    ProgressView()
-                                        .scaleEffect(0.7)
-                                    Text("Loading model...")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(lightGray)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                            }
-
-                            Divider()
-                                .padding(.horizontal, 16)
-
-                            // Language picker
-                            HStack {
-                                Text("Language")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(accentColor)
-
-                                Spacer()
-
-                                Picker("", selection: $appState.selectedLanguage) {
-                                    ForEach(Language.all, id: \.code) { lang in
-                                        Text("\(lang.flag) \(lang.name)").tag(lang.code)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(accentColor)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                        }
-                        .background(cardBackground)
-                        .cornerRadius(12)
-                        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
-                    }
 
                     // Hotkey section
                     HotkeySettingsSection(
@@ -254,22 +179,6 @@ struct SettingsView: View {
                     availableModels = service.availableModels
                 }
                 isTestingConnection = false
-            }
-        }
-    }
-
-    private func reloadModel(_ modelName: String) {
-        isLoadingModel = true
-        appState.isModelLoaded = false
-
-        // Post notification to reload model
-        NotificationCenter.default.post(name: .reloadModel, object: modelName)
-
-        // The loading state will be updated when the model finishes loading
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            // Check if still loading after a delay
-            if !appState.isModelLoaded {
-                // Model is still loading, keep showing indicator
             }
         }
     }
@@ -815,6 +724,7 @@ struct VoiceCommandsSettingsSection: View {
     let lightGray: Color
     let cardBackground: Color
     @Binding var showVoiceTraining: Bool
+    @State private var showAdvancedSettings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -901,10 +811,210 @@ struct VoiceCommandsSettingsSection: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                 }
+
+                // Advanced Settings (Experimental) - always visible
+                Divider()
+                    .padding(.horizontal, 16)
+
+                // Advanced settings toggle
+                Button(action: { withAnimation { showAdvancedSettings.toggle() } }) {
+                    HStack {
+                        Image(systemName: "gearshape.2")
+                            .font(.system(size: 12))
+                            .foregroundColor(lightGray)
+
+                        Text("Experimental Settings")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(lightGray)
+
+                        Spacer()
+
+                        Image(systemName: showAdvancedSettings ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10))
+                            .foregroundColor(lightGray)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+
+                if showAdvancedSettings {
+                    VoiceCommandAdvancedSettings(
+                        appState: appState,
+                        accentColor: accentColor,
+                        lightGray: lightGray
+                    )
+                }
             }
             .background(cardBackground)
             .cornerRadius(12)
             .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+        }
+    }
+}
+
+// MARK: - Voice Command Advanced Settings
+
+struct VoiceCommandAdvancedSettings: View {
+    @Bindable var appState: AppState
+    let accentColor: Color
+    let lightGray: Color
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .padding(.horizontal, 16)
+
+            // Phase 1: VAD Settings
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Phase 1: Voice Activity Detection")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(lightGray)
+                    .textCase(.uppercase)
+
+                // VAD Enable toggle
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Enable VAD")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(accentColor)
+                        Text("Skip non-speech audio")
+                            .font(.system(size: 10))
+                            .foregroundColor(lightGray)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $appState.voiceCommandSettings.vadEnabled)
+                        .toggleStyle(.switch)
+                        .scaleEffect(0.8)
+                        .tint(accentColor)
+                }
+
+                // VAD Threshold slider
+                if appState.voiceCommandSettings.vadEnabled {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("VAD Threshold")
+                                .font(.system(size: 12))
+                                .foregroundColor(accentColor)
+                            Spacer()
+                            Text(String(format: "%.2f", appState.voiceCommandSettings.vadThreshold))
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(lightGray)
+                        }
+                        Slider(value: $appState.voiceCommandSettings.vadThreshold, in: 0.1...0.8, step: 0.05)
+                            .tint(accentColor)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+                .padding(.horizontal, 16)
+
+            // Phase 2: Confidence & Trigger Settings
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Phase 2: Detection Settings")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(lightGray)
+                    .textCase(.uppercase)
+
+                // Confidence threshold slider
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Confidence Threshold")
+                            .font(.system(size: 12))
+                            .foregroundColor(accentColor)
+                        Spacer()
+                        Text(String(format: "%.0f%%", appState.voiceCommandSettings.confidenceThreshold * 100))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(lightGray)
+                    }
+                    Slider(value: $appState.voiceCommandSettings.confidenceThreshold, in: 0.5...0.95, step: 0.05)
+                        .tint(accentColor)
+                    Text("Higher = fewer false positives, may miss some valid commands")
+                        .font(.system(size: 9))
+                        .foregroundColor(lightGray.opacity(0.8))
+                }
+
+                // Silence confirmation delay
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Silence Delay")
+                            .font(.system(size: 12))
+                            .foregroundColor(accentColor)
+                        Spacer()
+                        Text(String(format: "%.1fs", appState.voiceCommandSettings.silenceConfirmationDelay))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(lightGray)
+                    }
+                    Slider(value: $appState.voiceCommandSettings.silenceConfirmationDelay, in: 0.5...4.0, step: 0.5)
+                        .tint(accentColor)
+                    Text("Wait time after trigger word before executing")
+                        .font(.system(size: 9))
+                        .foregroundColor(lightGray.opacity(0.8))
+                }
+
+                // Extended trigger phrase
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Extended Trigger")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(accentColor)
+                        Text("Use \"hey koe\" instead of \"kon\"")
+                            .font(.system(size: 10))
+                            .foregroundColor(lightGray)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $appState.voiceCommandSettings.useExtendedTrigger)
+                        .toggleStyle(.switch)
+                        .scaleEffect(0.8)
+                        .tint(accentColor)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+                .padding(.horizontal, 16)
+
+            // Phase 3: ECAPA-TDNN (WeSpeaker Neural Network)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Phase 3: Advanced Model")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(lightGray)
+                    .textCase(.uppercase)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("ECAPA-TDNN Model")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(accentColor)
+                            Text("Experimental")
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.purple)
+                                .cornerRadius(4)
+                        }
+                        Text("256-dim WeSpeaker neural embeddings for better accuracy")
+                            .font(.system(size: 10))
+                            .foregroundColor(lightGray)
+                    }
+                    Spacer()
+                    Toggle("", isOn: $appState.voiceCommandSettings.useECAPATDNN)
+                        .toggleStyle(.switch)
+                        .scaleEffect(0.8)
+                        .tint(accentColor)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .onChange(of: appState.voiceCommandSettings) { _, newSettings in
+            newSettings.save()
         }
     }
 }

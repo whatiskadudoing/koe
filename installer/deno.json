@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "exports": "./mod.ts",
   "imports": {
-    "@cliffy/prompt": "https://deno.land/x/cliffy@v0.25.7/prompt/mod.ts",
     "@cliffy/colors": "https://deno.land/x/cliffy@v0.25.7/ansi/colors.ts"
   },
   "tasks": {

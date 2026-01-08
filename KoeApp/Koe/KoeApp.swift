@@ -66,6 +66,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Voice command detector
     private let commandDetector = CommandDetector()
 
+    // Trigger system
+    private var triggerManager: TriggerManager?
+    private var hotkeyTrigger: HotkeyTrigger?
+
     // Use the shared coordinator
     private var coordinator: RecordingCoordinator {
         RecordingCoordinator.shared
@@ -108,6 +112,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             logger.notice("[AppDelegate] Voice profile reloaded after training")
         }
 
+        // Observe voice command settings changes
+        NotificationCenter.default.addObserver(
+            forName: .voiceCommandSettingsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            // Sync settings from AppState to CommandDetector
+            let newSettings = AppState.shared.voiceCommandSettings
+            self.commandDetector.settings = newSettings
+            logger.notice("[AppDelegate] Voice command settings updated: VAD=\(newSettings.vadEnabled), threshold=\(newSettings.confidenceThreshold)")
+        }
+
         // Set up command handler
         commandDetector.onCommandDetected = { result in
             print("[CommandDetector] Command detected: \(result.command.trigger) (confidence: \(result.confidence))")
@@ -133,7 +150,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        coordinator.unregisterHotkey()
+        // Clean up trigger system
+        Task {
+            await triggerManager?.unregisterAll()
+        }
         commandDetector.stopDetection()
         menuBarAnimationTimer?.invalidate()
     }
@@ -141,73 +161,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        // Create menu
+        // Create simplified menu - just Open and Quit
         let menu = NSMenu()
-        menu.delegate = self
-
-        // Language selection submenu
-        let languageMenu = NSMenu()
-        let languages = [
-            ("en", "🇺🇸 English"),
-            ("es", "🇪🇸 Español"),
-            ("pt", "🇧🇷 Português"),
-            ("auto", "🌐 Auto-detect")
-        ]
-
-        let currentLanguage = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto"
-        for (code, name) in languages {
-            let item = NSMenuItem(title: name, action: #selector(selectLanguage(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = code
-            item.state = (code == currentLanguage) ? .on : .off
-            languageMenu.addItem(item)
-        }
-
-        let languageMenuItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
-        languageMenuItem.submenu = languageMenu
-        menu.addItem(languageMenuItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // Model selection submenu
-        let modelMenu = NSMenu()
-        let models = [
-            ("tiny", "Tiny - Fastest"),
-            ("base", "Base - Fast"),
-            ("small", "Small - Balanced"),
-            ("medium", "Medium - Accurate"),
-            ("large-v3", "Large - Best")
-        ]
-
-        let currentModel = UserDefaults.standard.string(forKey: "selectedModel") ?? "tiny"
-        for (id, name) in models {
-            let item = NSMenuItem(title: name, action: #selector(selectModel(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = id
-            item.state = (id == currentModel) ? .on : .off
-            modelMenu.addItem(item)
-        }
-
-        let modelMenuItem = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
-        modelMenuItem.submenu = modelMenu
-        menu.addItem(modelMenuItem)
-
-        // Info about multilingual support
-        let infoItem = NSMenuItem(title: "✨ All models support all languages", action: nil, keyEquivalent: "")
-        infoItem.isEnabled = false
-        menu.addItem(infoItem)
-
-        menu.addItem(NSMenuItem.separator())
 
         // Open window
         let openItem = NSMenuItem(title: "Open Koe", action: #selector(togglePopover), keyEquivalent: "")
         openItem.target = self
         menu.addItem(openItem)
-
-        // Settings
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
-        settingsItem.target = self
-        menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -294,67 +254,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func handleHotkeyChanged() {
-        coordinator.updateHotkey()
-    }
-
-    @objc func selectLanguage(_ sender: NSMenuItem) {
-        guard let langCode = sender.representedObject as? String else { return }
-
-        // Update checkmarks in language menu
-        if let languageMenu = sender.menu {
-            for item in languageMenu.items {
-                item.state = (item.representedObject as? String == langCode) ? .on : .off
-            }
-        }
-
-        AppState.shared.selectedLanguage = langCode
-    }
-
-    @objc func selectModel(_ sender: NSMenuItem) {
-        guard let modelId = sender.representedObject as? String else { return }
-
-        // Update checkmarks in model menu
-        if let modelMenu = sender.menu {
-            for item in modelMenu.items {
-                item.state = (item.representedObject as? String == modelId) ? .on : .off
-            }
-        }
-
-        // Don't switch if already on this model
-        guard modelId != AppState.shared.selectedModel else { return }
-
-        AppState.shared.selectedModel = modelId
-        NotificationCenter.default.post(name: .reloadModel, object: modelId)
-    }
-
-    @objc func openSettings() {
-        // Try multiple approaches for macOS compatibility
-        if #available(macOS 14.0, *) {
-            // Modern approach for macOS 14+
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        }
-
-        // Fallback: Try the older selector
-        if NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil) {
-            return
-        }
-
-        // Final fallback: Use keyboard shortcut simulation
-        let event = NSEvent.keyEvent(
-            with: .keyDown,
-            location: .zero,
-            modifierFlags: .command,
-            timestamp: 0,
-            windowNumber: 0,
-            context: nil,
-            characters: ",",
-            charactersIgnoringModifiers: ",",
-            isARepeat: false,
-            keyCode: 43
+        // Update the hotkey trigger with new settings
+        hotkeyTrigger?.updateShortcut(
+            keyCode: AppState.shared.hotkeyKeyCode,
+            modifiers: AppState.shared.hotkeyModifiers
         )
-        if let event = event {
-            NSApp.sendEvent(event)
-        }
+        logger.notice("Hotkey updated: \(AppState.shared.hotkeyDisplayString)")
     }
 
     @objc func quitApp() {
@@ -405,7 +310,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setupGlobalHotkey() {
-        coordinator.setupHotkey()
+        // Use the new trigger system
+        Task {
+            await setupTriggers()
+        }
+    }
+
+    private func setupTriggers() async {
+        let manager = TriggerManager()
+        let hotkeyManager = KoeHotkeyManager()
+        let trigger = HotkeyTrigger(hotkeyManager: hotkeyManager)
+
+        // Configure shortcut from AppState
+        trigger.updateShortcut(
+            keyCode: AppState.shared.hotkeyKeyCode,
+            modifiers: AppState.shared.hotkeyModifiers
+        )
+
+        // Register the trigger
+        do {
+            try await manager.register(trigger)
+        } catch {
+            logger.error("Failed to register hotkey trigger: \(error)")
+        }
+
+        // Wire up coordinator to trigger events
+        coordinator.subscribeTo(triggerManager: manager)
+
+        // Store references
+        self.triggerManager = manager
+        self.hotkeyTrigger = trigger
+
+        logger.notice("Trigger system initialized with hotkey: \(AppState.shared.hotkeyDisplayString)")
     }
 
     func loadModel() {
@@ -587,30 +523,6 @@ extension Notification.Name {
     // Voice commands
     static let commandListeningChanged = Notification.Name("commandListeningChanged")
     static let voiceProfileTrained = Notification.Name("voiceProfileTrained")
+    static let voiceCommandSettingsChanged = Notification.Name("voiceCommandSettingsChanged")
 }
 
-// MARK: - NSMenuDelegate
-extension AppDelegate: NSMenuDelegate {
-    func menuWillOpen(_ menu: NSMenu) {
-        // Update checkmarks when menu opens to ensure they reflect current state
-        let currentLanguage = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto"
-        let currentModel = UserDefaults.standard.string(forKey: "selectedModel") ?? "tiny"
-
-        for item in menu.items {
-            if let submenu = item.submenu {
-                // Language submenu
-                if item.title == "Language" {
-                    for langItem in submenu.items {
-                        langItem.state = (langItem.representedObject as? String == currentLanguage) ? .on : .off
-                    }
-                }
-                // Model submenu
-                if item.title == "Model" {
-                    for modelItem in submenu.items {
-                        modelItem.state = (modelItem.representedObject as? String == currentModel) ? .on : .off
-                    }
-                }
-            }
-        }
-    }
-}

@@ -107,6 +107,33 @@ public final class RecordingCoordinator {
         hotkeyManager.unregister()
     }
 
+    // MARK: - Trigger Subscription
+
+    private var triggerManager: TriggerManager?
+
+    /// Subscribe to a TriggerManager for recording control
+    /// This is the preferred way to wire up triggers instead of direct hotkey setup
+    public func subscribeTo(triggerManager: TriggerManager) {
+        self.triggerManager = triggerManager
+
+        triggerManager.onEvent { [weak self] event in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let mode = TranscriptionMode(rawValue: AppState.shared.transcriptionMode) ?? .vad
+                let langCode = AppState.shared.selectedLanguage
+                let language = Language.all.first { $0.code == langCode } ?? .auto
+
+                switch event {
+                case .start:
+                    await self.startRecording(mode: mode, language: language)
+                case .stop:
+                    await self.stopRecording(mode: mode, language: language)
+                }
+            }
+        }
+        logger.info("Subscribed to TriggerManager")
+    }
+
     // MARK: - Deferred Initialization
 
     /// Called when app reaches .ready state to finish initialization
@@ -148,7 +175,7 @@ public final class RecordingCoordinator {
     }
 
     public func loadModel(name: String) async {
-        let model = KoeModel(rawValue: name) ?? .tiny
+        let model = KoeModel(rawValue: name) ?? .fast
         await loadModel(model)
     }
 

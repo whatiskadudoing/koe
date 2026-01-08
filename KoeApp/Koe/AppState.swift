@@ -55,8 +55,26 @@ public final class AppState {
     // Settings - stored in UserDefaults
     @ObservationIgnored
     private var _selectedModel: String {
-        get { UserDefaults.standard.string(forKey: "selectedModel") ?? "tiny" }
+        get {
+            let stored = UserDefaults.standard.string(forKey: "selectedModel") ?? KoeModel.fast.rawValue
+            return Self.migrateModelIfNeeded(stored)
+        }
         set { UserDefaults.standard.set(newValue, forKey: "selectedModel") }
+    }
+
+    /// Migrate old model names to new turbo models
+    private static func migrateModelIfNeeded(_ modelName: String) -> String {
+        switch modelName {
+        case "tiny", "base", "small":
+            return KoeModel.fast.rawValue
+        case "medium":
+            return KoeModel.balanced.rawValue
+        case "large-v3":
+            return KoeModel.best.rawValue
+        default:
+            // Already a new model name or unknown
+            return modelName
+        }
     }
 
     @ObservationIgnored
@@ -274,6 +292,14 @@ public final class AppState {
         voiceProfile != nil
     }
 
+    /// Voice command settings (experimental features)
+    public var voiceCommandSettings: VoiceCommandSettings = .load() {
+        didSet {
+            voiceCommandSettings.save()
+            NotificationCenter.default.post(name: .voiceCommandSettingsChanged, object: nil)
+        }
+    }
+
     /// Reload voice profile from storage (call on app launch or after external changes)
     public func reloadVoiceProfile() {
         let loaded = VoiceProfileManager.shared.currentProfile
@@ -286,7 +312,7 @@ public final class AppState {
 
     // Computed properties for typed access
     public var currentKoeModel: KoeModel {
-        KoeModel(rawValue: selectedModel) ?? .tiny
+        KoeModel(rawValue: selectedModel) ?? .fast
     }
 
     public var currentLanguage: Language {
