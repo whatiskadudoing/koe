@@ -6,6 +6,7 @@ import KoeTranscription
 import KoeTextInsertion
 import KoeHotkey
 import KoeCore
+import KoeRefinement
 
 /// Coordinates recording, transcription, and text insertion
 /// This replaces the monolithic RecordingService with a clean, modular approach
@@ -23,6 +24,7 @@ public final class RecordingCoordinator {
     private let textInserter: TextInsertionServiceImpl
     private let vadProcessor: VADProcessor
     private let hotkeyManager: KoeHotkeyManager
+    private let refinementService: MLXRefinementService
 
     // MARK: - State
     public private(set) var isRecording = false
@@ -48,13 +50,15 @@ public final class RecordingCoordinator {
         transcriber: WhisperKitTranscriber = WhisperKitTranscriber(),
         textInserter: TextInsertionServiceImpl = TextInsertionServiceImpl(),
         vadProcessor: VADProcessor = VADProcessor(),
-        hotkeyManager: KoeHotkeyManager = KoeHotkeyManager()
+        hotkeyManager: KoeHotkeyManager = KoeHotkeyManager(),
+        refinementService: MLXRefinementService = MLXRefinementService()
     ) {
         self.audioRecorder = audioRecorder
         self.transcriber = transcriber
         self.textInserter = textInserter
         self.vadProcessor = vadProcessor
         self.hotkeyManager = hotkeyManager
+        self.refinementService = refinementService
     }
 
     // MARK: - Hotkey Setup
@@ -135,6 +139,44 @@ public final class RecordingCoordinator {
     public func unloadModel() {
         transcriber.unloadModel()
         AppState.shared.isModelLoaded = false
+    }
+
+    // MARK: - Refinement Model Loading
+
+    public var isRefinementModelLoaded: Bool {
+        refinementService.isReady
+    }
+
+    public var refinementModelProgress: Double {
+        refinementService.loadingProgress
+    }
+
+    public func loadRefinementModel() async {
+        guard AppState.shared.isRefinementEnabled else {
+            logger.info("Refinement is disabled, skipping model load")
+            return
+        }
+
+        logger.info("Loading refinement model")
+        do {
+            try await refinementService.loadModel(.default)
+
+            if refinementService.isReady {
+                AppState.shared.isRefinementModelLoaded = true
+                logger.info("Refinement model loaded successfully")
+            } else {
+                logger.warning("loadRefinementModel completed but service.isReady is false")
+                AppState.shared.isRefinementModelLoaded = false
+            }
+        } catch {
+            logger.error("Failed to load refinement model", error: error)
+            AppState.shared.isRefinementModelLoaded = false
+        }
+    }
+
+    public func unloadRefinementModel() {
+        refinementService.unloadModel()
+        AppState.shared.isRefinementModelLoaded = false
     }
 
     // MARK: - Recording
@@ -304,59 +346,144 @@ public final class RecordingCoordinator {
             return
         }
 
-        let startTime = Date()
+        // Create processing result to track pipeline
+        var processingResult = ProcessingResult(id: UUID(), timestamp: Date(), steps: [])
+
+        // Step 1: Transcription
+        let transcriptionStep = ProcessingStep(
+            name: "transcription",
+            input: .audio(sampleCount: samples.count, sampleRate: 16000),
+            status: .running,
+            metadata: [
+                "model": AppState.shared.selectedModel,
+                "language": language.code
+            ]
+        )
+        processingResult.steps.append(transcriptionStep)
 
         do {
             _ = try await audioRecorder.stopRecording()
 
             let lang = language.isAuto ? nil : language
-            let text = try await transcriber.transcribe(
+            let rawText = try await transcriber.transcribe(
                 samples: samples,
                 sampleRate: 16000,
                 language: lang
             )
 
-            if !text.isEmpty {
-                let cleanText = text.trimmingCharacters(in: .whitespaces)
-                var insertionSucceeded = false
+            // Update transcription step
+            let cleanRawText = rawText.trimmingCharacters(in: .whitespaces)
+            processingResult.steps[0].complete(output: cleanRawText)
+
+            guard !cleanRawText.isEmpty else {
+                AppState.shared.addProcessingResult(processingResult)
+                return
+            }
+
+            // Step 2: Refinement (if enabled and model ready)
+            var finalText = cleanRawText
+
+            if AppState.shared.isRefinementEnabled && refinementService.isReady {
+                let refinementStep = ProcessingStep(
+                    name: "refinement",
+                    input: .text(cleanRawText),
+                    status: .running,
+                    metadata: ["model": "qwen3-1.7b", "backend": "mlx"]
+                )
+                processingResult.steps.append(refinementStep)
 
                 do {
-                    if mode == .realtime {
-                        // Type only new text not already typed
-                        let newText = getNewText(previous: lastTypedText, current: cleanText)
-                        if !newText.isEmpty {
-                            try await textInserter.insertText(newText)
-                            insertionSucceeded = true
-                        }
-                    } else {
-                        // VAD mode - paste all text at once
-                        try await textInserter.insertText(cleanText)
+                    // Apply refinement with 5 second timeout
+                    let refinedText = try await withTimeout(seconds: 5) {
+                        try await self.refinementService.refine(text: cleanRawText)
+                    }
+                    finalText = refinedText
+                    processingResult.steps[1].complete(output: refinedText)
+                    logger.info("Text refined successfully")
+                } catch {
+                    // Refinement failed or timed out - use raw text
+                    processingResult.steps[1].fail(error: error.localizedDescription)
+                    logger.warning("Refinement failed, using raw text: \(error.localizedDescription)")
+                }
+            } else if AppState.shared.isRefinementEnabled && !refinementService.isReady {
+                // Refinement enabled but model not ready - skip
+                var refinementStep = ProcessingStep(
+                    name: "refinement",
+                    input: .text(cleanRawText),
+                    status: .skipped,
+                    metadata: ["reason": "model_not_loaded"]
+                )
+                refinementStep.skip()
+                processingResult.steps.append(refinementStep)
+            }
+
+            // Insert text
+            var insertionSucceeded = false
+
+            do {
+                if mode == .realtime {
+                    // Type only new text not already typed
+                    let newText = getNewText(previous: lastTypedText, current: finalText)
+                    if !newText.isEmpty {
+                        try await textInserter.insertText(newText)
                         insertionSucceeded = true
                     }
-                } catch {
-                    logger.error("Text insertion failed", error: error)
-                    // Fallback: copy to clipboard
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(cleanText, forType: .string)
-                    AppState.shared.errorMessage = "Text copied to clipboard (press Cmd+V to paste)"
-                    NSSound(named: "Funk")?.play()
+                } else {
+                    // VAD mode - paste all text at once
+                    try await textInserter.insertText(finalText)
+                    insertionSucceeded = true
                 }
+            } catch {
+                logger.error("Text insertion failed", error: error)
+                // Fallback: copy to clipboard
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(finalText, forType: .string)
+                AppState.shared.errorMessage = "Text copied to clipboard (press Cmd+V to paste)"
+                NSSound(named: "Funk")?.play()
+            }
 
-                accumulatedTranscription = cleanText
-                currentTranscription = cleanText
+            accumulatedTranscription = finalText
+            currentTranscription = finalText
 
-                // Save to history
-                let duration = Date().timeIntervalSince(startTime)
-                AppState.shared.addTranscription(cleanText, duration: duration)
+            // Save processing result
+            AppState.shared.addProcessingResult(processingResult)
 
-                // Play success sound if insertion worked
-                if insertionSucceeded {
-                    NSSound(named: "Pop")?.play()
-                }
+            // Save to transcription history (using final text)
+            let duration = processingResult.totalDuration
+            AppState.shared.addTranscription(finalText, duration: duration)
+
+            // Play success sound if insertion worked
+            if insertionSucceeded {
+                NSSound(named: "Pop")?.play()
             }
         } catch {
+            // Mark transcription step as failed
+            processingResult.steps[0].fail(error: error.localizedDescription)
+            AppState.shared.addProcessingResult(processingResult)
+
             logger.error("Final transcription failed", error: error)
             AppState.shared.errorMessage = "Transcription failed: \(error.localizedDescription)"
+        }
+    }
+
+    /// Execute an async operation with a timeout
+    private func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw RefinementError.timeout
+            }
+
+            guard let result = try await group.next() else {
+                throw RefinementError.timeout
+            }
+
+            group.cancelAll()
+            return result
         }
     }
 

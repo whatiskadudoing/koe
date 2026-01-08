@@ -25,6 +25,10 @@ public final class AppState {
     public var isModelLoaded: Bool = false
     public var modelLoadingProgress: Double = 0.0
 
+    // Refinement model state
+    public var isRefinementModelLoaded: Bool = false
+    public var refinementModelProgress: Double = 0.0
+
     // Readiness state
     public var appReadinessState: AppReadinessState = .welcome
     public var hasMicrophonePermission: Bool = false
@@ -33,6 +37,7 @@ public final class AppState {
 
     // History
     public var transcriptionHistory: [Transcription] = []
+    public var processingHistory: [ProcessingResult] = []
 
     // Error handling
     public var errorMessage: String?
@@ -56,6 +61,18 @@ public final class AppState {
         set { UserDefaults.standard.set(newValue, forKey: "transcriptionMode") }
     }
 
+    @ObservationIgnored
+    private var _isRefinementEnabled: Bool {
+        get {
+            // Default to true if not set
+            if UserDefaults.standard.object(forKey: "isRefinementEnabled") == nil {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: "isRefinementEnabled")
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "isRefinementEnabled") }
+    }
+
     // Public accessors that trigger observation
     public var selectedModel: String {
         get { _selectedModel }
@@ -70,6 +87,11 @@ public final class AppState {
     public var transcriptionMode: String {
         get { _transcriptionMode }
         set { _transcriptionMode = newValue }
+    }
+
+    public var isRefinementEnabled: Bool {
+        get { _isRefinementEnabled }
+        set { _isRefinementEnabled = newValue }
     }
 
     // Computed properties for typed access
@@ -187,7 +209,19 @@ public final class AppState {
 
     public func clearHistory() {
         transcriptionHistory.removeAll()
+        processingHistory.removeAll()
         saveHistory()
+    }
+
+    public func addProcessingResult(_ result: ProcessingResult) {
+        processingHistory.insert(result, at: 0)
+
+        // Keep only last 50 entries
+        if processingHistory.count > 50 {
+            processingHistory = Array(processingHistory.prefix(50))
+        }
+
+        saveProcessingHistory()
     }
 
     private func loadHistory() {
@@ -197,11 +231,28 @@ public final class AppState {
             let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
             transcriptionHistory = history.filter { $0.timestamp > cutoff }
         }
+
+        loadProcessingHistory()
     }
 
     private func saveHistory() {
         if let data = try? JSONEncoder().encode(transcriptionHistory) {
             UserDefaults.standard.set(data, forKey: "transcriptionHistory")
+        }
+    }
+
+    private func loadProcessingHistory() {
+        if let data = UserDefaults.standard.data(forKey: "processingHistory"),
+           let history = try? JSONDecoder().decode([ProcessingResult].self, from: data) {
+            // Filter out entries older than 7 days
+            let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+            processingHistory = history.filter { $0.timestamp > cutoff }
+        }
+    }
+
+    private func saveProcessingHistory() {
+        if let data = try? JSONEncoder().encode(processingHistory) {
+            UserDefaults.standard.set(data, forKey: "processingHistory")
         }
     }
 }

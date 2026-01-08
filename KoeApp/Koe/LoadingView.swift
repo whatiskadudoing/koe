@@ -89,6 +89,9 @@ struct LoadingView: View {
         if !coordinator.isModelLoaded {
             Task {
                 await RecordingCoordinator.shared.loadModel(name: AppState.shared.selectedModel)
+
+                // Also load refinement model if enabled
+                await RecordingCoordinator.shared.loadRefinementModel()
             }
         }
     }

@@ -102,6 +102,73 @@ struct SettingsView: View {
                         .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
                     }
 
+                    // AI Refinement section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("AI Refinement")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(lightGray)
+                            .textCase(.uppercase)
+                            .tracking(1)
+
+                        VStack(spacing: 0) {
+                            // Enable toggle
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Text Improvement")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(accentColor)
+
+                                    Text("Fix grammar and remove filler words")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(lightGray)
+                                }
+
+                                Spacer()
+
+                                Toggle("", isOn: $appState.isRefinementEnabled)
+                                    .toggleStyle(.switch)
+                                    .tint(accentColor)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+
+                            if appState.isRefinementEnabled {
+                                Divider()
+                                    .padding(.horizontal, 16)
+
+                                HStack(spacing: 10) {
+                                    if appState.isRefinementModelLoaded {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.green)
+                                            .font(.system(size: 12))
+                                        Text("Model ready")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(lightGray)
+                                    } else if appState.refinementModelProgress > 0 {
+                                        ProgressView()
+                                            .scaleEffect(0.7)
+                                        Text("Loading model...")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(lightGray)
+                                    } else {
+                                        Image(systemName: "circle")
+                                            .foregroundColor(lightGray)
+                                            .font(.system(size: 12))
+                                        Text("Model not loaded")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(lightGray)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+                        }
+                        .background(cardBackground)
+                        .cornerRadius(12)
+                        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+                    }
+
                     // History section
                     VStack(alignment: .leading, spacing: 16) {
                         Text("History")
@@ -185,7 +252,7 @@ struct SettingsView: View {
                 .padding(.vertical, 20)
             }
         }
-        .frame(width: 400, height: 420)
+        .frame(width: 400, height: 540)
     }
 
     private func reloadModel(_ modelName: String) {
