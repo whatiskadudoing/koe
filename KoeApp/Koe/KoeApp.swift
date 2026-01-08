@@ -7,6 +7,7 @@ import KoeTextInsertion
 import KoeStorage
 import KoeUI
 import KoeCore
+import KoeMeeting
 
 @main
 struct KoeApp: App {
@@ -14,12 +15,14 @@ struct KoeApp: App {
     @State private var appState = AppState.shared
     // Use the shared coordinator instance
     @State private var coordinator = RecordingCoordinator.shared
+    @State private var meetingCoordinator = MeetingCoordinator.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(appState)
                 .environment(coordinator)
+                .environment(meetingCoordinator)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
@@ -29,6 +32,7 @@ struct KoeApp: App {
             SettingsView()
                 .environment(appState)
                 .environment(coordinator)
+                .environment(meetingCoordinator)
         }
     }
 }
@@ -58,6 +62,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         // NOTE: Model loading is now triggered by LoadingView when permissions are granted
         // This prevents file access dialogs from appearing before the user goes through permissions
+
+        // Start meeting detection early - it doesn't need the model
+        Task {
+            await MeetingCoordinator.shared.startMonitoring()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -209,6 +218,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func handleAppReady() {
         setupGlobalHotkey()
         coordinator.initializeWhenReady()
+        // Note: Meeting monitoring is started in applicationDidFinishLaunching
     }
 
     @objc func selectLanguage(_ sender: NSMenuItem) {

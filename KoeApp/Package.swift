@@ -19,7 +19,8 @@ let package = Package(
         .package(path: "../Packages/KoeHotkey"),
         .package(path: "../Packages/KoeTextInsertion"),
         .package(path: "../Packages/KoeStorage"),
-        .package(path: "../Packages/KoeUI")
+        .package(path: "../Packages/KoeUI"),
+        .package(path: "../Packages/KoeMeeting")
     ],
     targets: [
         .executableTarget(
@@ -34,7 +35,8 @@ let package = Package(
                 "KoeHotkey",
                 "KoeTextInsertion",
                 "KoeStorage",
-                "KoeUI"
+                "KoeUI",
+                "KoeMeeting"
             ],
             path: "Koe"
         )

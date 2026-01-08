@@ -26,6 +26,8 @@
     <string>Koe uses speech recognition to convert your voice to text.</string>
     <key>NSAccessibilityUsageDescription</key>
     <string>Koe needs accessibility access to type transcribed text into other applications.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Koe needs to capture system audio to record your meetings.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2024</string>
 </dict>

@@ -29,6 +29,7 @@ public final class AppState {
     public var appReadinessState: AppReadinessState = .welcome
     public var hasMicrophonePermission: Bool = false
     public var hasAccessibilityPermission: Bool = false
+    public var hasScreenRecordingPermission: Bool = false
 
     // History
     public var transcriptionHistory: [Transcription] = []
@@ -85,7 +86,7 @@ public final class AppState {
     }
 
     public var hasAllPermissions: Bool {
-        hasMicrophonePermission && hasAccessibilityPermission
+        hasMicrophonePermission && hasAccessibilityPermission && hasScreenRecordingPermission
     }
 
     private init() {
@@ -106,9 +107,39 @@ public final class AppState {
         hasAccessibilityPermission = AXIsProcessTrusted()
     }
 
+    public func checkScreenRecordingPermission() {
+        // Check Screen Recording permission by trying to get window info
+        // If permission is not granted, window titles will be nil for user apps
+        let options = CGWindowListOption([.optionOnScreenOnly, .excludeDesktopElements])
+        guard let windowList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            hasScreenRecordingPermission = false
+            return
+        }
+
+        // System processes that always show window titles even without permission
+        let systemProcesses = Set(["Window Server", "Control Center", "Dock", "SystemUIServer"])
+
+        // Check if any NON-SYSTEM window has a name (indicates permission granted)
+        for window in windowList {
+            guard let ownerName = window[kCGWindowOwnerName as String] as? String else { continue }
+
+            // Skip system processes
+            if systemProcesses.contains(ownerName) { continue }
+
+            if let name = window[kCGWindowName as String] as? String, !name.isEmpty {
+                hasScreenRecordingPermission = true
+                return
+            }
+        }
+
+        // No user app window names found - permission not granted
+        hasScreenRecordingPermission = false
+    }
+
     public func checkAllPermissions() {
         checkMicrophonePermission()
         checkAccessibilityPermission()
+        checkScreenRecordingPermission()
     }
 
     public func advanceReadinessState() {
