@@ -87,12 +87,6 @@ public final class AppState {
     }
 
     @ObservationIgnored
-    private var _transcriptionMode: String {
-        get { UserDefaults.standard.string(forKey: "transcriptionMode") ?? "vad" }
-        set { UserDefaults.standard.set(newValue, forKey: "transcriptionMode") }
-    }
-
-    @ObservationIgnored
     private var _isRefinementEnabled: Bool {
         get {
             // Default to true if not set
@@ -127,12 +121,6 @@ public final class AppState {
     }
 
     @ObservationIgnored
-    private var _refinementModeRaw: String {
-        get { UserDefaults.standard.string(forKey: "refinementMode") ?? "cleanup" }
-        set { UserDefaults.standard.set(newValue, forKey: "refinementMode") }
-    }
-
-    @ObservationIgnored
     private var _customRefinementPrompt: String {
         get { UserDefaults.standard.string(forKey: "customRefinementPrompt") ?? "" }
         set { UserDefaults.standard.set(newValue, forKey: "customRefinementPrompt") }
@@ -159,11 +147,6 @@ public final class AppState {
         set { _selectedLanguage = newValue }
     }
 
-    public var transcriptionMode: String {
-        get { _transcriptionMode }
-        set { _transcriptionMode = newValue }
-    }
-
     public var isRefinementEnabled: Bool {
         get { _isRefinementEnabled }
         set { _isRefinementEnabled = newValue }
@@ -183,11 +166,6 @@ public final class AppState {
     public var ollamaModel: String {
         get { _ollamaModel }
         set { _ollamaModel = newValue }
-    }
-
-    public var refinementModeRaw: String {
-        get { _refinementModeRaw }
-        set { _refinementModeRaw = newValue }
     }
 
     public var customRefinementPrompt: String {
@@ -320,15 +298,6 @@ public final class AppState {
 
     public var currentLanguage: Language {
         Language.all.first { $0.code == selectedLanguage } ?? .auto
-    }
-
-    public var currentTranscriptionMode: TranscriptionMode {
-        TranscriptionMode(rawValue: transcriptionMode) ?? .vad
-    }
-
-    public var currentRefinementMode: RefinementMode {
-        get { RefinementMode(rawValue: refinementModeRaw) ?? .cleanup }
-        set { refinementModeRaw = newValue.rawValue }
     }
 
     public var currentAITier: AITier {

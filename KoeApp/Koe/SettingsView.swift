@@ -2,6 +2,7 @@ import SwiftUI
 import KoeDomain
 import KoeRefinement
 import KoeCommands
+import KoeUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
@@ -9,18 +10,11 @@ struct SettingsView: View {
     @State private var availableModels: [OllamaModel] = []
     @State private var showVoiceTraining = false
 
-    // Japanese-inspired color palette
-    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
-    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
-    private let pageBackground = Color(nsColor: NSColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0))
-    private let cardBackground = Color.white
-    private let purpleColor = Color(nsColor: NSColor(red: 0.58, green: 0.44, blue: 0.86, alpha: 1.0))
-
     var body: some View {
         @Bindable var appState = appState
 
         ZStack {
-            pageBackground.ignoresSafeArea()
+            KoeColors.background.ignoresSafeArea()
 
             ScrollView {
                 VStack(spacing: 24) {
@@ -28,126 +22,39 @@ struct SettingsView: View {
                     VStack(spacing: 8) {
                         Text("Settings")
                             .font(.system(size: 24, weight: .light))
-                            .foregroundColor(accentColor)
+                            .foregroundColor(KoeColors.accent)
                             .tracking(2)
                     }
                     .padding(.top, 8)
 
                     // Hotkey section
-                    HotkeySettingsSection(
-                        appState: appState,
-                        accentColor: accentColor,
-                        lightGray: lightGray,
-                        pageBackground: pageBackground,
-                        cardBackground: cardBackground
-                    )
+                    HotkeySettingsSection(appState: appState)
 
                     // Appearance section
-                    AppearanceSettingsSection(
-                        appState: appState,
-                        accentColor: accentColor,
-                        lightGray: lightGray,
-                        cardBackground: cardBackground
-                    )
+                    AppearanceSettingsSection(appState: appState)
 
-                    // AI Refinement section
-                    AIRefinementSettingsSection(
+                    // Transcription Model section (Global)
+                    TranscriptionModelSection(appState: appState)
+
+                    // AI Refinement Model section (Global)
+                    AIModelSettingsSection(
                         appState: appState,
-                        accentColor: accentColor,
-                        lightGray: lightGray,
-                        purpleColor: purpleColor,
-                        pageBackground: pageBackground,
-                        cardBackground: cardBackground,
                         availableModels: $availableModels,
                         isTestingConnection: $isTestingConnection,
                         testConnection: testConnection
                     )
 
-                    // Voice Commands section
-                    VoiceCommandsSettingsSection(
+                    // Voice Profile section (Global)
+                    VoiceProfileSection(
                         appState: appState,
-                        accentColor: accentColor,
-                        lightGray: lightGray,
-                        cardBackground: cardBackground,
                         showVoiceTraining: $showVoiceTraining
                     )
 
                     // History section
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("History")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(lightGray)
-                            .textCase(.uppercase)
-                            .tracking(1)
-
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Transcription entries")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(accentColor)
-
-                                Text("\(appState.transcriptionHistory.count) items stored")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(lightGray)
-                            }
-
-                            Spacer()
-
-                            Button(action: {
-                                appState.clearHistory()
-                            }) {
-                                Text("Clear")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(accentColor)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background(accentColor.opacity(0.1))
-                                    .cornerRadius(16)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(16)
-                        .background(cardBackground)
-                        .cornerRadius(12)
-                        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
-                    }
+                    HistorySection(appState: appState)
 
                     // About section
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("About")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(lightGray)
-                            .textCase(.uppercase)
-                            .tracking(1)
-
-                        VStack(spacing: 12) {
-                            Text("声")
-                                .font(.system(size: 32, weight: .thin))
-                                .foregroundColor(accentColor.opacity(0.7))
-
-                            Text("koe")
-                                .font(.system(size: 18, weight: .light, design: .rounded))
-                                .foregroundColor(accentColor)
-                                .tracking(4)
-
-                            Text("Voice to Text")
-                                .font(.system(size: 12))
-                                .foregroundColor(lightGray)
-                                .padding(.top, 4)
-
-                            Divider()
-                                .padding(.vertical, 8)
-
-                            Text("Powered by WhisperKit")
-                                .font(.system(size: 11))
-                                .foregroundColor(lightGray.opacity(0.7))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(20)
-                        .background(cardBackground)
-                        .cornerRadius(12)
-                        .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
-                    }
+                    AboutSection()
 
                     Spacer(minLength: 16)
                 }
@@ -159,7 +66,6 @@ struct SettingsView: View {
         .sheet(isPresented: $showVoiceTraining) {
             VoiceTrainingView { profile in
                 appState.voiceProfile = profile
-                // Notify the app that a new profile was trained
                 NotificationCenter.default.post(name: .voiceProfileTrained, object: profile)
             }
         }
@@ -188,45 +94,43 @@ extension Notification.Name {
     static let reloadModel = Notification.Name("reloadModel")
 }
 
-// MARK: - AI Refinement Settings Section
+// MARK: - Hotkey Settings Section
 
-struct AIRefinementSettingsSection: View {
+struct HotkeySettingsSection: View {
     @Bindable var appState: AppState
-    let accentColor: Color
-    let lightGray: Color
-    let purpleColor: Color
-    let pageBackground: Color
-    let cardBackground: Color
-    @Binding var availableModels: [OllamaModel]
-    @Binding var isTestingConnection: Bool
-    let testConnection: () -> Void
+
+    private let presets: [(name: String, keyCode: UInt32, modifiers: Int)] = [
+        ("⌥ Space", 49, 2),
+        ("R-⌥", 61, 0),
+        ("⌃ Space", 49, 4),
+        ("F5", 96, 0),
+        ("F6", 97, 0),
+    ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("AI Refinement")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(lightGray)
-                .textCase(.uppercase)
-                .tracking(1)
-
+        SettingsSectionContainer(title: "Keyboard Shortcut") {
             VStack(spacing: 0) {
-                // Enable toggle
+                // Current shortcut display
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Enable AI Refinement")
+                        Text("Push-to-Talk Shortcut")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(accentColor)
+                            .foregroundColor(KoeColors.accent)
 
-                        Text("Clean up transcribed text with AI")
+                        Text("Hold to record, release to transcribe")
                             .font(.system(size: 12))
-                            .foregroundColor(lightGray)
+                            .foregroundColor(KoeColors.textLight)
                     }
 
                     Spacer()
 
-                    Toggle("", isOn: $appState.isRefinementEnabled)
-                        .toggleStyle(.switch)
-                        .tint(purpleColor)
+                    Text(appState.hotkeyDisplayString)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(KoeColors.accent)
+                        .cornerRadius(8)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -234,123 +138,202 @@ struct AIRefinementSettingsSection: View {
                 Divider()
                     .padding(.horizontal, 16)
 
+                // Preset shortcuts
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Quick Presets")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+
+                    HStack(spacing: 8) {
+                        ForEach(presets, id: \.name) { preset in
+                            SettingsChip(
+                                label: preset.name,
+                                isSelected: isPresetSelected(preset)
+                            ) {
+                                appState.hotkeyKeyCode = preset.keyCode
+                                appState.hotkeyModifiers = preset.modifiers
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
+        }
+    }
+
+    private func isPresetSelected(_ preset: (name: String, keyCode: UInt32, modifiers: Int)) -> Bool {
+        appState.hotkeyKeyCode == preset.keyCode && appState.hotkeyModifiers == preset.modifiers
+    }
+}
+
+// MARK: - Appearance Settings Section
+
+struct AppearanceSettingsSection: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        SettingsSectionContainer(title: "Appearance") {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Ring Animation")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+
+                    Text(appState.currentRingAnimationStyle.description)
+                        .font(.system(size: 12))
+                        .foregroundColor(KoeColors.textLight)
+                }
+
+                Spacer()
+
+                Picker("", selection: $appState.ringAnimationStyleRaw) {
+                    ForEach(RingAnimationStyle.allCases, id: \.rawValue) { style in
+                        Text(style.displayName).tag(style.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 100)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+        }
+    }
+}
+
+// MARK: - Transcription Model Section (Global)
+
+struct TranscriptionModelSection: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        SettingsSectionContainer(title: "Transcription") {
+            VStack(spacing: 0) {
+                // Model selector
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Whisper Model")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(KoeColors.accent)
+
+                        Text(modelDescription)
+                            .font(.system(size: 12))
+                            .foregroundColor(KoeColors.textLight)
+                    }
+
+                    Spacer()
+
+                    Picker("", selection: $appState.selectedModel) {
+                        ForEach(KoeModel.allCases, id: \.rawValue) { model in
+                            Text(model.displayName).tag(model.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(width: 120)
+                    .onChange(of: appState.selectedModel) { _, newModel in
+                        Task {
+                            await RecordingCoordinator.shared.loadModel(name: newModel)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+
+                Divider()
+                    .padding(.horizontal, 16)
+
+                // Language selector
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Default Language")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(KoeColors.accent)
+
+                        Text("Used for transcription")
+                            .font(.system(size: 12))
+                            .foregroundColor(KoeColors.textLight)
+                    }
+
+                    Spacer()
+
+                    Picker("", selection: $appState.selectedLanguage) {
+                        ForEach(Language.all, id: \.code) { lang in
+                            Text("\(lang.flag) \(lang.name)").tag(lang.code)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(width: 140)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+
+                // Model status
+                Divider()
+                    .padding(.horizontal, 16)
+
+                HStack(spacing: 6) {
+                    Image(systemName: appState.isModelLoaded ? "checkmark.circle.fill" : "arrow.down.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(appState.isModelLoaded ? .green : KoeColors.textLight)
+                    Text(appState.isModelLoaded ? "Model loaded and ready" : "Loading model...")
+                        .font(.system(size: 12))
+                        .foregroundColor(KoeColors.textLight)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private var modelDescription: String {
+        switch appState.currentKoeModel {
+        case .fast: return "Turbo • Fastest • ~400MB"
+        case .balanced: return "Turbo Medium • Balanced • ~800MB"
+        case .best: return "Turbo Large • Best quality • ~1.6GB"
+        }
+    }
+}
+
+// MARK: - AI Model Settings Section (Global)
+
+struct AIModelSettingsSection: View {
+    @Bindable var appState: AppState
+    @Binding var availableModels: [OllamaModel]
+    @Binding var isTestingConnection: Bool
+    let testConnection: () -> Void
+
+    var body: some View {
+        SettingsSectionContainer(title: "AI Refinement Model") {
+            VStack(spacing: 0) {
                 // Quality Tier picker
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Quality")
+                        Text("AI Provider")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(accentColor)
+                            .foregroundColor(KoeColors.accent)
 
                         Text(tierDescription)
-                            .font(.system(size: 11))
-                            .foregroundColor(lightGray)
+                            .font(.system(size: 12))
+                            .foregroundColor(KoeColors.textLight)
                     }
 
                     Spacer()
 
                     Picker("", selection: $appState.aiTierRaw) {
                         ForEach(AITier.allCases, id: \.rawValue) { tier in
-                            HStack {
-                                Image(systemName: tier.icon)
-                                Text(tier.displayName)
-                            }
-                            .tag(tier.rawValue)
+                            Text(tier.displayName).tag(tier.rawValue)
                         }
                     }
                     .pickerStyle(.menu)
-                    .tint(accentColor)
+                    .labelsHidden()
+                    .frame(width: 100)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-
-                Divider()
-                    .padding(.horizontal, 16)
-
-                // Refinement Options - Toggles
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Options")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(accentColor)
-
-                    // Option chips in a flow layout
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Row 1: Clean Up toggle
-                        RefinementOptionChip(
-                            label: "Clean Up",
-                            icon: "wand.and.stars",
-                            isSelected: $appState.isCleanupEnabled,
-                            description: "Remove filler words, fix grammar",
-                            accentColor: accentColor,
-                            selectedColor: purpleColor
-                        )
-
-                        // Row 2: Tone options (mutually exclusive)
-                        HStack(spacing: 8) {
-                            Text("Tone:")
-                                .font(.system(size: 11))
-                                .foregroundColor(lightGray)
-
-                            ToneOptionChip(
-                                label: "None",
-                                isSelected: appState.toneStyle == "none",
-                                isDisabled: appState.isPromptImproverEnabled,
-                                accentColor: accentColor
-                            ) {
-                                appState.toneStyle = "none"
-                            }
-
-                            ToneOptionChip(
-                                label: "Formal",
-                                isSelected: appState.toneStyle == "formal",
-                                isDisabled: appState.isPromptImproverEnabled,
-                                accentColor: accentColor
-                            ) {
-                                appState.toneStyle = "formal"
-                            }
-
-                            ToneOptionChip(
-                                label: "Casual",
-                                isSelected: appState.toneStyle == "casual",
-                                isDisabled: appState.isPromptImproverEnabled,
-                                accentColor: accentColor
-                            ) {
-                                appState.toneStyle = "casual"
-                            }
-                        }
-                        .opacity(appState.isPromptImproverEnabled ? 0.5 : 1.0)
-
-                        // Row 3: Prompt Improver toggle
-                        RefinementOptionChip(
-                            label: "Prompt Mode",
-                            icon: "sparkles",
-                            isSelected: $appState.isPromptImproverEnabled,
-                            description: "Optimize as AI prompt (ignores tone)",
-                            accentColor: accentColor,
-                            selectedColor: Color.orange
-                        )
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-
-                // Custom instructions (always available)
-                Divider()
-                    .padding(.horizontal, 16)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Custom Instructions (optional)")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(accentColor)
-
-                    TextField("Add extra instructions...", text: $appState.customRefinementPrompt)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .padding(10)
-                        .background(pageBackground)
-                        .cornerRadius(8)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
 
                 // Ollama settings (only shown for Custom tier)
                 if appState.currentAITier == .custom {
@@ -359,10 +342,23 @@ struct AIRefinementSettingsSection: View {
 
                     ollamaSettingsView
                 }
+
+                // Model status
+                Divider()
+                    .padding(.horizontal, 16)
+
+                HStack(spacing: 6) {
+                    Image(systemName: appState.isRefinementModelLoaded ? "checkmark.circle.fill" : "arrow.down.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(appState.isRefinementModelLoaded ? .green : KoeColors.textLight)
+                    Text(appState.isRefinementModelLoaded ? "AI model ready" : "Loading AI model...")
+                        .font(.system(size: 12))
+                        .foregroundColor(KoeColors.textLight)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .background(cardBackground)
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
         }
     }
 
@@ -371,41 +367,28 @@ struct AIRefinementSettingsSection: View {
         case .best:
             return "Qwen 2.5 3B • GPU accelerated • ~2GB"
         case .custom:
-            return "Use Ollama with any model"
+            return "Ollama with custom model"
         }
     }
 
     private var ollamaSettingsView: some View {
         VStack(spacing: 0) {
-            // Ollama settings header
-            HStack {
-                Text("Ollama Server")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(lightGray)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 8)
-
             // Endpoint
             HStack {
-                Text("Endpoint")
+                Text("Server")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(accentColor)
+                    .foregroundColor(KoeColors.accent)
 
                 Spacer()
 
                 TextField("http://localhost:11434", text: $appState.ollamaEndpoint)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(accentColor)
+                    .foregroundColor(KoeColors.accent)
                     .frame(width: 160)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(pageBackground)
+                    .background(KoeColors.background)
                     .cornerRadius(6)
             }
             .padding(.horizontal, 16)
@@ -415,7 +398,7 @@ struct AIRefinementSettingsSection: View {
             HStack {
                 Text("Model")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(accentColor)
+                    .foregroundColor(KoeColors.accent)
 
                 Spacer()
 
@@ -423,11 +406,11 @@ struct AIRefinementSettingsSection: View {
                     TextField("llama3.2:3b", text: $appState.ollamaModel)
                         .textFieldStyle(.plain)
                         .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(accentColor)
+                        .foregroundColor(KoeColors.accent)
                         .frame(width: 160)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
-                        .background(pageBackground)
+                        .background(KoeColors.background)
                         .cornerRadius(6)
                 } else {
                     Picker("", selection: $appState.ollamaModel) {
@@ -436,7 +419,7 @@ struct AIRefinementSettingsSection: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .tint(accentColor)
+                    .tint(KoeColors.accent)
                 }
             }
             .padding(.horizontal, 16)
@@ -454,7 +437,7 @@ struct AIRefinementSettingsSection: View {
 
                     Text(appState.isOllamaConnected ? "Connected" : "Not connected")
                         .font(.system(size: 12))
-                        .foregroundColor(lightGray)
+                        .foregroundColor(KoeColors.textLight)
                 }
 
                 Spacer()
@@ -471,10 +454,10 @@ struct AIRefinementSettingsSection: View {
                         Text("Test")
                             .font(.system(size: 12, weight: .medium))
                     }
-                    .foregroundColor(accentColor)
+                    .foregroundColor(KoeColors.accent)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(accentColor.opacity(0.1))
+                    .background(KoeColors.accent.opacity(0.1))
                     .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
@@ -486,535 +469,189 @@ struct AIRefinementSettingsSection: View {
     }
 }
 
-// MARK: - Refinement Option Chip
+// MARK: - Voice Profile Section (Global)
 
-struct RefinementOptionChip: View {
-    let label: String
-    let icon: String
-    @Binding var isSelected: Bool
-    let description: String
-    let accentColor: Color
-    let selectedColor: Color
-
-    var body: some View {
-        Button(action: { isSelected.toggle() }) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundColor(isSelected ? .white : accentColor)
-                    .frame(width: 20)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(label)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(isSelected ? .white : accentColor)
-
-                    Text(description)
-                        .font(.system(size: 10))
-                        .foregroundColor(isSelected ? .white.opacity(0.8) : accentColor.opacity(0.6))
-                }
-
-                Spacer()
-
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16))
-                    .foregroundColor(isSelected ? .white : accentColor.opacity(0.3))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(isSelected ? selectedColor : accentColor.opacity(0.08))
-            .cornerRadius(10)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Tone Option Chip (Radio button style)
-
-struct ToneOptionChip: View {
-    let label: String
-    let isSelected: Bool
-    let isDisabled: Bool
-    let accentColor: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : accentColor)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? accentColor : accentColor.opacity(0.1))
-                .cornerRadius(14)
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled)
-    }
-}
-
-// MARK: - Hotkey Settings Section
-
-struct HotkeySettingsSection: View {
+struct VoiceProfileSection: View {
     @Bindable var appState: AppState
-    let accentColor: Color
-    let lightGray: Color
-    let pageBackground: Color
-    let cardBackground: Color
-
-    // Preset shortcuts
-    private let presets: [(name: String, keyCode: UInt32, modifiers: Int)] = [
-        ("⌥ Space", 49, 2),          // Option + Space (default)
-        ("R-⌥", 61, 0),              // Right Option key
-        ("⌃ Space", 49, 4),          // Control + Space
-        ("F5", 96, 0),               // F5
-        ("F6", 97, 0),               // F6
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Keyboard Shortcut")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(lightGray)
-                .textCase(.uppercase)
-                .tracking(1)
-
-            VStack(spacing: 0) {
-                // Current shortcut display
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Push-to-Talk Shortcut")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(accentColor)
-
-                        Text("Hold to record, release to transcribe")
-                            .font(.system(size: 12))
-                            .foregroundColor(lightGray)
-                    }
-
-                    Spacer()
-
-                    Text(appState.hotkeyDisplayString)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(accentColor)
-                        .cornerRadius(8)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-
-                Divider()
-                    .padding(.horizontal, 16)
-
-                // Preset shortcuts
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Quick Presets")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(accentColor)
-
-                    HStack(spacing: 8) {
-                        ForEach(presets, id: \.name) { preset in
-                            ShortcutPresetChip(
-                                label: preset.name,
-                                isSelected: isPresetSelected(preset),
-                                accentColor: accentColor
-                            ) {
-                                appState.hotkeyKeyCode = preset.keyCode
-                                appState.hotkeyModifiers = preset.modifiers
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-            }
-            .background(cardBackground)
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
-        }
-    }
-
-    private func isPresetSelected(_ preset: (name: String, keyCode: UInt32, modifiers: Int)) -> Bool {
-        appState.hotkeyKeyCode == preset.keyCode && appState.hotkeyModifiers == preset.modifiers
-    }
-}
-
-// MARK: - Shortcut Preset Chip
-
-struct ShortcutPresetChip: View {
-    let label: String
-    let isSelected: Bool
-    let accentColor: Color
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .rounded))
-                .foregroundColor(isSelected ? .white : accentColor)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(isSelected ? accentColor : accentColor.opacity(0.1))
-                .cornerRadius(8)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Appearance Settings Section
-
-struct AppearanceSettingsSection: View {
-    @Bindable var appState: AppState
-    let accentColor: Color
-    let lightGray: Color
-    let cardBackground: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Appearance")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(lightGray)
-                .textCase(.uppercase)
-                .tracking(1)
-
-            VStack(spacing: 0) {
-                // Animation style picker
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Ring Animation")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(accentColor)
-
-                        Text(appState.currentRingAnimationStyle.description)
-                            .font(.system(size: 12))
-                            .foregroundColor(lightGray)
-                    }
-
-                    Spacer()
-
-                    Picker("", selection: $appState.ringAnimationStyleRaw) {
-                        ForEach(RingAnimationStyle.allCases, id: \.rawValue) { style in
-                            HStack {
-                                Image(systemName: style.icon)
-                                Text(style.displayName)
-                            }
-                            .tag(style.rawValue)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .tint(accentColor)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-            }
-            .background(cardBackground)
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
-        }
-    }
-}
-
-// MARK: - Voice Commands Settings Section
-
-struct VoiceCommandsSettingsSection: View {
-    @Bindable var appState: AppState
-    let accentColor: Color
-    let lightGray: Color
-    let cardBackground: Color
     @Binding var showVoiceTraining: Bool
-    @State private var showAdvancedSettings = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Voice Commands")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(lightGray)
-                .textCase(.uppercase)
-                .tracking(1)
-
+        SettingsSectionContainer(title: "Voice Profile") {
             VStack(spacing: 0) {
-                // Enable toggle
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Voice Activation")
+                        Text("Your Voice")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(accentColor)
-
-                        Text("Say \"kon\" to trigger actions")
-                            .font(.system(size: 12))
-                            .foregroundColor(lightGray)
-                    }
-
-                    Spacer()
-
-                    Toggle("", isOn: $appState.isCommandListeningEnabled)
-                        .toggleStyle(.switch)
-                        .tint(accentColor)
-                        .disabled(!appState.hasVoiceProfile)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-
-                Divider()
-                    .padding(.horizontal, 16)
-
-                // Voice profile status
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Voice Profile")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(accentColor)
+                            .foregroundColor(KoeColors.accent)
 
                         if appState.hasVoiceProfile {
                             HStack(spacing: 6) {
                                 Circle()
                                     .fill(Color.green)
                                     .frame(width: 8, height: 8)
-                                Text("Trained")
+                                Text("Trained and ready")
                                     .font(.system(size: 12))
-                                    .foregroundColor(lightGray)
+                                    .foregroundColor(KoeColors.textLight)
                             }
                         } else {
-                            Text("Not trained yet")
-                                .font(.system(size: 12))
-                                .foregroundColor(lightGray)
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.orange)
+                                    .frame(width: 8, height: 8)
+                                Text("Not trained")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(KoeColors.textLight)
+                            }
                         }
                     }
 
                     Spacer()
 
-                    Button(action: { showVoiceTraining = true }) {
-                        Text(appState.hasVoiceProfile ? "Retrain" : "Train Voice")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(accentColor)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(accentColor.opacity(0.1))
-                            .cornerRadius(16)
+                    // Only show Train button if not trained yet
+                    if !appState.hasVoiceProfile {
+                        Button(action: { showVoiceTraining = true }) {
+                            Text("Train Voice")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(KoeColors.accent)
+                                .cornerRadius(16)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
 
-                // Info text
                 if !appState.hasVoiceProfile {
                     Divider()
                         .padding(.horizontal, 16)
 
-                    Text("Train your voice to enable hands-free activation. Koe will only respond to your voice.")
+                    Text("Train your voice to enable hands-free activation. Retrain from On Voice node settings.")
                         .font(.system(size: 11))
-                        .foregroundColor(lightGray)
+                        .foregroundColor(KoeColors.textLight)
                         .multilineTextAlignment(.leading)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                 }
+            }
+        }
+    }
+}
 
-                // Advanced Settings (Experimental) - always visible
-                Divider()
-                    .padding(.horizontal, 16)
+// MARK: - History Section
 
-                // Advanced settings toggle
-                Button(action: { withAnimation { showAdvancedSettings.toggle() } }) {
-                    HStack {
-                        Image(systemName: "gearshape.2")
-                            .font(.system(size: 12))
-                            .foregroundColor(lightGray)
+struct HistorySection: View {
+    @Bindable var appState: AppState
 
-                        Text("Experimental Settings")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(lightGray)
+    var body: some View {
+        SettingsSectionContainer(title: "History") {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Transcription entries")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
 
-                        Spacer()
+                    Text("\(appState.transcriptionHistory.count) items stored")
+                        .font(.system(size: 12))
+                        .foregroundColor(KoeColors.textLight)
+                }
 
-                        Image(systemName: showAdvancedSettings ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 10))
-                            .foregroundColor(lightGray)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                Spacer()
+
+                Button(action: {
+                    appState.clearHistory()
+                }) {
+                    Text("Clear")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(KoeColors.accent.opacity(0.1))
+                        .cornerRadius(16)
                 }
                 .buttonStyle(.plain)
-
-                if showAdvancedSettings {
-                    VoiceCommandAdvancedSettings(
-                        appState: appState,
-                        accentColor: accentColor,
-                        lightGray: lightGray
-                    )
-                }
             }
-            .background(cardBackground)
+            .padding(16)
+        }
+    }
+}
+
+// MARK: - About Section
+
+struct AboutSection: View {
+    var body: some View {
+        SettingsSectionContainer(title: "About") {
+            VStack(spacing: 12) {
+                Text("声")
+                    .font(.system(size: 32, weight: .thin))
+                    .foregroundColor(KoeColors.accent.opacity(0.7))
+
+                Text("koe")
+                    .font(.system(size: 18, weight: .light, design: .rounded))
+                    .foregroundColor(KoeColors.accent)
+                    .tracking(4)
+
+                Text("Voice to Text")
+                    .font(.system(size: 12))
+                    .foregroundColor(KoeColors.textLight)
+                    .padding(.top, 4)
+
+                Divider()
+                    .padding(.vertical, 8)
+
+                Text("Powered by WhisperKit")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textLight.opacity(0.7))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(20)
+        }
+    }
+}
+
+// MARK: - Reusable Components
+
+/// Container for settings sections with consistent styling
+struct SettingsSectionContainer<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(KoeColors.textLight)
+                .textCase(.uppercase)
+                .tracking(1)
+
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(Color.white)
             .cornerRadius(12)
             .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
         }
     }
 }
 
-// MARK: - Voice Command Advanced Settings
-
-struct VoiceCommandAdvancedSettings: View {
-    @Bindable var appState: AppState
-    let accentColor: Color
-    let lightGray: Color
+/// Reusable chip button for settings
+struct SettingsChip: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .padding(.horizontal, 16)
-
-            // Phase 1: VAD Settings
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Phase 1: Voice Activity Detection")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(lightGray)
-                    .textCase(.uppercase)
-
-                // VAD Enable toggle
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Enable VAD")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(accentColor)
-                        Text("Skip non-speech audio")
-                            .font(.system(size: 10))
-                            .foregroundColor(lightGray)
-                    }
-                    Spacer()
-                    Toggle("", isOn: $appState.voiceCommandSettings.vadEnabled)
-                        .toggleStyle(.switch)
-                        .scaleEffect(0.8)
-                        .tint(accentColor)
-                }
-
-                // VAD Threshold slider
-                if appState.voiceCommandSettings.vadEnabled {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("VAD Threshold")
-                                .font(.system(size: 12))
-                                .foregroundColor(accentColor)
-                            Spacer()
-                            Text(String(format: "%.2f", appState.voiceCommandSettings.vadThreshold))
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(lightGray)
-                        }
-                        Slider(value: $appState.voiceCommandSettings.vadThreshold, in: 0.1...0.8, step: 0.05)
-                            .tint(accentColor)
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-
-            Divider()
-                .padding(.horizontal, 16)
-
-            // Phase 2: Confidence & Trigger Settings
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Phase 2: Detection Settings")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(lightGray)
-                    .textCase(.uppercase)
-
-                // Confidence threshold slider
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Confidence Threshold")
-                            .font(.system(size: 12))
-                            .foregroundColor(accentColor)
-                        Spacer()
-                        Text(String(format: "%.0f%%", appState.voiceCommandSettings.confidenceThreshold * 100))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(lightGray)
-                    }
-                    Slider(value: $appState.voiceCommandSettings.confidenceThreshold, in: 0.5...0.95, step: 0.05)
-                        .tint(accentColor)
-                    Text("Higher = fewer false positives, may miss some valid commands")
-                        .font(.system(size: 9))
-                        .foregroundColor(lightGray.opacity(0.8))
-                }
-
-                // Silence confirmation delay
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Silence Delay")
-                            .font(.system(size: 12))
-                            .foregroundColor(accentColor)
-                        Spacer()
-                        Text(String(format: "%.1fs", appState.voiceCommandSettings.silenceConfirmationDelay))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(lightGray)
-                    }
-                    Slider(value: $appState.voiceCommandSettings.silenceConfirmationDelay, in: 0.5...4.0, step: 0.5)
-                        .tint(accentColor)
-                    Text("Wait time after trigger word before executing")
-                        .font(.system(size: 9))
-                        .foregroundColor(lightGray.opacity(0.8))
-                }
-
-                // Extended trigger phrase
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Extended Trigger")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(accentColor)
-                        Text("Use \"hey koe\" instead of \"kon\"")
-                            .font(.system(size: 10))
-                            .foregroundColor(lightGray)
-                    }
-                    Spacer()
-                    Toggle("", isOn: $appState.voiceCommandSettings.useExtendedTrigger)
-                        .toggleStyle(.switch)
-                        .scaleEffect(0.8)
-                        .tint(accentColor)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-
-            Divider()
-                .padding(.horizontal, 16)
-
-            // Phase 3: ECAPA-TDNN (WeSpeaker Neural Network)
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Phase 3: Advanced Model")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(lightGray)
-                    .textCase(.uppercase)
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text("ECAPA-TDNN Model")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(accentColor)
-                            Text("Experimental")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.purple)
-                                .cornerRadius(4)
-                        }
-                        Text("256-dim WeSpeaker neural embeddings for better accuracy")
-                            .font(.system(size: 10))
-                            .foregroundColor(lightGray)
-                    }
-                    Spacer()
-                    Toggle("", isOn: $appState.voiceCommandSettings.useECAPATDNN)
-                        .toggleStyle(.switch)
-                        .scaleEffect(0.8)
-                        .tint(accentColor)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .regular, design: .rounded))
+                .foregroundColor(isSelected ? .white : KoeColors.accent)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(isSelected ? KoeColors.accent : KoeColors.accent.opacity(0.1))
+                .cornerRadius(8)
         }
-        .onChange(of: appState.voiceCommandSettings) { _, newSettings in
-            newSettings.save()
-        }
+        .buttonStyle(.plain)
     }
 }

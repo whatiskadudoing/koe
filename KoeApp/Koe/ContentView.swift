@@ -136,17 +136,14 @@ struct ContentView: View {
 
     private var mainUI: some View {
         VStack(spacing: 0) {
-            // Top bar with tab toggle and model toggle
-            VStack(spacing: 8) {
-                HStack {
-                    Spacer()
+            // Top bar with tab toggle
+            HStack {
+                Spacer()
 
-                    // Tab toggle
-                    TabToggle(selectedTab: $selectedTab, onManualSwitch: handleManualTabSwitch)
+                // Tab toggle
+                TabToggle(selectedTab: $selectedTab, onManualSwitch: handleManualTabSwitch)
 
-                    Spacer()
-                }
-
+                Spacer()
             }
             .padding(.top, 12)
 
@@ -184,15 +181,14 @@ struct ContentView: View {
                     onTap: {
                         Task { @MainActor in
                             if appState.recordingState == .idle {
-                                let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
+                                // Manual tap uses VAD mode (auto-stop on silence)
                                 let langCode = appState.selectedLanguage
                                 let language = Language.all.first { $0.code == langCode } ?? .auto
-                                await coordinator.startRecording(mode: mode, language: language)
+                                await coordinator.startRecording(mode: .vad, language: language)
                             } else if appState.recordingState == .recording {
-                                let mode = TranscriptionMode(rawValue: appState.transcriptionMode) ?? .vad
                                 let langCode = appState.selectedLanguage
                                 let language = Language.all.first { $0.code == langCode } ?? .auto
-                                await coordinator.stopRecording(mode: mode, language: language)
+                                await coordinator.stopRecording(mode: .vad, language: language)
                             }
                         }
                     }
@@ -846,78 +842,6 @@ struct HistoryRow: View {
             let formatter = DateFormatter()
             formatter.dateFormat = "MMM d, h:mm a"
             return formatter.string(from: date)
-        }
-    }
-}
-
-// MARK: - Mode Toggle
-
-struct ModeToggle: View {
-    @AppStorage("transcriptionMode") private var mode: String = "vad"
-
-    private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
-    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
-
-    var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 4) {
-                ModeButton(
-                    title: "on release",
-                    isSelected: mode == "vad",
-                    accentColor: accentColor,
-                    lightGray: lightGray
-                ) {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        mode = "vad"
-                    }
-                }
-
-                ModeButton(
-                    title: "while speaking",
-                    isSelected: mode == "realtime",
-                    accentColor: accentColor,
-                    lightGray: lightGray
-                ) {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        mode = "realtime"
-                    }
-                }
-            }
-            .padding(3)
-            .background(Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0)))
-            .cornerRadius(14)
-
-            Text(mode == "vad" ? "types after you release the key" : "types as you speak")
-                .font(.system(size: 10))
-                .foregroundColor(lightGray)
-        }
-    }
-}
-
-struct ModeButton: View {
-    let title: String
-    let isSelected: Bool
-    let accentColor: Color
-    let lightGray: Color
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11, weight: isSelected ? .medium : .regular))
-                .foregroundColor(isSelected ? .white : (isHovered ? accentColor : lightGray))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(isSelected ? accentColor : (isHovered ? accentColor.opacity(0.1) : Color.clear))
-                .cornerRadius(12)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
-                isHovered = hovering
-            }
         }
     }
 }
@@ -1636,7 +1560,7 @@ struct RefinementToggle: View {
                 .truncationMode(.tail)
         }
         .help(appState.isRefinementEnabled
-            ? "AI: \(appState.currentAITier.displayName) • \(appState.currentRefinementMode.displayName)"
+            ? "AI: \(appState.currentAITier.displayName)"
             : "Enable AI refinement")
     }
 
@@ -1954,5 +1878,242 @@ struct PressEventsModifier: ViewModifier {
 extension View {
     func pressEvents(onPress: @escaping () -> Void, onRelease: @escaping () -> Void) -> some View {
         modifier(PressEventsModifier(onPress: onPress, onRelease: onRelease))
+    }
+}
+
+// MARK: - Global Settings Content (for Side Panel)
+
+struct GlobalSettingsContent: View {
+    @Environment(AppState.self) private var appState
+    @State private var showVoiceTraining = false
+
+    var body: some View {
+        @Bindable var appState = appState
+
+        VStack(alignment: .leading, spacing: 16) {
+            // Hotkey section
+            GlobalSettingsGroup(title: "Keyboard Shortcut", icon: "command") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Push-to-Talk")
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.textLight)
+
+                    Text(appState.hotkeyDisplayString)
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundColor(KoeColors.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(KoeColors.surface)
+                        .cornerRadius(6)
+
+                    Text("Configure in app menu")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLighter)
+                }
+            }
+
+            // Appearance section
+            GlobalSettingsGroup(title: "Appearance", icon: "sparkles") {
+                HStack {
+                    Text("Ring Style")
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.textLight)
+
+                    Spacer()
+
+                    Picker("", selection: $appState.ringAnimationStyleRaw) {
+                        ForEach(RingAnimationStyle.allCases, id: \.rawValue) { style in
+                            Text(style.displayName).tag(style.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(width: 90)
+                }
+            }
+
+            // Transcription section
+            GlobalSettingsGroup(title: "Transcription", icon: "waveform") {
+                VStack(alignment: .leading, spacing: 10) {
+                    // Model
+                    HStack {
+                        Text("Model")
+                            .font(.system(size: 11))
+                            .foregroundColor(KoeColors.textLight)
+
+                        Spacer()
+
+                        Picker("", selection: $appState.selectedModel) {
+                            ForEach(KoeModel.allCases, id: \.rawValue) { model in
+                                Text(model.displayName).tag(model.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(width: 100)
+                        .onChange(of: appState.selectedModel) { _, newModel in
+                            Task {
+                                await RecordingCoordinator.shared.loadModel(name: newModel)
+                            }
+                        }
+                    }
+
+                    // Language
+                    HStack {
+                        Text("Language")
+                            .font(.system(size: 11))
+                            .foregroundColor(KoeColors.textLight)
+
+                        Spacer()
+
+                        Picker("", selection: $appState.selectedLanguage) {
+                            ForEach(Language.all, id: \.code) { lang in
+                                Text("\(lang.flag) \(lang.name)").tag(lang.code)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(width: 120)
+                    }
+
+                    // Status
+                    HStack(spacing: 4) {
+                        Image(systemName: appState.isModelLoaded ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 9))
+                            .foregroundColor(appState.isModelLoaded ? .green : KoeColors.textLighter)
+                        Text(appState.isModelLoaded ? "Ready" : "Loading...")
+                            .font(.system(size: 10))
+                            .foregroundColor(KoeColors.textLighter)
+                    }
+                }
+            }
+
+            // AI section
+            GlobalSettingsGroup(title: "AI Refinement", icon: "sparkles") {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Provider")
+                            .font(.system(size: 11))
+                            .foregroundColor(KoeColors.textLight)
+
+                        Spacer()
+
+                        Picker("", selection: $appState.aiTierRaw) {
+                            ForEach(AITier.allCases, id: \.rawValue) { tier in
+                                Text(tier.displayName).tag(tier.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(width: 90)
+                    }
+
+                    // Status
+                    HStack(spacing: 4) {
+                        Image(systemName: appState.isRefinementEnabled ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 9))
+                            .foregroundColor(appState.isRefinementEnabled ? .green : KoeColors.textLighter)
+                        Text(appState.isRefinementEnabled ? "Enabled" : "Disabled")
+                            .font(.system(size: 10))
+                            .foregroundColor(KoeColors.textLighter)
+                    }
+                }
+            }
+
+            // Voice Profile section
+            GlobalSettingsGroup(title: "Voice Profile", icon: "person.wave.2") {
+                VStack(alignment: .leading, spacing: 8) {
+                    if appState.hasVoiceProfile {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.green)
+                            Text("Voice trained")
+                                .font(.system(size: 11))
+                                .foregroundColor(KoeColors.textLight)
+
+                            Spacer()
+
+                            Button("Retrain") {
+                                NotificationCenter.default.post(name: .showVoiceTraining, object: nil)
+                            }
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(KoeColors.accent)
+                            .buttonStyle(.plain)
+                        }
+                    } else {
+                        Button(action: {
+                            NotificationCenter.default.post(name: .showVoiceTraining, object: nil)
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "person.wave.2")
+                                    .font(.system(size: 11))
+                                Text("Train Your Voice")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(KoeColors.accent)
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // History section
+            if !appState.transcriptionHistory.isEmpty {
+                GlobalSettingsGroup(title: "History", icon: "clock") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("\(appState.transcriptionHistory.count) transcriptions")
+                            .font(.system(size: 11))
+                            .foregroundColor(KoeColors.textLight)
+
+                        Button(action: {
+                            appState.clearHistory()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 10))
+                                Text("Clear History")
+                                    .font(.system(size: 11))
+                            }
+                            .foregroundColor(.red.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Spacer(minLength: 16)
+        }
+    }
+}
+
+/// A compact settings group for the side panel
+struct GlobalSettingsGroup<Content: View>: View {
+    let title: String
+    let icon: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Header
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundColor(KoeColors.accent)
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(KoeColors.accent)
+            }
+
+            // Content
+            content()
+        }
+        .padding(12)
+        .background(KoeColors.surface)
+        .cornerRadius(10)
     }
 }

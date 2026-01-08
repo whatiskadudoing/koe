@@ -100,19 +100,18 @@ public final class RecordingCoordinator {
             onKeyDown: { [weak self] in
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
-                    let mode = TranscriptionMode(rawValue: AppState.shared.transcriptionMode) ?? .vad
+                    // Hotkey uses push-to-talk (records while held)
                     let langCode = AppState.shared.selectedLanguage
                     let language = Language.all.first { $0.code == langCode } ?? .auto
-                    await self.startRecording(mode: mode, language: language)
+                    await self.startRecording(mode: .vad, language: language)
                 }
             },
             onKeyUp: { [weak self] in
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
-                    let mode = TranscriptionMode(rawValue: AppState.shared.transcriptionMode) ?? .vad
                     let langCode = AppState.shared.selectedLanguage
                     let language = Language.all.first { $0.code == langCode } ?? .auto
-                    await self.stopRecording(mode: mode, language: language)
+                    await self.stopRecording(mode: .vad, language: language)
                 }
             }
         )
@@ -144,15 +143,14 @@ public final class RecordingCoordinator {
         triggerManager.onEvent { [weak self] event in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                let mode = TranscriptionMode(rawValue: AppState.shared.transcriptionMode) ?? .vad
                 let langCode = AppState.shared.selectedLanguage
                 let language = Language.all.first { $0.code == langCode } ?? .auto
 
                 switch event {
                 case .start:
-                    await self.startRecording(mode: mode, language: language)
+                    await self.startRecording(mode: .vad, language: language)
                 case .stop:
-                    await self.stopRecording(mode: mode, language: language)
+                    await self.stopRecording(mode: .vad, language: language)
                 }
             }
         }

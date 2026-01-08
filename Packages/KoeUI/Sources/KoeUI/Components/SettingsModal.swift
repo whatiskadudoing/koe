@@ -63,7 +63,7 @@ public struct SettingsModal<Content: View>: View {
         .background(Color.white)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.15), radius: 20, y: 8)
-        .frame(minWidth: 300, maxWidth: 360)
+        .frame(minWidth: 340, maxWidth: 420)
     }
 }
 
