@@ -626,9 +626,15 @@ async function main(): Promise<void> {
       Deno.exit(1);
     }
 
-    // NOTE: Precompilation is skipped - model compiles on first app launch
-    // This makes installation much faster (~1 min vs ~5 min)
-    // The app shows a loading screen during first-time compilation
+    // Precompile Fast model for instant app startup
+    // Balanced and Best models are downloaded/compiled in background after app launch
+    console.log();
+    const precompileSuccess = await precompileWithProgress();
+
+    if (!precompileSuccess) {
+      // Precompile failure is non-fatal - app will compile on first launch
+      console.log(c.dim("  Model will be compiled on first launch.\n"));
+    }
 
     // Show success message
     console.log(`
