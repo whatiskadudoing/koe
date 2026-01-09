@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.10.0-beta.6...v1.11.0-beta.6) (2026-01-09)
+
+
+### Features
+
+* modular installer with real-time progress ([ac65e66](https://github.com/whatiskadudoing/koe/commit/ac65e6612217499ae1c4ee867db7ee38afcb3bb9))
+
 ## [1.10.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.9.0-beta.6...v1.10.0-beta.6) (2026-01-09)
 
 
