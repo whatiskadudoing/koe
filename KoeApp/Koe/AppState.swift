@@ -47,7 +47,7 @@ public final class AppState {
 
     /// Whether background model processing is active
     public var isBackgroundProcessing: Bool {
-        backgroundModelService.state.isProcessing
+        backgroundModelService.isProcessing
     }
 
     // Refinement model state

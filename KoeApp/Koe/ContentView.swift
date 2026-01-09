@@ -9,6 +9,7 @@ struct ContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(RecordingCoordinator.self) private var coordinator
     @Environment(MeetingCoordinator.self) private var meetingCoordinator
+    @ObservedObject private var backgroundService = BackgroundModelService.shared
 
     @State private var selectedTab: AppTab = .dictation
 
@@ -20,6 +21,9 @@ struct ContentView: View {
 
     /// Selected pipeline stage for settings modal
     @State private var selectedPipelineStage: PipelineStageInfo?
+
+    /// Show the one-time background work explanation
+    @State private var showBackgroundExplanation: Bool = false
 
     enum AppTab {
         case dictation
@@ -92,10 +96,27 @@ struct ContentView: View {
                 .zIndex(10)
             }
 
+            // One-time background work explanation (shows after app ready if there's pending work)
+            if showBackgroundExplanation {
+                BackgroundWorkExplanation(isPresented: $showBackgroundExplanation)
+                    .zIndex(20)
+                    .transition(.opacity)
+            }
+
         }
         .frame(minWidth: 380, minHeight: 520)
         .onAppear {
             setupTabSwitchObservers()
+        }
+        .onChange(of: appState.appReadinessState) { oldState, newState in
+            // Show explanation when app becomes ready AND has pending work AND user hasn't seen it
+            if newState == .ready && !UserDefaults.standard.bool(forKey: "HasSeenBackgroundExplanation") && backgroundService.hasPendingWork {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.easeIn(duration: 0.3)) {
+                        showBackgroundExplanation = true
+                    }
+                }
+            }
         }
     }
 
@@ -2073,6 +2094,115 @@ struct GlobalSettingsGroup<Content: View>: View {
     }
 }
 
+// MARK: - Background Work Explanation (One-time)
+
+struct BackgroundWorkExplanation: View {
+    @ObservedObject private var service = BackgroundModelService.shared
+    @State private var hasSeenExplanation = UserDefaults.standard.bool(forKey: "HasSeenBackgroundExplanation")
+    @Binding var isPresented: Bool
+
+    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+    private let purpleColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
+
+    var body: some View {
+        ZStack {
+            // Dimmed background
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            // Card
+            VStack(spacing: 20) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(purpleColor.opacity(0.15))
+                        .frame(width: 80, height: 80)
+
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 36, weight: .medium))
+                        .foregroundColor(purpleColor)
+                }
+
+                // Title
+                Text("Getting Smarter")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(KoeColors.textPrimary)
+
+                // Description
+                VStack(spacing: 12) {
+                    Text("Koe will download and optimize additional speech recognition models in the background.")
+                        .font(.system(size: 14))
+                        .foregroundColor(KoeColors.textLight)
+                        .multilineTextAlignment(.center)
+
+                    Text("You can use the app right now with Fast mode. We'll notify you when Balanced and Best modes are ready.")
+                        .font(.system(size: 14))
+                        .foregroundColor(KoeColors.textLight)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 8)
+
+                // Features preview
+                VStack(alignment: .leading, spacing: 8) {
+                    FeatureRow(icon: "hare.fill", text: "Fast mode - ready now", color: .green)
+                    FeatureRow(icon: "gauge.medium", text: "Balanced mode - downloading...", color: .orange)
+                    FeatureRow(icon: "star.fill", text: "Best mode - coming soon", color: purpleColor)
+                }
+                .padding(12)
+                .background(KoeColors.surface)
+                .cornerRadius(10)
+
+                // OK Button
+                Button(action: dismiss) {
+                    Text("Got it!")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(accentColor)
+                        .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(24)
+            .frame(maxWidth: 340)
+            .background(Color(nsColor: NSColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0)))
+            .cornerRadius(20)
+            .shadow(color: .black.opacity(0.2), radius: 30, y: 10)
+        }
+    }
+
+    private func dismiss() {
+        UserDefaults.standard.set(true, forKey: "HasSeenBackgroundExplanation")
+        withAnimation(.easeOut(duration: 0.25)) {
+            isPresented = false
+        }
+        // Start background processing after user acknowledges
+        BackgroundModelService.shared.startBackgroundProcessing()
+    }
+}
+
+struct FeatureRow: View {
+    let icon: String
+    let text: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(color)
+                .frame(width: 20)
+
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundColor(KoeColors.textPrimary)
+
+            Spacer()
+        }
+    }
+}
+
 // MARK: - First Launch Banner
 
 struct FirstLaunchBanner: View {
@@ -2121,7 +2251,7 @@ struct FirstLaunchBanner: View {
         !isDismissed &&
         !UserDefaults.standard.bool(forKey: bannerKey) &&
         service.isFirstLaunch &&
-        service.state.isProcessing
+        (service.isProcessing || service.hasPendingWork)
     }
 
     private func dismiss() {
@@ -2142,12 +2272,7 @@ struct BackgroundProgressBar: View {
 
     // Show when there's active work OR pending models
     private var shouldShow: Bool {
-        modelService.state.isProcessing || isAIDownloading || hasPendingModels
-    }
-
-    private var hasPendingModels: Bool {
-        // Check if Balanced or Best models are not ready
-        !modelService.isModelReady(.balanced) || !modelService.isModelReady(.best)
+        modelService.isProcessing || modelService.hasPendingWork || isAIDownloading
     }
 
     private var isAIDownloading: Bool {
@@ -2178,7 +2303,7 @@ struct BackgroundProgressBar: View {
     }
 
     private var currentProgress: Double {
-        if modelService.state.isProcessing {
+        if modelService.isProcessing {
             return modelService.overallProgress
         }
         if isAIDownloading {
@@ -2189,17 +2314,11 @@ struct BackgroundProgressBar: View {
     }
 
     private var currentMessage: String? {
-        if modelService.state.isProcessing {
-            return modelService.statusMessage
+        if let msg = modelService.statusMessage {
+            return msg
         }
         if isAIDownloading {
             return aiStatusMessage
-        }
-        // Show pending status
-        if hasPendingModels {
-            let pending = KoeModel.backgroundModels.filter { !modelService.isModelReady($0) }
-            let names = pending.map { $0.shortName }.joined(separator: ", ")
-            return "\(names) modes will download in background"
         }
         return nil
     }
@@ -2226,14 +2345,14 @@ struct BackgroundProgressBar: View {
 
                 // Status text
                 HStack(spacing: 6) {
-                    if modelService.state.isPaused {
+                    if modelService.isPaused {
                         Image(systemName: "pause.circle.fill")
                             .font(.system(size: 9))
                             .foregroundColor(.orange)
                         Text("Paused - will resume after transcription")
                             .font(.system(size: 10))
                             .foregroundColor(KoeColors.textLight)
-                    } else if modelService.state.isProcessing || isAIDownloading {
+                    } else if modelService.isProcessing || isAIDownloading {
                         ProgressView()
                             .scaleEffect(0.5)
                             .frame(width: 10, height: 10)
@@ -2249,7 +2368,7 @@ struct BackgroundProgressBar: View {
                                 .font(.system(size: 10))
                                 .foregroundColor(KoeColors.textLighter)
                         }
-                    } else if hasPendingModels {
+                    } else if modelService.hasPendingWork {
                         // Pending but not started yet
                         Image(systemName: "clock")
                             .font(.system(size: 9))
@@ -2305,7 +2424,7 @@ struct ModelPicker: View {
         Menu {
             ForEach(KoeModel.allCases, id: \.rawValue) { model in
                 let isAvailable = modelService.isModelReady(model)
-                let status = modelService.statusFor(model)
+                let status = modelService.modelStatuses[model.rawValue]
 
                 Button(action: {
                     if isAvailable {
