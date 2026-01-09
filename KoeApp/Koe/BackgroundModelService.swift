@@ -22,12 +22,15 @@ public struct ModelDownloadStatus: Codable, Sendable, Equatable {
     public var errorMessage: String?
     public var startedAt: Date?
     public var completedAt: Date?
+    public var retryCount: Int  // Number of retry attempts made
+    public var lastFailedAt: Date?  // When the last failure occurred
 
     public init(model: KoeModel) {
         self.model = model
         self.phase = .pending
         self.downloadProgress = 0
         self.compilationProgress = 0
+        self.retryCount = 0
     }
 
     /// Combined progress (download is 50%, compilation is 50%)
@@ -94,6 +97,10 @@ public final class BackgroundModelService: ObservableObject {
     // UserDefaults keys
     private let stateKey = "BackgroundModelState"
     private let hasCompletedFirstBackgroundKey = "HasCompletedFirstBackground"
+
+    // Retry configuration
+    private let maxRetries = 3
+    private let baseRetryDelaySeconds: UInt64 = 30  // 30 seconds, doubles each retry
 
     private init() {
         logger.notice("BackgroundModelService initializing...")
@@ -227,12 +234,20 @@ public final class BackgroundModelService: ObservableObject {
             return nil
         }
 
+        // Check if this is a retry attempt
+        let retryInfo: String
+        if let status = modelStatuses[modelName], status.retryCount > 0 {
+            retryInfo = " (retry \(status.retryCount)/\(maxRetries))"
+        } else {
+            retryInfo = ""
+        }
+
         switch currentPhase {
         case .downloading:
             let percent = Int(currentDownloadProgress * 100)
-            return "Downloading \(model.shortName)... \(percent)%"
+            return "Downloading \(model.shortName)... \(percent)%\(retryInfo)"
         case .compiling:
-            return "Optimizing \(model.shortName)..."
+            return "Optimizing \(model.shortName)...\(retryInfo)"
         default:
             return nil
         }
@@ -250,7 +265,16 @@ public final class BackgroundModelService: ObservableObject {
     // MARK: - Private Implementation
 
     private func updateHasPendingWork() {
-        let pending = KoeModel.backgroundModels.filter { !isModelReady($0) }
+        // Check for models that need work (not ready AND not permanently failed)
+        let pending = KoeModel.backgroundModels.filter { model in
+            if isModelReady(model) { return false }
+            // Check if permanently failed (all retries exhausted)
+            if let status = modelStatuses[model.rawValue],
+               status.phase == .failed && status.retryCount > maxRetries {
+                return false
+            }
+            return true
+        }
         hasPendingWork = !pending.isEmpty
         logger.notice("Pending work check: \(pending.count) models pending, hasPendingWork=\(self.hasPendingWork)")
     }
@@ -297,6 +321,13 @@ public final class BackgroundModelService: ObservableObject {
                 continue
             }
 
+            // Skip if permanently failed (all retries exhausted)
+            if let status = modelStatuses[model.rawValue],
+               status.phase == .failed && status.retryCount > maxRetries {
+                logger.notice("Model \(model.shortName) permanently failed after \(status.retryCount) attempts, skipping")
+                continue
+            }
+
             // Wait if paused
             while isPausedForTranscription {
                 try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
@@ -305,7 +336,7 @@ public final class BackgroundModelService: ObservableObject {
             // Check for cancellation
             if Task.isCancelled { break }
 
-            // Process this model
+            // Process this model (will retry if previously failed with retries remaining)
             await processModel(model)
         }
 
@@ -334,78 +365,117 @@ public final class BackgroundModelService: ObservableObject {
     private func processModel(_ model: KoeModel) async {
         logger.notice("Processing background model: \(model.shortName)")
 
-        // Initialize status
-        var status = ModelDownloadStatus(model: model)
-        status.phase = .downloading
-        status.startedAt = Date()
-        modelStatuses[model.rawValue] = status
-        currentModelName = model.rawValue
-        currentPhase = .downloading
-        currentDownloadProgress = 0
-        persistState()
+        // Get existing status or create new one (preserves retry count across app restarts)
+        var status = modelStatuses[model.rawValue] ?? ModelDownloadStatus(model: model)
 
-        do {
-            // Download the model
-            logger.notice("Downloading \(model.shortName)...")
+        // Retry loop with exponential backoff
+        while status.retryCount <= maxRetries {
+            // Reset for this attempt
+            status.phase = .downloading
+            status.startedAt = Date()
+            status.downloadProgress = 0
+            status.compilationProgress = 0
+            status.errorMessage = nil
+            modelStatuses[model.rawValue] = status
+            currentModelName = model.rawValue
+            currentPhase = .downloading
+            currentDownloadProgress = 0
+            persistState()
 
-            try await transcriber.downloadOnly(model) { [weak self] progress in
-                Task { @MainActor [weak self] in
-                    guard let self = self else { return }
-                    self.currentDownloadProgress = progress
-                    if var s = self.modelStatuses[model.rawValue] {
-                        s.downloadProgress = progress
-                        self.modelStatuses[model.rawValue] = s
+            let attemptNumber = status.retryCount + 1
+            logger.notice("Attempt \(attemptNumber)/\(self.maxRetries + 1) for \(model.shortName)")
+
+            do {
+                // Download the model
+                logger.notice("Downloading \(model.shortName)...")
+
+                try await transcriber.downloadOnly(model) { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard let self = self else { return }
+                        self.currentDownloadProgress = progress
+                        if var s = self.modelStatuses[model.rawValue] {
+                            s.downloadProgress = progress
+                            self.modelStatuses[model.rawValue] = s
+                        }
                     }
                 }
+
+                // Update status for compilation phase
+                status.phase = .compiling
+                status.downloadProgress = 1.0
+                modelStatuses[model.rawValue] = status
+                currentPhase = .compiling
+                currentDownloadProgress = 1.0
+                persistState()
+
+                // Wait if paused before compilation
+                while isPausedForTranscription {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                }
+
+                // Compile the model (this is the expensive ~4 min operation)
+                logger.notice("Compiling \(model.shortName)...")
+
+                // Use a separate transcriber instance for compilation to not interfere
+                // with the main app's transcriber
+                let compileTranscriber = WhisperKitTranscriber()
+                try await compileTranscriber.loadModel(model)
+
+                // After compilation, unload to free memory
+                compileTranscriber.unloadModel()
+
+                // Success!
+                status.phase = .ready
+                status.compilationProgress = 1.0
+                status.completedAt = Date()
+                modelStatuses[model.rawValue] = status
+                currentModelName = nil
+                currentPhase = .pending
+                currentCompilationProgress = 1.0
+                persistState()
+
+                // Send notification
+                await sendModelReadyNotification(model)
+
+                logger.notice("Model \(model.shortName) ready!")
+                return  // Success, exit retry loop
+
+            } catch {
+                status.retryCount += 1
+                status.lastFailedAt = Date()
+                status.errorMessage = error.localizedDescription
+                logger.error("Attempt \(attemptNumber) failed for \(model.shortName): \(error)")
+
+                if status.retryCount > maxRetries {
+                    // All retries exhausted
+                    logger.error("All \(self.maxRetries + 1) attempts failed for \(model.shortName)")
+                    status.phase = .failed
+                    modelStatuses[model.rawValue] = status
+                    currentModelName = nil
+                    currentPhase = .failed
+                    persistState()
+                    return
+                }
+
+                // Exponential backoff: 30s, 60s, 120s
+                let delaySeconds = baseRetryDelaySeconds * UInt64(1 << (status.retryCount - 1))
+                logger.notice("Waiting \(delaySeconds) seconds before retry \(status.retryCount + 1)...")
+                modelStatuses[model.rawValue] = status
+                persistState()
+
+                // Wait before retry (check for cancellation)
+                try? await Task.sleep(nanoseconds: delaySeconds * 1_000_000_000)
+
+                // Wait if paused during retry delay
+                while isPausedForTranscription {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                }
+
+                if Task.isCancelled {
+                    logger.notice("Task cancelled, stopping retries for \(model.shortName)")
+                    return
+                }
             }
-
-            // Update status for compilation phase
-            status.phase = .compiling
-            status.downloadProgress = 1.0
-            modelStatuses[model.rawValue] = status
-            currentPhase = .compiling
-            currentDownloadProgress = 1.0
-            persistState()
-
-            // Wait if paused before compilation
-            while isPausedForTranscription {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-            }
-
-            // Compile the model (this is the expensive ~4 min operation)
-            logger.notice("Compiling \(model.shortName)...")
-
-            // Use a separate transcriber instance for compilation to not interfere
-            // with the main app's transcriber
-            let compileTranscriber = WhisperKitTranscriber()
-            try await compileTranscriber.loadModel(model)
-
-            // After compilation, unload to free memory
-            compileTranscriber.unloadModel()
-
-            // Success!
-            status.phase = .ready
-            status.compilationProgress = 1.0
-            status.completedAt = Date()
-            modelStatuses[model.rawValue] = status
-            currentModelName = nil
-            currentPhase = .pending
-            currentCompilationProgress = 1.0
-            persistState()
-
-            // Send notification
-            await sendModelReadyNotification(model)
-
-            logger.notice("Model \(model.shortName) ready!")
-
-        } catch {
-            logger.error("Failed to process model \(model.shortName): \(error)")
-            status.phase = .failed
-            status.errorMessage = error.localizedDescription
-            modelStatuses[model.rawValue] = status
-            currentModelName = nil
-            currentPhase = .failed
-            persistState()
         }
     }
 
