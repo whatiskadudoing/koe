@@ -21,6 +21,10 @@ struct NodeSettingsContent: View {
             RecorderSettings(appState: appState)
         case .transcribe:
             TranscribeSettings(appState: appState)
+        case .transcribeWhisperKit:
+            WhisperKitSettings(appState: appState)
+        case .transcribeApple:
+            AppleSpeechSettings(appState: appState)
         case .improve:
             ImproveSettings(appState: appState)
         case .autoType:
@@ -680,6 +684,218 @@ struct TranscribeSettings: View {
             Text("Change model in App Settings")
                 .font(.system(size: 9))
                 .foregroundColor(KoeColors.textLighter)
+        }
+    }
+}
+
+// MARK: - WhisperKit Settings
+
+struct WhisperKitSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Engine description
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform.circle")
+                        .font(.system(size: 14))
+                        .foregroundColor(KoeColors.stateTranscribing)
+                    Text("WhisperKit Engine")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(KoeColors.accent)
+                }
+
+                Text("High accuracy transcription using OpenAI Whisper model optimized for Apple Silicon.")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            // Accuracy info
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Accuracy")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(KoeColors.textTertiary)
+                    Text("~7.75% WER")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(KoeColors.stateComplete)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Startup")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(KoeColors.textTertiary)
+                    Text("Requires download")
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.textLight)
+                }
+            }
+
+            Divider()
+
+            // Model status
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Model")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+
+                    Text(appState.currentKoeModel.displayName)
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Image(systemName: appState.isModelLoaded ? "checkmark.circle.fill" : "arrow.down.circle")
+                        .font(.system(size: 10))
+                        .foregroundColor(appState.isModelLoaded ? KoeColors.stateComplete : KoeColors.textLight)
+                    Text(appState.isModelLoaded ? "Ready" : "Loading...")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                }
+            }
+
+            Divider()
+
+            // Language selector
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Language")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+                }
+
+                Spacer()
+
+                Picker("", selection: $appState.selectedLanguage) {
+                    ForEach(Language.all, id: \.code) { lang in
+                        Text("\(lang.flag) \(lang.name)").tag(lang.code)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 130)
+            }
+        }
+    }
+}
+
+// MARK: - Apple Speech Settings
+
+struct AppleSpeechSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Engine description
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "apple.logo")
+                        .font(.system(size: 14))
+                        .foregroundColor(KoeColors.stateTranscribing)
+                    Text("Apple Speech Engine")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(KoeColors.accent)
+                }
+
+                Text("Native macOS speech recognition using SFSpeechRecognizer. No download required.")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            // Accuracy info
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Accuracy")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(KoeColors.textTertiary)
+                    Text("~14% WER")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(KoeColors.stateTranscribing)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Startup")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(KoeColors.textTertiary)
+                    Text("Instant")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(KoeColors.stateComplete)
+                }
+            }
+
+            Divider()
+
+            // Status
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Status")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+
+                    Text("Built into macOS")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.stateComplete)
+                    Text("Always ready")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                }
+            }
+
+            Divider()
+
+            // Language selector
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Language")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+                }
+
+                Spacer()
+
+                Picker("", selection: $appState.selectedLanguage) {
+                    ForEach(Language.all, id: \.code) { lang in
+                        Text("\(lang.flag) \(lang.name)").tag(lang.code)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 130)
+            }
+
+            Divider()
+
+            // Note about trade-offs
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 10))
+                    .foregroundColor(KoeColors.textLight)
+                Text("Faster but less accurate than WhisperKit")
+                    .font(.system(size: 10))
+                    .foregroundColor(KoeColors.textTertiary)
+            }
         }
     }
 }

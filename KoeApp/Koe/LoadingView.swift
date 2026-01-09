@@ -198,22 +198,36 @@ struct LoadingView: View {
     }
 
     private func checkAndLoadModels() async {
-        // Note: WhisperKit handles its own model downloads with progress
-        // ModelManager is for optional models (FluidAudio, LLMs) that are downloaded on-demand
-        // So we go straight to loading the transcription model
+        // Skip WhisperKit model loading if Apple Speech is enabled (instant startup)
+        // WhisperKit model will be loaded on-demand when user enables that node
+        if AppState.shared.isAppleSpeechEnabled && !AppState.shared.isWhisperKitEnabled {
+            // Apple Speech is ready instantly - no model loading needed
+            loadingPhase = .ready
+            AppState.shared.isModelLoaded = true
+            advanceToReady()
+            return
+        }
 
+        // Load WhisperKit model if enabled
         loadingPhase = .loadingModel
         await startModelLoading()
     }
 
     private func startModelLoading() async {
-        // Only start loading if not already loaded
-        if !coordinator.isModelLoaded {
+        // Only load WhisperKit if it's enabled
+        if AppState.shared.isWhisperKitEnabled && !coordinator.isModelLoaded {
             await RecordingCoordinator.shared.loadModel(name: AppState.shared.selectedModel)
         }
     }
 
     private func startModelLoadingCheck() {
+        // If Apple Speech is enabled and WhisperKit is disabled, we're ready immediately
+        if AppState.shared.isAppleSpeechEnabled && !AppState.shared.isWhisperKitEnabled {
+            AppState.shared.isModelLoaded = true
+            advanceToReady()
+            return
+        }
+
         // Check immediately - use coordinator.isModelLoaded which checks actual transcriber state
         if coordinator.isModelLoaded {
             advanceToReady()

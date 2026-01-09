@@ -161,6 +161,32 @@ public final class AppState {
         }
     }
 
+    // MARK: - Transcription Engine Selection (mutually exclusive)
+
+    /// Whether WhisperKit transcription is enabled
+    /// Default: false (requires model download, enable for higher accuracy)
+    public var isWhisperKitEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isWhisperKitEnabled, forKey: "isWhisperKitEnabled")
+            // Notify for resource management when disabled
+            if !isWhisperKitEnabled {
+                NotificationCenter.default.post(name: .transcriptionEngineDisabled, object: "whisperkit")
+            }
+        }
+    }
+
+    /// Whether Apple Speech transcription is enabled
+    /// Default: true (instant startup, no download required)
+    public var isAppleSpeechEnabled: Bool = true {
+        didSet {
+            UserDefaults.standard.set(isAppleSpeechEnabled, forKey: "isAppleSpeechEnabled")
+            // Notify for resource management when disabled
+            if !isAppleSpeechEnabled {
+                NotificationCenter.default.post(name: .transcriptionEngineDisabled, object: "apple-speech")
+            }
+        }
+    }
+
     /// Whether to copy transcribed text to clipboard when target is lost (user switched apps)
     /// If false, text is simply discarded when target cannot be restored
     public var copyToClipboardOnTargetLost: Bool {
@@ -358,6 +384,14 @@ public final class AppState {
             isAutoEnterEnabled = UserDefaults.standard.bool(forKey: "isAutoEnterEnabled")
         }
 
+        // Load transcription engine states (default: WhisperKit enabled)
+        if UserDefaults.standard.object(forKey: "isWhisperKitEnabled") != nil {
+            isWhisperKitEnabled = UserDefaults.standard.bool(forKey: "isWhisperKitEnabled")
+        }
+        if UserDefaults.standard.object(forKey: "isAppleSpeechEnabled") != nil {
+            isAppleSpeechEnabled = UserDefaults.standard.bool(forKey: "isAppleSpeechEnabled")
+        }
+
         // Load saved refinement options
         if UserDefaults.standard.object(forKey: "isCleanupEnabled") != nil {
             isCleanupEnabled = UserDefaults.standard.bool(forKey: "isCleanupEnabled")
@@ -438,12 +472,30 @@ public final class AppState {
         switch appReadinessState {
         case .welcome:
             checkAllPermissions()
-            appReadinessState = hasAllPermissions ? .loading : .needsPermissions
+            if hasAllPermissions {
+                // Skip loading if Apple Speech is enabled (instant startup)
+                if isAppleSpeechEnabled && !isWhisperKitEnabled {
+                    isModelLoaded = true
+                    appReadinessState = .ready
+                    NotificationCenter.default.post(name: .appReady, object: nil)
+                } else {
+                    appReadinessState = .loading
+                }
+            } else {
+                appReadinessState = .needsPermissions
+            }
 
         case .needsPermissions:
             checkAllPermissions()
             if hasAllPermissions {
-                appReadinessState = .loading
+                // Skip loading if Apple Speech is enabled (instant startup)
+                if isAppleSpeechEnabled && !isWhisperKitEnabled {
+                    isModelLoaded = true
+                    appReadinessState = .ready
+                    NotificationCenter.default.post(name: .appReady, object: nil)
+                } else {
+                    appReadinessState = .loading
+                }
             }
 
         case .loading:

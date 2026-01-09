@@ -152,6 +152,24 @@ final class NodeStateController<Node: Hashable & Sendable> {
         setPersistedState(node, enabled)
     }
 
+    /// Toggle a node with mutual exclusivity - disables other nodes in the same group
+    func toggleExclusive(_ node: Node, in group: [Node]) {
+        let nodeInfo = info(for: node)
+        guard nodeInfo.isUserToggleable else { return }
+
+        let current = getPersistedState(node)
+        let newState = !current
+
+        if newState {
+            // Enabling this node - disable all others in the group
+            for otherNode in group where otherNode != node {
+                setPersistedState(otherNode, false)
+            }
+        }
+
+        setPersistedState(node, newState)
+    }
+
     /// Mark a node as running (dims mutually exclusive nodes)
     func setRunning(_ node: Node?) {
         runningNodeTypeId = node.map { nodeToTypeId($0) }
@@ -207,6 +225,8 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .voiceTrigger: return "voice-trigger"
                 case .recorder: return "recorder"
                 case .transcribe: return "transcribe"
+                case .transcribeWhisperKit: return "transcribe-whisperkit"
+                case .transcribeApple: return "transcribe-apple"
                 case .improve: return "text-improve"
                 case .autoType: return "auto-type"
                 case .autoEnter: return "auto-enter"
@@ -216,6 +236,8 @@ extension NodeStateController where Node == PipelineStageInfo {
                 switch node {
                 case .hotkeyTrigger: return true
                 case .voiceTrigger: return appState.isCommandListeningEnabled
+                case .transcribeWhisperKit: return appState.isWhisperKitEnabled
+                case .transcribeApple: return appState.isAppleSpeechEnabled
                 case .improve: return appState.isRefinementEnabled
                 case .autoEnter: return appState.isAutoEnterEnabled
                 default: return true
@@ -224,6 +246,8 @@ extension NodeStateController where Node == PipelineStageInfo {
             setPersistedState: { node, enabled in
                 switch node {
                 case .voiceTrigger: appState.isCommandListeningEnabled = enabled
+                case .transcribeWhisperKit: appState.isWhisperKitEnabled = enabled
+                case .transcribeApple: appState.isAppleSpeechEnabled = enabled
                 case .improve: appState.isRefinementEnabled = enabled
                 case .autoEnter: appState.isAutoEnterEnabled = enabled
                 default: break

@@ -22,11 +22,21 @@ public final class RecordingCoordinator {
 
     // MARK: - Dependencies (injected)
     private let audioRecorder: AVAudioEngineRecorder
-    private let transcriber: WhisperKitTranscriber
+    private let whisperKitTranscriber: WhisperKitTranscriber
+    private let appleSpeechTranscriber: AppleSpeechTranscriber
     private let textInserter: TextInsertionServiceImpl
     private let vadProcessor: VADProcessor
     private let hotkeyManager: KoeHotkeyManager
     private let aiService: AIService
+
+    /// Returns the active transcriber based on which node is enabled
+    private var activeTranscriber: any TranscriptionService {
+        if AppState.shared.isAppleSpeechEnabled {
+            return appleSpeechTranscriber
+        } else {
+            return whisperKitTranscriber
+        }
+    }
 
     // MARK: - State
     public private(set) var isRecording = false
@@ -76,14 +86,16 @@ public final class RecordingCoordinator {
 
     public init(
         audioRecorder: AVAudioEngineRecorder = AVAudioEngineRecorder(),
-        transcriber: WhisperKitTranscriber = WhisperKitTranscriber(),
+        whisperKitTranscriber: WhisperKitTranscriber = WhisperKitTranscriber(),
+        appleSpeechTranscriber: AppleSpeechTranscriber = AppleSpeechTranscriber(),
         textInserter: TextInsertionServiceImpl = TextInsertionServiceImpl(),
         vadProcessor: VADProcessor = VADProcessor(),
         hotkeyManager: KoeHotkeyManager = KoeHotkeyManager(),
         aiService: AIService = AIService.shared
     ) {
         self.audioRecorder = audioRecorder
-        self.transcriber = transcriber
+        self.whisperKitTranscriber = whisperKitTranscriber
+        self.appleSpeechTranscriber = appleSpeechTranscriber
         self.textInserter = textInserter
         self.vadProcessor = vadProcessor
         self.hotkeyManager = hotkeyManager
@@ -170,32 +182,42 @@ public final class RecordingCoordinator {
         }
     }
 
-    // MARK: - Model Loading
+    // MARK: - Model Loading (WhisperKit specific)
 
     public var isModelLoaded: Bool {
-        transcriber.isReady
+        // For Apple Speech, always ready. For WhisperKit, check if loaded.
+        if AppState.shared.isAppleSpeechEnabled && !AppState.shared.isWhisperKitEnabled {
+            return true
+        }
+        return whisperKitTranscriber.isReady
     }
 
     public var modelLoadingProgress: Double {
-        transcriber.loadingProgress
+        whisperKitTranscriber.loadingProgress
     }
 
     public func loadModel(_ model: KoeModel) async {
-        logger.info("Loading model: \(model.rawValue)")
+        // Only load WhisperKit model if WhisperKit is enabled
+        guard AppState.shared.isWhisperKitEnabled else {
+            logger.info("Skipping WhisperKit model load - Apple Speech is active")
+            return
+        }
+
+        logger.info("Loading WhisperKit model: \(model.rawValue)")
         do {
-            try await transcriber.loadModel(model)
+            try await whisperKitTranscriber.loadModel(model)
 
             // Only set loaded if transcriber is actually ready
-            if transcriber.isReady {
+            if whisperKitTranscriber.isReady {
                 AppState.shared.isModelLoaded = true
                 NotificationCenter.default.post(name: .modelLoaded, object: nil)
-                logger.info("Model loaded successfully")
+                logger.info("WhisperKit model loaded successfully")
             } else {
-                logger.warning("loadModel completed but transcriber.isReady is false")
+                logger.warning("loadModel completed but whisperKitTranscriber.isReady is false")
                 AppState.shared.isModelLoaded = false
             }
         } catch {
-            logger.error("Failed to load model", error: error)
+            logger.error("Failed to load WhisperKit model", error: error)
             AppState.shared.isModelLoaded = false
         }
     }
@@ -206,7 +228,7 @@ public final class RecordingCoordinator {
     }
 
     public func unloadModel() {
-        transcriber.unloadModel()
+        whisperKitTranscriber.unloadModel()
         AppState.shared.isModelLoaded = false
     }
 
@@ -245,12 +267,8 @@ public final class RecordingCoordinator {
     // MARK: - Recording
 
     public func startRecording(mode: TranscriptionMode, language: Language) async {
-        guard transcriber.isReady else {
-            logger.warning("Cannot start recording - model not loaded")
-            AppState.shared.errorMessage = "Model still loading..."
-            NSSound(named: "Basso")?.play()
-            return
-        }
+        // Note: Recording is now decoupled from transcription readiness.
+        // The transcription node will handle its own readiness check.
 
         // Prevent starting a new recording if currently recording OR if pipeline is still processing
         guard !isRecording && !isPipelineProcessing else {
@@ -482,7 +500,7 @@ public final class RecordingCoordinator {
 
         do {
             let lang = language.isAuto ? nil : language
-            let text = try await transcriber.transcribe(
+            let text = try await activeTranscriber.transcribe(
                 samples: samples,
                 sampleRate: 16000,
                 language: lang
@@ -527,7 +545,7 @@ public final class RecordingCoordinator {
             _ = try await audioRecorder.stopRecording()
 
             let lang = language.isAuto ? nil : language
-            let rawText = try await transcriber.transcribe(
+            let rawText = try await activeTranscriber.transcribe(
                 samples: samples,
                 sampleRate: 16000,
                 language: lang

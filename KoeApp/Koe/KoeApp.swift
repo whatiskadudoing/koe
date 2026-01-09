@@ -800,5 +800,8 @@ extension Notification.Name {
 
     // UI navigation
     static let showVoiceTraining = Notification.Name("showVoiceTraining")
+
+    // Transcription engine management
+    static let transcriptionEngineDisabled = Notification.Name("transcriptionEngineDisabled")
 }
 

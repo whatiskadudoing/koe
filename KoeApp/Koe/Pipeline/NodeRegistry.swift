@@ -62,6 +62,12 @@ public struct NodeInfo: Identifiable, Sendable {
     /// Key for storing enabled state in UserDefaults (nil = not persisted)
     public let persistenceKey: String?
 
+    // MARK: - Mutual Exclusivity
+
+    /// Group name for mutually exclusive nodes (only one in group can be enabled)
+    /// Nodes with the same exclusiveGroup will auto-disable when another in the group is enabled
+    public let exclusiveGroup: String?
+
     // MARK: - Init
 
     public init(
@@ -79,7 +85,8 @@ public struct NodeInfo: Identifiable, Sendable {
         actionDescription: String? = nil,
         showsComparison: Bool = false,
         hasSettings: Bool = false,
-        persistenceKey: String? = nil
+        persistenceKey: String? = nil,
+        exclusiveGroup: String? = nil
     ) {
         self.typeId = typeId
         self.displayName = displayName
@@ -96,6 +103,7 @@ public struct NodeInfo: Identifiable, Sendable {
         self.showsComparison = showsComparison
         self.hasSettings = hasSettings
         self.persistenceKey = persistenceKey
+        self.exclusiveGroup = exclusiveGroup
     }
 }
 
@@ -184,6 +192,23 @@ public final class NodeRegistry: @unchecked Sendable {
         return nodes.values.filter { $0.isUserToggleable }
     }
 
+    /// Get all nodes in the same exclusive group
+    public func nodesInExclusiveGroup(_ group: String) -> [NodeInfo] {
+        lock.lock()
+        defer { lock.unlock() }
+        return nodes.values.filter { $0.exclusiveGroup == group }
+    }
+
+    /// Get other nodes that should be disabled when enabling a node
+    public func exclusiveNodes(for typeId: String) -> [NodeInfo] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let node = nodes[typeId], let group = node.exclusiveGroup else {
+            return []
+        }
+        return nodes.values.filter { $0.exclusiveGroup == group && $0.typeId != typeId }
+    }
+
     // MARK: - Built-in Nodes
 
     private func registerBuiltInNodes() {
@@ -243,6 +268,35 @@ public final class NodeRegistry: @unchecked Sendable {
                 outputType: .text,
                 inputDescription: "Audio recording",
                 hasSettings: true
+            ),
+
+            // Transcription Engines (mutually exclusive - only one can be active)
+            NodeInfo(
+                typeId: "transcribe-whisperkit",
+                displayName: "WhisperKit",
+                icon: "waveform.circle",
+                color: KoeColors.stateTranscribing,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                outputType: .text,
+                inputDescription: "Audio recording",
+                hasSettings: true,
+                persistenceKey: "transcribeWhisperKitEnabled",
+                exclusiveGroup: "transcription"
+            ),
+
+            NodeInfo(
+                typeId: "transcribe-apple",
+                displayName: "Apple Speech",
+                icon: "apple.logo",
+                color: KoeColors.stateTranscribing,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                outputType: .text,
+                inputDescription: "Audio recording",
+                hasSettings: true,
+                persistenceKey: "transcribeAppleSpeechEnabled",
+                exclusiveGroup: "transcription"
             ),
 
             // Text Processing
@@ -328,6 +382,8 @@ extension PipelineStageInfo {
         case .voiceTrigger: return "voice-trigger"
         case .recorder: return "recorder"
         case .transcribe: return "transcribe"
+        case .transcribeWhisperKit: return "transcribe-whisperkit"
+        case .transcribeApple: return "transcribe-apple"
         case .improve: return "text-improve"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"

@@ -24,15 +24,38 @@ struct PipelineStripView: View {
                 onOpenSettings: { stage in selectedStage = stage }
             )
 
-            // Sequential stages (vertically centered)
-            ForEach(Array(PipelineStageInfo.sequentialStages.enumerated()), id: \.element.id) { index, stage in
+            // Pre-transcription stages (recorder)
+            ForEach(Array(PipelineStageInfo.preTranscriptionStages.enumerated()), id: \.element.id) { index, stage in
                 HStack(spacing: 0) {
-                    // Connector between sequential stages (skip first one - merge connector handles it)
                     if index > 0 {
-                        PipelineConnector(
-                            isActive: isConnectorActive(stage: stage, previousIndex: index - 1),
-                            color: activeTriggerColor
-                        )
+                        PipelineConnector(isActive: true, color: activeTriggerColor)
+                    }
+
+                    PipelineNodeView(
+                        stage: stage,
+                        isEnabled: nodeController.binding(for: stage),
+                        isSelected: selectedStage == stage,
+                        isRunning: isStageRunning(stage),
+                        metrics: metricsFor(stage),
+                        onToggle: { nodeController.toggle(stage) },
+                        onOpenSettings: { selectedStage = stage }
+                    )
+                }
+            }
+
+            // Parallel transcription engines section
+            ParallelTranscriptionView(
+                nodeController: nodeController,
+                selectedStage: $selectedStage,
+                isTranscribing: appState.recordingState == .transcribing,
+                onOpenSettings: { stage in selectedStage = stage }
+            )
+
+            // Post-transcription stages (improve, type, enter)
+            ForEach(Array(PipelineStageInfo.postTranscriptionStages.enumerated()), id: \.element.id) { index, stage in
+                HStack(spacing: 0) {
+                    if index > 0 {
+                        PipelineConnector(isActive: true, color: activeTriggerColor)
                     }
 
                     PipelineNodeView(
@@ -81,7 +104,8 @@ struct PipelineStripView: View {
         case .recording:
             return stage == .recorder
         case .transcribing:
-            return stage == .transcribe
+            // Both transcription nodes show running state when transcribing
+            return stage == .transcribe || stage == .transcribeWhisperKit || stage == .transcribeApple
         case .refining:
             return stage == .improve
         }
@@ -164,6 +188,139 @@ struct ParallelTriggersView: View {
             onOpenSettings: { onOpenSettings(stage) }
         )
         .opacity(isDimmedByOther ? 0.4 : 1.0)
+    }
+}
+
+// MARK: - Parallel Transcription View
+
+struct ParallelTranscriptionView: View {
+    let nodeController: NodeStateController<PipelineStageInfo>
+    @Binding var selectedStage: PipelineStageInfo?
+    let isTranscribing: Bool
+    let onOpenSettings: (PipelineStageInfo) -> Void
+
+    private var isWhisperKitEnabled: Bool {
+        nodeController.isEnabled(.transcribeWhisperKit)
+    }
+
+    private var isAppleEnabled: Bool {
+        nodeController.isEnabled(.transcribeApple)
+    }
+
+    private var isAnyTranscriptionEnabled: Bool {
+        isWhisperKitEnabled || isAppleEnabled
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Split connector from recorder
+            PipelineSplitConnector(
+                isTopActive: isWhisperKitEnabled,
+                isBottomActive: isAppleEnabled,
+                isSplitActive: isAnyTranscriptionEnabled,
+                activeColor: KoeColors.accent
+            )
+
+            // Transcription engines stacked vertically
+            VStack(spacing: 8) {
+                // WhisperKit transcription
+                transcriptionNode(
+                    stage: .transcribeWhisperKit,
+                    isRunning: isTranscribing && isWhisperKitEnabled,
+                    isDimmedByOther: isTranscribing && isAppleEnabled && !isWhisperKitEnabled
+                )
+
+                // Apple Speech transcription
+                transcriptionNode(
+                    stage: .transcribeApple,
+                    isRunning: isTranscribing && isAppleEnabled,
+                    isDimmedByOther: isTranscribing && isWhisperKitEnabled && !isAppleEnabled
+                )
+            }
+
+            // Merge connector to next stage
+            PipelineMergeConnector(
+                isTopActive: isWhisperKitEnabled,
+                isBottomActive: isAppleEnabled,
+                isMergeActive: isAnyTranscriptionEnabled,
+                activeColor: KoeColors.accent
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func transcriptionNode(stage: PipelineStageInfo, isRunning: Bool, isDimmedByOther: Bool) -> some View {
+        PipelineNodeView(
+            stage: stage,
+            isEnabled: nodeController.binding(for: stage),
+            isSelected: selectedStage == stage,
+            isRunning: isRunning,
+            metrics: nil,
+            onToggle: {
+                // Toggle with mutual exclusivity - disable the other transcription node
+                nodeController.toggleExclusive(stage, in: PipelineStageInfo.transcriptionStages)
+            },
+            onOpenSettings: { onOpenSettings(stage) }
+        )
+        .opacity(isDimmedByOther ? 0.4 : 1.0)
+    }
+}
+
+// MARK: - Split Connector
+
+struct PipelineSplitConnector: View {
+    let isTopActive: Bool
+    let isBottomActive: Bool
+    let isSplitActive: Bool
+    let activeColor: Color
+
+    private let nodeHeight: CGFloat = 60
+    private let spacing: CGFloat = 8
+    private let inputWidth: CGFloat = 20
+    private let splitWidth: CGFloat = 16
+
+    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
+
+    var body: some View {
+        Canvas { context, size in
+            let midY = size.height / 2
+            let topY = nodeHeight / 2
+            let bottomY = size.height - (nodeHeight / 2)
+            let splitX = inputWidth
+
+            // Input line from previous node to split point
+            var inPath = Path()
+            inPath.move(to: CGPoint(x: 0, y: midY))
+            inPath.addLine(to: CGPoint(x: splitX, y: midY))
+            context.stroke(
+                inPath,
+                with: .color(isSplitActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round)
+            )
+
+            // Line from split point to top transcription node
+            var topPath = Path()
+            topPath.move(to: CGPoint(x: splitX, y: midY))
+            topPath.addLine(to: CGPoint(x: splitX, y: topY))
+            topPath.addLine(to: CGPoint(x: size.width, y: topY))
+            context.stroke(
+                topPath,
+                with: .color(isTopActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            )
+
+            // Line from split point to bottom transcription node
+            var bottomPath = Path()
+            bottomPath.move(to: CGPoint(x: splitX, y: midY))
+            bottomPath.addLine(to: CGPoint(x: splitX, y: bottomY))
+            bottomPath.addLine(to: CGPoint(x: size.width, y: bottomY))
+            context.stroke(
+                bottomPath,
+                with: .color(isBottomActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            )
+        }
+        .frame(width: inputWidth + splitWidth, height: (nodeHeight * 2) + spacing)
     }
 }
 
