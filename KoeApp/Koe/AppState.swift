@@ -108,9 +108,9 @@ public final class AppState {
     @ObservationIgnored
     private var _isRefinementEnabled: Bool {
         get {
-            // Default to true if not set
+            // Default to false if not set (user must opt-in)
             if UserDefaults.standard.object(forKey: "isRefinementEnabled") == nil {
-                return true
+                return false
             }
             return UserDefaults.standard.bool(forKey: "isRefinementEnabled")
         }
