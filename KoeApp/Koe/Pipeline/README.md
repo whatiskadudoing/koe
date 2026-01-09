@@ -252,12 +252,111 @@ enum NodeOutputType {
 4. **Define relationships** - Use `requiredNodes` and `dimsWhenRunning` for dependencies
 5. **Use persistenceKey** - For nodes that can be toggled, so state persists across launches
 
+## Node UI System
+
+Each node controls its own appearance through `NodeUIProvider`. This means node-specific functionality lives in the node's UI provider, not scattered in app code.
+
+### NodeUIProvider Protocol
+
+```swift
+protocol NodeUIProvider {
+    var typeId: String { get }
+
+    // Pipeline strip UI
+    func pipelineIcon(context: NodeUIContext) -> AnyView
+    func pipelineBackground(context: NodeUIContext) -> AnyView
+    func pipelineBadge(context: NodeUIContext) -> AnyView?
+
+    // Report UI
+    func reportCard(context: NodeUIContext) -> AnyView
+    func reportDetail(context: NodeUIContext) -> AnyView
+    func reportInputDescription(context: NodeUIContext) -> String
+    func reportOutputContent(context: NodeUIContext) -> AnyView?
+
+    // Settings UI
+    func settingsPanel(context: NodeUIContext) -> AnyView?
+}
+```
+
+### NodeUIContext
+
+All UI methods receive a context with everything they need:
+
+```swift
+struct NodeUIContext {
+    let nodeInfo: NodeInfo           // Node definition
+    let state: NodeUIState           // Current state (idle, running, failed, etc.)
+    let isEnabled: Bool              // User toggle state
+    let isSelected: Bool             // Selected in UI
+    let metrics: ElementExecutionMetrics?    // Execution metrics
+    let executionRecord: PipelineExecutionRecord? // Full record for reports
+}
+```
+
+### NodeUIState
+
+```swift
+enum NodeUIState {
+    case idle          // Not doing anything
+    case running       // Currently processing
+    case completed     // Finished successfully
+    case failed(String?) // Failed with error
+    case skipped       // Was skipped
+    case disabled      // Disabled by user
+    case dimmed        // Temporarily dimmed
+}
+```
+
+### Built-in UI Providers
+
+| Provider | For | Special Features |
+|----------|-----|------------------|
+| `DefaultNodeUIProvider` | Base implementation | Standard icon/background |
+| `TextTransformNodeUI` | text-improve, etc. | Before/after comparison |
+| `ActionNodeUI` | auto-type, auto-enter | Action confirmation display |
+| `RecorderNodeUI` | recorder | Animated recording indicator |
+| `TranscribeNodeUI` | transcribe | Character count display |
+| `TriggerNodeUI` | triggers | Prominent enable badge |
+
+### Creating Custom UI for a Node
+
+```swift
+class MyCustomNodeUI: DefaultNodeUIProvider {
+    init() {
+        super.init(typeId: "my-custom-node")
+    }
+
+    // Override specific methods
+    override func pipelineIcon(context: NodeUIContext) -> AnyView {
+        // Custom icon rendering
+        AnyView(
+            Image(systemName: "star.fill")
+                .foregroundColor(context.state == .running ? .yellow : .gray)
+        )
+    }
+
+    override func reportDetail(context: NodeUIContext) -> AnyView {
+        // Custom report view with node-specific data
+        AnyView(
+            VStack {
+                Text("My Custom Output")
+                // ... custom content
+            }
+        )
+    }
+}
+
+// Register it
+NodeUIRegistry.shared.register(MyCustomNodeUI())
+```
+
 ## File Locations
 
 | File | Purpose |
 |------|---------|
 | `Pipeline/NodeRegistry.swift` | Node definitions and registry |
 | `Pipeline/NodeStateController.swift` | Runtime state management |
+| `Pipeline/NodeUI.swift` | UI providers and rendering |
 | `Pipeline/PipelineNodeView.swift` | Visual node component |
 | `Pipeline/PipelineStripView.swift` | Pipeline visualization |
 | `Pipeline/PipelineStageInfo.swift` | Stage enum for UI |

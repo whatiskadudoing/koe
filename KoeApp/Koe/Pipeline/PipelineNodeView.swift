@@ -3,6 +3,9 @@ import KoeUI
 import KoePipeline
 
 /// Individual node in the pipeline visualization
+/// Uses NodeUIProvider for rendering - each node type controls its own appearance
+///
+/// Interactions:
 /// - Click toggle indicator: turn on/off (if toggleable)
 /// - Double tap node: open settings (if has settings)
 struct PipelineNodeView: View {
@@ -11,8 +14,8 @@ struct PipelineNodeView: View {
     let isSelected: Bool
     let isRunning: Bool
     let metrics: ElementExecutionMetrics?
-    let onToggle: () -> Void      // Called when toggle indicator is clicked
-    let onOpenSettings: () -> Void // Called on double tap for nodes with settings
+    let onToggle: () -> Void
+    let onOpenSettings: () -> Void
 
     @State private var isHovered = false
     @State private var lastTapTime: Date = .distantPast
@@ -20,6 +23,29 @@ struct PipelineNodeView: View {
     private let nodeSize: CGFloat = 44
     private let cornerRadius: CGFloat = 10
     private let doubleTapThreshold: TimeInterval = 0.3
+
+    /// Get the UI provider for this node
+    private var uiProvider: NodeUIProvider {
+        stage.nodeInfo.uiProvider
+    }
+
+    /// Create UI context for current state
+    private var uiContext: NodeUIContext {
+        let state: NodeUIState = {
+            if isRunning { return .running }
+            if !isEnabled && stage.isToggleable { return .disabled }
+            if let m = metrics, m.status == .failed { return .failed(m.errorMessage) }
+            return .idle
+        }()
+
+        return NodeUIContext(
+            nodeInfo: stage.nodeInfo,
+            state: state,
+            isEnabled: isEnabled,
+            isSelected: isSelected,
+            metrics: metrics
+        )
+    }
 
     var body: some View {
         nodeContent
@@ -35,27 +61,23 @@ struct PipelineNodeView: View {
     }
 
     /// Handle tap with manual double-tap detection
-    /// - Toggle is handled by the NodeToggleIndicator (click the dot)
-    /// - Double-tap anywhere opens settings
     private func handleTap() {
         let now = Date()
         let timeSinceLastTap = now.timeIntervalSince(lastTapTime)
 
         if timeSinceLastTap < doubleTapThreshold {
             // Double tap - open settings
-            lastTapTime = .distantPast // Reset to prevent triple-tap triggering
+            lastTapTime = .distantPast
             if stage.hasSettings {
                 onOpenSettings()
             }
         } else {
-            // Record tap time for double-tap detection
             lastTapTime = now
 
-            // For toggleable nodes: single tap also toggles (with delay to detect double tap)
+            // For toggleable nodes: single tap also toggles (with delay)
             if stage.isToggleable {
                 let capturedTime = now
                 DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapThreshold) { [self] in
-                    // Only toggle if no second tap came in
                     if lastTapTime == capturedTime {
                         withAnimation(.easeOut(duration: 0.2)) {
                             isEnabled.toggle()
@@ -69,30 +91,21 @@ struct PipelineNodeView: View {
     private var nodeContent: some View {
         VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {
-                // Node background - rounded square
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(isRunning ? stage.color.opacity(0.15) : Color.white)
+                // Background from provider
+                uiProvider.pipelineBackground(context: uiContext)
                     .frame(width: nodeSize, height: nodeSize)
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                     .shadow(
                         color: .black.opacity(isHovered ? 0.10 : 0.05),
                         radius: isHovered ? 8 : 4,
                         y: 2
                     )
 
-                // Icon or waveform when running
-                if isRunning {
-                    AnimatedWaveform(color: stage.color, barCount: 4, minHeight: 4, maxHeight: 12)
-                        .frame(width: 24, height: 16)
-                        .frame(width: nodeSize, height: nodeSize)
-                } else {
-                    Image(systemName: stage.icon)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(effectiveIconColor)
-                        .frame(width: nodeSize, height: nodeSize)
-                }
+                // Icon from provider
+                uiProvider.pipelineIcon(context: uiContext)
+                    .frame(width: nodeSize, height: nodeSize)
 
-                // Interactive toggle indicator (only for toggleable stages)
-                // Clicking this is the primary way to toggle on/off
+                // Toggle indicator (for toggleable nodes)
                 if stage.isToggleable && !isRunning {
                     NodeToggleIndicator(
                         isOn: $isEnabled,
@@ -101,23 +114,20 @@ struct PipelineNodeView: View {
                     .offset(x: -2, y: 2)
                 }
 
-                // Status indicator for failed stages
-                if let m = metrics, m.status == .failed, !isRunning {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.red)
-                        .offset(x: -4, y: 4)
+                // Badge from provider (error indicator, etc.)
+                if !stage.isToggleable, let badge = uiProvider.pipelineBadge(context: uiContext) {
+                    badge.offset(x: -4, y: 4)
                 }
             }
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(isRunning ? stage.color : (isSelected ? KoeColors.accent : Color.clear), lineWidth: 2)
+                    .stroke(borderColor, lineWidth: 2)
             )
 
-            // Name label - fixed size to prevent wrapping
+            // Name label
             Text(stage.displayName)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(isRunning ? stage.color : (isEnabled ? KoeColors.textSecondary : KoeColors.textLight))
+                .foregroundColor(labelColor)
                 .fixedSize()
                 .lineLimit(1)
         }
@@ -125,39 +135,20 @@ struct PipelineNodeView: View {
         .scaleEffect(isHovered ? 1.05 : 1.0)
     }
 
-    /// Color for timing badge based on duration
-    private func timingColor(for metrics: ElementExecutionMetrics) -> Color {
-        switch metrics.status {
-        case .failed:
-            return .red
-        case .cancelled:
-            return .orange
-        case .skipped:
-            return KoeColors.textLight
-        case .success:
-            // Color based on duration: <100ms green, <500ms yellow, >500ms orange
-            if metrics.durationMs < 100 {
-                return .green
-            } else if metrics.durationMs < 500 {
-                return .orange
-            } else {
-                return .red
-            }
-        }
+    private var borderColor: Color {
+        if isRunning { return stage.color }
+        if isSelected { return KoeColors.accent }
+        return .clear
     }
 
-    private var effectiveIconColor: Color {
-        if !stage.isToggleable {
-            // Always-on stages use their color
-            return stage.color
-        }
-        return isEnabled ? stage.color : KoeColors.textLight
+    private var labelColor: Color {
+        if isRunning { return stage.color }
+        if isEnabled { return KoeColors.textSecondary }
+        return KoeColors.textLight
     }
 
     private var effectiveOpacity: Double {
-        if !stage.isToggleable {
-            return 1.0
-        }
+        if !stage.isToggleable { return 1.0 }
         return isEnabled ? 1.0 : 0.5
     }
 }
