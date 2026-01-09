@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.13.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.12.1-beta.6...v1.13.0-beta.6) (2026-01-09)
+
+
+### Features
+
+* skip ANE compilation during install, use CPU+GPU for instant startup ([37439bb](https://github.com/whatiskadudoing/koe/commit/37439bb3663d9b7c8cb839a257b69bd485c8cbb6))
+
+
+### Bug Fixes
+
+* remove unused runOptimization function and imports ([f22b59f](https://github.com/whatiskadudoing/koe/commit/f22b59feaaa59b4a089c2b0a5f5d98c04263481c))
+
 ## [1.12.1-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.12.0-beta.6...v1.12.1-beta.6) (2026-01-09)
 
 
