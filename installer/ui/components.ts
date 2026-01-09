@@ -179,8 +179,8 @@ export function successBox(version: string): string {
     "",
     `Hold ${colors.bold("⌥ Space")} anywhere to transcribe.`,
     "",
-    colors.dim("Tip: Balanced & Best modes will download"),
-    colors.dim("in the background for better accuracy."),
+    colors.dim("First launch optimizes for Apple Silicon"),
+    colors.dim("in the background — transcription works immediately."),
   ];
 
   return box(lines, "rounded", 2);

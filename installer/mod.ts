@@ -365,10 +365,7 @@ async function main(): Promise<void> {
       Deno.exit(1);
     }
 
-    // Step 6: Optimize model (with real progress!)
-    await runOptimization();
-
-    // Success message
+    // Success message (ANE optimization happens in background on first launch)
     console.log();
     console.log(successBox(version));
     console.log();

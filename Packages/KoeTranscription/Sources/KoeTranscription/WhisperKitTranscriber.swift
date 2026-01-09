@@ -105,11 +105,32 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
         if isCancelled { return }
 
         do {
-            // Use ANE for fastest daily transcription (one-time 4-min compilation on first load)
-            let computeOptions = ModelComputeOptions(
-                audioEncoderCompute: .cpuAndNeuralEngine,
-                textDecoderCompute: .cpuAndNeuralEngine
-            )
+            // Use persistent location for model storage
+            let modelFolder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+                .appendingPathComponent("Koe")
+                .appendingPathComponent("Models")
+
+            try? FileManager.default.createDirectory(at: modelFolder, withIntermediateDirectories: true)
+
+            // Check if ANE is already compiled (marker file exists)
+            let aneMarkerPath = modelFolder.appendingPathComponent(".ane-compiled-\(name)")
+            let isANECompiled = FileManager.default.fileExists(atPath: aneMarkerPath.path)
+
+            // Use ANE if already compiled, otherwise CPU+GPU for fast initial load
+            let computeOptions: ModelComputeOptions
+            if isANECompiled {
+                computeOptions = ModelComputeOptions(
+                    audioEncoderCompute: .cpuAndNeuralEngine,
+                    textDecoderCompute: .cpuAndNeuralEngine
+                )
+                print("[WhisperKit] Using ANE (pre-compiled)")
+            } else {
+                computeOptions = ModelComputeOptions(
+                    audioEncoderCompute: .cpuAndGPU,
+                    textDecoderCompute: .cpuAndGPU
+                )
+                print("[WhisperKit] Using CPU+GPU (fast initial load)")
+            }
 
             // Check for bundled model first
             if let bundledPath = getBundledModelPath(for: name) {
@@ -130,15 +151,13 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
                 _loadingProgress = 1.0
                 lock.unlock()
                 notifyProgress(1.0)
+
+                // Schedule background ANE compilation if not yet compiled
+                if !isANECompiled {
+                    scheduleBackgroundANECompilation(modelPath: bundledPath, markerPath: aneMarkerPath)
+                }
                 return
             }
-
-            // Use persistent location for model storage
-            let modelFolder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-                .appendingPathComponent("Koe")
-                .appendingPathComponent("Models")
-
-            try? FileManager.default.createDirectory(at: modelFolder, withIntermediateDirectories: true)
 
             // Check if model exists in cache
             let cachedModelPath = modelFolder.appendingPathComponent("models/argmaxinc/whisperkit-coreml/openai_whisper-\(name)")
@@ -162,6 +181,11 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
                 _loadingProgress = 1.0
                 lock.unlock()
                 notifyProgress(1.0)
+
+                // Schedule background ANE compilation if not yet compiled
+                if !isANECompiled {
+                    scheduleBackgroundANECompilation(modelPath: cachedModelPath.path, markerPath: aneMarkerPath)
+                }
                 return
             }
 
@@ -462,5 +486,40 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
         try audioFile.write(from: buffer)
 
         return url
+    }
+
+    /// Schedule background ANE compilation for faster subsequent loads
+    /// This runs with low priority and creates a marker file when complete
+    private func scheduleBackgroundANECompilation(modelPath: String, markerPath: URL) {
+        Task.detached(priority: .background) {
+            // Wait a bit for app to finish launching
+            try? await Task.sleep(for: .seconds(5))
+
+            print("[WhisperKit] Starting background ANE compilation...")
+
+            let aneComputeOptions = ModelComputeOptions(
+                audioEncoderCompute: .cpuAndNeuralEngine,
+                textDecoderCompute: .cpuAndNeuralEngine
+            )
+
+            do {
+                // Load with ANE to trigger compilation
+                let _ = try await WhisperKit(
+                    modelFolder: modelPath,
+                    computeOptions: aneComputeOptions,
+                    verbose: false,
+                    logLevel: .error,
+                    prewarm: false,
+                    load: true
+                )
+
+                // Create marker file to indicate ANE compilation is complete
+                try "".write(to: markerPath, atomically: true, encoding: .utf8)
+
+                print("[WhisperKit] Background ANE compilation complete! Next launch will use ANE.")
+            } catch {
+                print("[WhisperKit] Background ANE compilation failed: \(error)")
+            }
+        }
     }
 }
