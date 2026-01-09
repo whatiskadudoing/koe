@@ -184,6 +184,7 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
   // Spinner for compilation phase (no progress available)
   let spinnerFrame = 0;
   let spinnerInterval: number | null = null;
+  let compilationStartTime: number | null = null;
 
   const updateDisplay = (progress: OptimizeProgress) => {
     // Restore cursor to progress area
@@ -191,6 +192,17 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
 
     // Clear and redraw progress
     clearLine();
+
+    // Calculate real-time elapsed during compilation
+    let displayElapsed = progress.elapsed;
+    let displayRemaining = progress.estimatedRemaining;
+
+    if (progress.percent < 0 && compilationStartTime) {
+      // Update elapsed time in real-time during compilation
+      displayElapsed = (Date.now() - compilationStartTime) / 1000;
+      // Estimate ~3-4 min total, subtract elapsed
+      displayRemaining = Math.max(0, 210 - displayElapsed);
+    }
 
     if (progress.percent < 0) {
       // Compilation phase - show spinner with elapsed time
@@ -211,9 +223,9 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
 
     // Stats box
     clearLine();
-    const elapsedStr = formatDuration(progress.elapsed);
-    const remainingStr = progress.estimatedRemaining
-      ? `~${formatDuration(progress.estimatedRemaining)}`
+    const elapsedStr = formatDuration(displayElapsed);
+    const remainingStr = displayRemaining !== null
+      ? `~${formatDuration(displayRemaining)}`
       : "calculating...";
     write(`  ${colors.dim("Elapsed:")}    ${colors.white(elapsedStr)}\n`);
     clearLine();
@@ -228,6 +240,7 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
 
     // Start spinner animation during compilation
     if (progress.percent < 0 && !spinnerInterval) {
+      compilationStartTime = Date.now();
       spinnerInterval = setInterval(() => {
         spinnerFrame++;
         updateDisplay(_lastProgress);
@@ -238,6 +251,7 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
     if (progress.percent >= 0 && spinnerInterval) {
       clearInterval(spinnerInterval);
       spinnerInterval = null;
+      compilationStartTime = null;
     }
 
     updateDisplay(progress);
