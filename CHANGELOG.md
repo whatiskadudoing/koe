@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.8.0-beta.6...v1.9.0-beta.6) (2026-01-09)
+
+
+### Features
+
+* background model system and improved onboarding ([a36a93a](https://github.com/whatiskadudoing/koe/commit/a36a93ae55d2823ddb9ac1e041ae1a3efdaaa582))
+
 ## [1.7.0](https://github.com/whatiskadudoing/koe/compare/v1.6.0...v1.7.0) (2026-01-09)
 
 
