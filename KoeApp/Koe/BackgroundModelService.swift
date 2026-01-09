@@ -88,6 +88,13 @@ public final class BackgroundModelService: ObservableObject {
     @Published public private(set) var isFirstLaunch: Bool = false
     @Published public private(set) var hasPendingWork: Bool = false
 
+    /// Whether to automatically switch to better models when they become ready
+    @Published public var autoSwitchToNewModels: Bool {
+        didSet {
+            UserDefaults.standard.set(autoSwitchToNewModels, forKey: autoSwitchKey)
+        }
+    }
+
     // MARK: - Private
     private let transcriber = WhisperKitTranscriber()
     private let logger = Logger(subsystem: "com.koe.voice", category: "BackgroundModels")
@@ -97,12 +104,22 @@ public final class BackgroundModelService: ObservableObject {
     // UserDefaults keys
     private let stateKey = "BackgroundModelState"
     private let hasCompletedFirstBackgroundKey = "HasCompletedFirstBackground"
+    private let autoSwitchKey = "AutoSwitchToNewModels"
 
     // Retry configuration
     private let maxRetries = 3
     private let baseRetryDelaySeconds: UInt64 = 30  // 30 seconds, doubles each retry
 
     private init() {
+        // Initialize auto-switch preference (defaults to true for new users)
+        // Use object(forKey:) to check if preference was ever set
+        if UserDefaults.standard.object(forKey: autoSwitchKey) == nil {
+            // Never set before - will be set by explanation screen
+            self.autoSwitchToNewModels = true  // Default to auto
+        } else {
+            self.autoSwitchToNewModels = UserDefaults.standard.bool(forKey: autoSwitchKey)
+        }
+
         logger.notice("BackgroundModelService initializing...")
 
         // Load persisted state
@@ -126,7 +143,7 @@ public final class BackgroundModelService: ObservableObject {
         // Check if there's pending work
         updateHasPendingWork()
 
-        logger.notice("BackgroundModelService initialized: isFirstLaunch=\(self.isFirstLaunch), hasPendingWork=\(self.hasPendingWork)")
+        logger.notice("BackgroundModelService initialized: isFirstLaunch=\(self.isFirstLaunch), hasPendingWork=\(self.hasPendingWork), autoSwitch=\(self.autoSwitchToNewModels)")
 
         setupObservers()
     }
@@ -434,6 +451,11 @@ public final class BackgroundModelService: ObservableObject {
                 currentCompilationProgress = 1.0
                 persistState()
 
+                // Auto-switch to better model if enabled
+                if autoSwitchToNewModels {
+                    await autoSwitchToModel(model)
+                }
+
                 // Send notification
                 await sendModelReadyNotification(model)
 
@@ -479,10 +501,28 @@ public final class BackgroundModelService: ObservableObject {
         }
     }
 
+    private func autoSwitchToModel(_ model: KoeModel) async {
+        logger.notice("Auto-switching to \(model.shortName) model")
+
+        // Update AppState's selected model
+        AppState.shared.selectedModel = model.rawValue
+
+        // Load the new model
+        await RecordingCoordinator.shared.loadModel(name: model.rawValue)
+
+        logger.notice("Auto-switched to \(model.shortName)")
+    }
+
     private func sendModelReadyNotification(_ model: KoeModel) async {
         let content = UNMutableNotificationContent()
         content.title = "\(model.shortName) Mode Ready"
-        content.body = "Tap to switch to \(model.shortName) for better accuracy."
+
+        // Different message based on auto-switch setting
+        if autoSwitchToNewModels {
+            content.body = "Switched to \(model.shortName) for better accuracy."
+        } else {
+            content.body = "Tap to switch to \(model.shortName) for better accuracy."
+        }
         content.sound = .default
         content.userInfo = ["modelRawValue": model.rawValue]
         content.categoryIdentifier = "MODEL_READY"

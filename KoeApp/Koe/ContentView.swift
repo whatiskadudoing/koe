@@ -2135,7 +2135,7 @@ struct BackgroundWorkExplanation: View {
                         .foregroundColor(KoeColors.textLight)
                         .multilineTextAlignment(.center)
 
-                    Text("You can use the app right now with Fast mode. We'll notify you when Balanced and Best modes are ready.")
+                    Text("You can use the app right now with Fast mode. We'll notify you when better modes are ready.")
                         .font(.system(size: 14))
                         .foregroundColor(KoeColors.textLight)
                         .multilineTextAlignment(.center)
@@ -2151,6 +2151,31 @@ struct BackgroundWorkExplanation: View {
                 .padding(12)
                 .background(KoeColors.surface)
                 .cornerRadius(10)
+
+                // Auto-switch toggle
+                VStack(spacing: 8) {
+                    Toggle(isOn: $service.autoSwitchToNewModels) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Auto-upgrade quality")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(KoeColors.textPrimary)
+                            Text("Switch to better models automatically")
+                                .font(.system(size: 12))
+                                .foregroundColor(KoeColors.textLight)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .tint(purpleColor)
+                }
+                .padding(12)
+                .background(KoeColors.surface)
+                .cornerRadius(10)
+
+                // Footer note
+                Text("You can always change the model manually in Settings.")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textLight)
+                    .multilineTextAlignment(.center)
 
                 // OK Button
                 Button(action: dismiss) {

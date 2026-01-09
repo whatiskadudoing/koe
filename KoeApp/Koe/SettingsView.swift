@@ -224,18 +224,44 @@ struct TranscriptionModelSection: View {
 
                     Spacer()
 
-                    Picker("", selection: $appState.selectedModel) {
+                    Menu {
                         ForEach(KoeModel.allCases, id: \.rawValue) { model in
-                            Text(model.displayName).tag(model.rawValue)
+                            let isReady = BackgroundModelService.shared.isModelReady(model)
+                            let isSelected = appState.selectedModel == model.rawValue
+
+                            Button(action: {
+                                guard isReady else { return }
+                                appState.selectedModel = model.rawValue
+                                Task {
+                                    await RecordingCoordinator.shared.loadModel(name: model.rawValue)
+                                }
+                            }) {
+                                HStack {
+                                    Text(model.displayName)
+                                    Spacer()
+                                    if !isReady {
+                                        Text("downloading...")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                    } else if isSelected {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                            .disabled(!isReady)
                         }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(width: 120)
-                    .onChange(of: appState.selectedModel) { _, newModel in
-                        Task {
-                            await RecordingCoordinator.shared.loadModel(name: newModel)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(appState.currentKoeModel.displayName)
+                                .font(.system(size: 13))
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 10))
                         }
+                        .foregroundColor(KoeColors.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(KoeColors.surface)
+                        .cornerRadius(6)
                     }
                 }
                 .padding(.horizontal, 16)
