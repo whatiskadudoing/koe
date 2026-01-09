@@ -24,13 +24,26 @@ struct KoeApp: App {
     // Mode manager for coordinating dictation and meeting modes
     @State private var modeManager = ModeManager.shared
 
+    /// Check if running in precompile mode (headless model compilation)
+    static var isPrecompileMode: Bool {
+        CommandLine.arguments.contains("--precompile")
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(appState)
-                .environment(coordinator)
-                .environment(meetingCoordinator)
-                .environment(modeManager)
+            Group {
+                if Self.isPrecompileMode {
+                    // Minimal view for precompile mode - no UI needed
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                } else {
+                    ContentView()
+                        .environment(appState)
+                        .environment(coordinator)
+                        .environment(meetingCoordinator)
+                        .environment(modeManager)
+                }
+            }
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
@@ -77,6 +90,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Check for precompile mode first
+        if KoeApp.isPrecompileMode {
+            runPrecompileAndExit()
+            return
+        }
+
         NSLog("🚀 Koe app launched!")
         setupMenuBar()
         setupCommandDetector()
@@ -86,6 +105,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Start meeting detection early - it doesn't need the model
         Task {
             await MeetingCoordinator.shared.startMonitoring()
+        }
+    }
+
+    /// Run headless model precompilation and exit (called by installer)
+    private func runPrecompileAndExit() {
+        // Flush stdout immediately for installer to see progress
+        setbuf(stdout, nil)
+
+        print("[Koe] Starting model precompilation...")
+        fflush(stdout)
+
+        Task {
+            let startTime = Date()
+
+            do {
+                let transcriber = WhisperKitTranscriber()
+
+                // Compile the default (fast) model
+                print("[Koe] Loading Fast model...")
+                fflush(stdout)
+
+                // Subscribe to progress updates
+                let progressStream = transcriber.loadingProgressStream()
+
+                // Start loading in background
+                let loadTask = Task {
+                    try await transcriber.loadModel(.fast)
+                }
+
+                // Print progress updates
+                var lastProgress: Int = -1
+                for await progress in progressStream {
+                    let percent = Int(progress * 100)
+                    if percent != lastProgress && percent >= 0 {
+                        print("[Koe] Progress: \(percent)%")
+                        fflush(stdout)
+                        lastProgress = percent
+                    }
+                    if progress >= 1.0 {
+                        break
+                    }
+                }
+
+                // Wait for load to complete
+                try await loadTask.value
+
+                let elapsed = Date().timeIntervalSince(startTime)
+                print("[Koe] Fast model compiled successfully in \(String(format: "%.1f", elapsed))s")
+                fflush(stdout)
+
+                print("[Koe] Precompilation complete!")
+                fflush(stdout)
+
+                // Exit successfully
+                exit(0)
+            } catch {
+                print("[Koe] Precompilation failed: \(error)")
+                fflush(stdout)
+                exit(1)
+            }
         }
     }
 

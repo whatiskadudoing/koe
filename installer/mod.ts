@@ -257,6 +257,80 @@ async function openApp(): Promise<void> {
   await open.output();
 }
 
+async function precompileModels(): Promise<void> {
+  // Run the app with --precompile flag to compile CoreML models
+  const appBinary = `${INSTALL_PATH}/${APP_NAME}/Contents/MacOS/Koe`;
+  const process = new Deno.Command(appBinary, {
+    args: ["--precompile"],
+    stdout: "piped",
+    stderr: "piped",
+  });
+
+  const child = process.spawn();
+
+  // Wait for the process to complete
+  const status = await child.status;
+
+  if (!status.success) {
+    throw new Error("Model precompilation failed");
+  }
+}
+
+// Messages to show during precompilation
+const PRECOMPILE_MESSAGES = [
+  "Optimizing for your Mac...",
+  "Compiling neural network...",
+  "Configuring Apple Neural Engine...",
+  "Building speech recognition...",
+  "This only happens once...",
+  "Almost there...",
+  "Finalizing setup...",
+];
+
+async function precompileWithProgress(): Promise<boolean> {
+  const spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+  let frame = 0;
+  let messageIndex = 0;
+  let done = false;
+  let success = true;
+
+  // Start the precompile task
+  const _task = (async () => {
+    try {
+      await precompileModels();
+    } catch (_e) {
+      success = false;
+    }
+    done = true;
+  })();
+
+  // Animate while precompiling
+  let lastMessageChange = Date.now();
+  const messageInterval = 4000; // Change message every 4 seconds
+
+  while (!done) {
+    // Rotate through messages
+    if (Date.now() - lastMessageChange > messageInterval) {
+      messageIndex = (messageIndex + 1) % PRECOMPILE_MESSAGES.length;
+      lastMessageChange = Date.now();
+    }
+
+    const message = PRECOMPILE_MESSAGES[messageIndex];
+    write(`${CLEAR_LINE}  ${c.accent(spinner[frame % 10])} ${c.dim(message)}`);
+    frame++;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+
+  // Show final state
+  if (success) {
+    write(`${CLEAR_LINE}  ${c.success("✓")} Model optimized for your Mac!\n`);
+    return true;
+  } else {
+    write(`${CLEAR_LINE}  ${c.dim("○")} Skipped optimization\n`);
+    return false;
+  }
+}
+
 // =============================================================================
 // MODEL DOWNLOAD
 // =============================================================================
@@ -543,6 +617,15 @@ async function main(): Promise<void> {
         c.error("\n  Setup failed. Please check your internet connection and try again.\n"),
       );
       Deno.exit(1);
+    }
+
+    // Precompile models for instant startup
+    console.log();
+    const precompileSuccess = await precompileWithProgress();
+
+    if (!precompileSuccess) {
+      // Precompile failure is non-fatal - app will compile on first launch
+      console.log(c.dim("  Model will be compiled on first launch.\n"));
     }
 
     // Show success message

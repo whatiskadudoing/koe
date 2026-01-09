@@ -39,6 +39,7 @@ runs:
         # Create .app bundle structure
         mkdir -p dist/Koe.app/Contents/MacOS
         mkdir -p dist/Koe.app/Contents/Resources
+        mkdir -p dist/Koe.app/Contents/Frameworks
 
         # Copy executable
         cp "$EXECUTABLE" dist/Koe.app/Contents/MacOS/Koe
@@ -55,6 +56,18 @@ runs:
 
         # Make executable
         chmod +x dist/Koe.app/Contents/MacOS/Koe
+
+        # Copy llama.framework if it exists (required for AI features)
+        if [ -d ".build/arm64-apple-macosx/release/llama.framework" ]; then
+          echo "Copying llama.framework..."
+          cp -R .build/arm64-apple-macosx/release/llama.framework dist/Koe.app/Contents/Frameworks/
+          # Add rpath so executable can find the framework
+          install_name_tool -add_rpath @executable_path/../Frameworks dist/Koe.app/Contents/MacOS/Koe 2>/dev/null || true
+          echo "Framework copied successfully"
+        else
+          echo "Warning: llama.framework not found at .build/arm64-apple-macosx/release/llama.framework"
+          ls -la .build/arm64-apple-macosx/release/ || true
+        fi
 
         echo "app-path=KoeApp/dist/Koe.app" >> $GITHUB_OUTPUT
 
