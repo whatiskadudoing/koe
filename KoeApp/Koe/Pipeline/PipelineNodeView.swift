@@ -3,43 +3,67 @@ import KoeUI
 import KoePipeline
 
 /// Individual node in the pipeline visualization
-/// - Single tap: toggle on/off (if toggleable)
-/// - Double tap: open settings (if has settings)
+/// - Click toggle indicator: turn on/off (if toggleable)
+/// - Double tap node: open settings (if has settings)
 struct PipelineNodeView: View {
     let stage: PipelineStageInfo
     @Binding var isEnabled: Bool
     let isSelected: Bool
     let isRunning: Bool
     let metrics: ElementExecutionMetrics?
-    let onToggle: () -> Void      // Called on single tap for toggleable nodes
+    let onToggle: () -> Void      // Called when toggle indicator is clicked
     let onOpenSettings: () -> Void // Called on double tap for nodes with settings
 
     @State private var isHovered = false
+    @State private var lastTapTime: Date = .distantPast
 
     private let nodeSize: CGFloat = 44
     private let cornerRadius: CGFloat = 10
+    private let doubleTapThreshold: TimeInterval = 0.3
 
     var body: some View {
         nodeContent
-            .onTapGesture(count: 2) {
-                // Double tap: open settings if available
-                if stage.hasSettings {
-                    onOpenSettings()
-                }
-            }
-            .onTapGesture(count: 1) {
-                // Single tap: toggle if toggleable
-                if stage.isToggleable {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        onToggle()
-                    }
-                }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                handleTap()
             }
             .onHover { hovering in
                 withAnimation(.easeOut(duration: 0.15)) {
                     isHovered = hovering
                 }
             }
+    }
+
+    /// Handle tap with manual double-tap detection
+    /// - Toggle is handled by the NodeToggleIndicator (click the dot)
+    /// - Double-tap anywhere opens settings
+    private func handleTap() {
+        let now = Date()
+        let timeSinceLastTap = now.timeIntervalSince(lastTapTime)
+
+        if timeSinceLastTap < doubleTapThreshold {
+            // Double tap - open settings
+            lastTapTime = .distantPast // Reset to prevent triple-tap triggering
+            if stage.hasSettings {
+                onOpenSettings()
+            }
+        } else {
+            // Record tap time for double-tap detection
+            lastTapTime = now
+
+            // For toggleable nodes: single tap also toggles (with delay to detect double tap)
+            if stage.isToggleable {
+                let capturedTime = now
+                DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapThreshold) { [self] in
+                    // Only toggle if no second tap came in
+                    if lastTapTime == capturedTime {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            isEnabled.toggle()
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private var nodeContent: some View {
@@ -67,12 +91,14 @@ struct PipelineNodeView: View {
                         .frame(width: nodeSize, height: nodeSize)
                 }
 
-                // Toggle indicator (only for toggleable stages)
+                // Interactive toggle indicator (only for toggleable stages)
+                // Clicking this is the primary way to toggle on/off
                 if stage.isToggleable && !isRunning {
-                    Circle()
-                        .fill(isEnabled ? Color.green : KoeColors.textLighter)
-                        .frame(width: 8, height: 8)
-                        .offset(x: -4, y: 4)
+                    NodeToggleIndicator(
+                        isOn: $isEnabled,
+                        size: 10
+                    )
+                    .offset(x: -2, y: 2)
                 }
 
                 // Status indicator for failed stages

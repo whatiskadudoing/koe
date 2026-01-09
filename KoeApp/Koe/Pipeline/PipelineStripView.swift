@@ -8,19 +8,19 @@ struct PipelineStripView: View {
     @Environment(AppState.self) private var appState
     @Binding var selectedStage: PipelineStageInfo?
 
+    /// Node state controller - manages toggle states and relationships
+    private var nodeController: NodeStateController<PipelineStageInfo> {
+        NodeStateController.forPipeline(appState: appState)
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
             // Parallel triggers section (includes merge connector)
             ParallelTriggersView(
+                nodeController: nodeController,
                 selectedStage: $selectedStage,
-                isHotkeyEnabled: isHotkeyEnabled,
-                isVoiceEnabled: isVoiceEnabled,
                 isHotkeyRunning: isHotkeyRunning,
                 isVoiceRunning: isVoiceRunning,
-                isAnyTriggerEnabled: isAnyTriggerEnabled,
-                activeLineColor: activeTriggerColor,
-                onToggleHotkey: { toggleStage(.hotkeyTrigger) },
-                onToggleVoice: { toggleStage(.voiceTrigger) },
                 onOpenSettings: { stage in selectedStage = stage }
             )
 
@@ -37,11 +37,11 @@ struct PipelineStripView: View {
 
                     PipelineNodeView(
                         stage: stage,
-                        isEnabled: binding(for: stage),
+                        isEnabled: nodeController.binding(for: stage),
                         isSelected: selectedStage == stage,
                         isRunning: isStageRunning(stage),
                         metrics: metricsFor(stage),
-                        onToggle: { toggleStage(stage) },
+                        onToggle: { nodeController.toggle(stage) },
                         onOpenSettings: { selectedStage = stage }
                     )
                 }
@@ -53,28 +53,11 @@ struct PipelineStripView: View {
         .cornerRadius(16)
     }
 
+    // MARK: - Computed Properties
+
     /// Color for active pipeline - consistent blue accent
     private var activeTriggerColor: Color {
-        return KoeColors.accent
-    }
-
-    /// Whether any recording is in progress
-    private var isAnyRecording: Bool {
-        appState.recordingState != .idle
-    }
-
-    // MARK: - Trigger State
-
-    private var isHotkeyEnabled: Bool {
-        true // Hotkey is always available
-    }
-
-    private var isVoiceEnabled: Bool {
-        appState.isCommandListeningEnabled && appState.hasVoiceProfile
-    }
-
-    private var isAnyTriggerEnabled: Bool {
-        isHotkeyEnabled || isVoiceEnabled
+        KoeColors.accent
     }
 
     private var isHotkeyRunning: Bool {
@@ -85,61 +68,11 @@ struct PipelineStripView: View {
         appState.recordingState == .recording && appState.isVoiceCommandTriggered
     }
 
+    private var isAnyTriggerEnabled: Bool {
+        nodeController.isEnabled(.hotkeyTrigger) || nodeController.isEnabled(.voiceTrigger)
+    }
+
     // MARK: - Stage Helpers
-
-    private func toggleStage(_ stage: PipelineStageInfo) {
-        switch stage {
-        case .hotkeyTrigger:
-            break // Hotkey is always enabled for now
-        case .voiceTrigger:
-            appState.isCommandListeningEnabled.toggle()
-        case .improve:
-            appState.isRefinementEnabled.toggle()
-        case .autoEnter:
-            appState.isAutoEnterEnabled.toggle()
-        default:
-            break
-        }
-    }
-
-    private func binding(for stage: PipelineStageInfo) -> Binding<Bool> {
-        switch stage {
-        case .hotkeyTrigger:
-            return .constant(true)
-        case .voiceTrigger:
-            return Binding(
-                get: { appState.isCommandListeningEnabled && appState.hasVoiceProfile },
-                set: { appState.isCommandListeningEnabled = $0 }
-            )
-        case .improve:
-            return Binding(
-                get: { appState.isRefinementEnabled },
-                set: { appState.isRefinementEnabled = $0 }
-            )
-        case .autoEnter:
-            return Binding(
-                get: { appState.isAutoEnterEnabled },
-                set: { appState.isAutoEnterEnabled = $0 }
-            )
-        default:
-            return .constant(true)
-        }
-    }
-
-    private func isStageEnabled(_ stage: PipelineStageInfo) -> Bool {
-        switch stage {
-        case .hotkeyTrigger:
-            return true
-        case .voiceTrigger:
-            return appState.isCommandListeningEnabled && appState.hasVoiceProfile
-        case .improve:
-            return appState.isRefinementEnabled
-        case .autoEnter:
-            return appState.isAutoEnterEnabled
-        default:
-            return true
-        }
-    }
 
     private func isStageRunning(_ stage: PipelineStageInfo) -> Bool {
         switch appState.recordingState {
@@ -159,13 +92,13 @@ struct PipelineStripView: View {
 
         // First connector connects from triggers to first sequential stage
         if previousIndex < 0 {
-            return isAnyTriggerEnabled && isStageEnabled(stage)
+            return isAnyTriggerEnabled && nodeController.isEnabled(stage)
         }
 
         guard previousIndex < stages.count else { return false }
 
         let previousStage = stages[previousIndex]
-        return isStageEnabled(previousStage) && isStageEnabled(stage)
+        return nodeController.isEnabled(previousStage) && nodeController.isEnabled(stage)
     }
 
     private func metricsFor(_ stage: PipelineStageInfo) -> ElementExecutionMetrics? {
@@ -179,44 +112,33 @@ struct PipelineStripView: View {
 // MARK: - Parallel Triggers View
 
 struct ParallelTriggersView: View {
+    let nodeController: NodeStateController<PipelineStageInfo>
     @Binding var selectedStage: PipelineStageInfo?
-    let isHotkeyEnabled: Bool
-    let isVoiceEnabled: Bool
     let isHotkeyRunning: Bool
     let isVoiceRunning: Bool
-    let isAnyTriggerEnabled: Bool
-    let activeLineColor: Color
-    let onToggleHotkey: () -> Void
-    let onToggleVoice: () -> Void
     let onOpenSettings: (PipelineStageInfo) -> Void
+
+    private var isAnyTriggerEnabled: Bool {
+        nodeController.isEnabled(.hotkeyTrigger) || nodeController.isEnabled(.voiceTrigger)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             // Triggers stacked vertically
             VStack(spacing: 8) {
-                // Hotkey trigger - dimmed when voice is running
-                PipelineNodeView(
+                // Hotkey trigger - uses controller for state and dimming
+                triggerNode(
                     stage: .hotkeyTrigger,
-                    isEnabled: .constant(isHotkeyEnabled && !isVoiceRunning),
-                    isSelected: selectedStage == .hotkeyTrigger,
                     isRunning: isHotkeyRunning,
-                    metrics: nil,
-                    onToggle: onToggleHotkey,
-                    onOpenSettings: { onOpenSettings(.hotkeyTrigger) }
+                    isDimmedByOther: isVoiceRunning
                 )
-                .opacity(isVoiceRunning ? 0.4 : 1.0)
 
-                // Voice trigger - dimmed when hotkey is running
-                PipelineNodeView(
+                // Voice trigger - uses controller for state and dimming
+                triggerNode(
                     stage: .voiceTrigger,
-                    isEnabled: .constant(isVoiceEnabled && !isHotkeyRunning),
-                    isSelected: selectedStage == .voiceTrigger,
                     isRunning: isVoiceRunning,
-                    metrics: nil,
-                    onToggle: onToggleVoice,
-                    onOpenSettings: { onOpenSettings(.voiceTrigger) }
+                    isDimmedByOther: isHotkeyRunning
                 )
-                .opacity(isHotkeyRunning ? 0.4 : 1.0)
             }
 
             // Merge lines from both triggers
@@ -224,9 +146,23 @@ struct ParallelTriggersView: View {
                 isTopActive: isHotkeyRunning,
                 isBottomActive: isVoiceRunning,
                 isMergeActive: isAnyTriggerEnabled,
-                activeColor: activeLineColor
+                activeColor: KoeColors.accent
             )
         }
+    }
+
+    @ViewBuilder
+    private func triggerNode(stage: PipelineStageInfo, isRunning: Bool, isDimmedByOther: Bool) -> some View {
+        PipelineNodeView(
+            stage: stage,
+            isEnabled: nodeController.binding(for: stage),
+            isSelected: selectedStage == stage,
+            isRunning: isRunning,
+            metrics: nil,
+            onToggle: { nodeController.toggle(stage) },
+            onOpenSettings: { onOpenSettings(stage) }
+        )
+        .opacity(isDimmedByOther ? 0.4 : 1.0)
     }
 }
 

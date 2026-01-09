@@ -1005,94 +1005,60 @@ struct HistoryDetailView: View {
         .shadow(color: .black.opacity(0.15), radius: 20, x: -5, y: 0)
     }
 
-    // MARK: - Helpers for dynamic pipeline display
+    // MARK: - Helpers for dynamic pipeline display (using NodeRegistry)
+
+    private var registry: NodeRegistry { NodeRegistry.shared }
 
     private func displayName(for typeId: String) -> String {
-        switch typeId {
-        case "text-improve": return "Improve"
-        case "language-improvement": return "Language Improve"  // Legacy
-        case "prompt-optimizer": return "Prompt Optimizer"  // Legacy
-        case "auto-type": return "Auto Type"
-        case "auto-enter": return "Auto Enter"
-        default: return typeId.replacingOccurrences(of: "-", with: " ").capitalized
-        }
+        registry.nodeOrDefault(for: typeId).displayName
     }
 
     private func icon(for typeId: String) -> String {
-        switch typeId {
-        case "text-improve": return "sparkles"
-        case "language-improvement": return "text.badge.checkmark"
-        case "prompt-optimizer": return "sparkles"
-        case "auto-type": return "keyboard"
-        case "auto-enter": return "return"
-        default: return "gearshape"
-        }
+        registry.nodeOrDefault(for: typeId).icon
     }
 
     private func color(for typeId: String) -> Color {
-        switch typeId {
-        case "text-improve": return refiningColor
-        case "language-improvement": return refiningColor
-        case "prompt-optimizer": return Color.orange
-        case "auto-type": return actionColor
-        case "auto-enter": return actionColor
-        default: return lightGray
-        }
+        registry.nodeOrDefault(for: typeId).color
     }
 
     private func inputDescription(for typeId: String) -> String {
-        switch typeId {
-        case "text-improve": return "Raw transcription"
-        case "language-improvement": return "Raw transcription"
-        case "prompt-optimizer": return "Improved text"
-        case "auto-type": return executionRecord?.outputText ?? entry.text  // Show actual text that was typed
-        case "auto-enter": return "Sends Enter key"
-        default: return "Previous output"
+        let nodeInfo = registry.nodeOrDefault(for: typeId)
+        // Special case: auto-type shows the actual text that was typed
+        if typeId == "auto-type" {
+            return executionRecord?.outputText ?? entry.text
         }
+        return nodeInfo.inputDescription
     }
 
     private func outputText(for typeId: String, record: PipelineExecutionRecord) -> String? {
-        switch typeId {
-        case "text-improve", "language-improvement", "prompt-optimizer":
-            // For text transformations, show the output
-            return record.outputText
-        case "auto-type", "auto-enter":
-            // Actions don't have output - they perform side effects
-            return nil
-        default:
+        let nodeInfo = registry.nodeOrDefault(for: typeId)
+        // Actions don't have output - only text transformations do
+        if nodeInfo.isAction {
             return nil
         }
+        if case .text = nodeInfo.outputType {
+            return record.outputText
+        }
+        return nil
     }
 
-    /// Check if this element is an action (side effect) vs a transformation
     private func isAction(for typeId: String) -> Bool {
-        switch typeId {
-        case "auto-type", "auto-enter": return true
-        default: return false
-        }
+        registry.nodeOrDefault(for: typeId).isAction
     }
 
     private func actionDescription(for typeId: String) -> String? {
-        switch typeId {
-        case "auto-type": return "Typed to active window"
-        case "auto-enter": return "Pressed Enter"
-        default: return nil
-        }
+        registry.nodeOrDefault(for: typeId).actionDescription
     }
 
     private func settingsSummary(for typeId: String) -> String? {
         guard let settings = entry.refinementSettings else { return nil }
+        // Settings summary is specific to refinement-type nodes
         switch typeId {
-        case "text-improve":
+        case "text-improve", "language-improvement":
             var parts: [String] = []
             if settings.cleanup { parts.append("cleanup") }
             if settings.tone != "none" { parts.append(settings.tone) }
             if settings.promptMode { parts.append("prompt") }
-            return parts.isEmpty ? nil : parts.joined(separator: " + ")
-        case "language-improvement":
-            var parts: [String] = []
-            if settings.cleanup { parts.append("cleanup") }
-            if settings.tone != "none" { parts.append(settings.tone) }
             return parts.isEmpty ? nil : parts.joined(separator: " + ")
         case "prompt-optimizer":
             return settings.promptMode ? "enabled" : nil
@@ -1239,90 +1205,57 @@ struct HistoryDetailContent: View {
         .frame(maxHeight: 400)
     }
 
-    // MARK: - Helpers
+    // MARK: - Helpers (using NodeRegistry)
+
+    private var registry: NodeRegistry { NodeRegistry.shared }
 
     private func displayName(for typeId: String) -> String {
-        switch typeId {
-        case "text-improve": return "Improve"
-        case "language-improvement": return "Language Improve"
-        case "prompt-optimizer": return "Prompt Optimizer"
-        case "auto-type": return "Auto Type"
-        case "auto-enter": return "Auto Enter"
-        default: return typeId.replacingOccurrences(of: "-", with: " ").capitalized
-        }
+        registry.nodeOrDefault(for: typeId).displayName
     }
 
     private func icon(for typeId: String) -> String {
-        switch typeId {
-        case "text-improve": return "sparkles"
-        case "language-improvement": return "text.badge.checkmark"
-        case "prompt-optimizer": return "sparkles"
-        case "auto-type": return "keyboard"
-        case "auto-enter": return "return"
-        default: return "gearshape"
-        }
+        registry.nodeOrDefault(for: typeId).icon
     }
 
     private func color(for typeId: String) -> Color {
-        switch typeId {
-        case "text-improve": return refiningColor
-        case "language-improvement": return refiningColor
-        case "prompt-optimizer": return Color.orange
-        case "auto-type": return actionColor
-        case "auto-enter": return actionColor
-        default: return lightGray
-        }
+        registry.nodeOrDefault(for: typeId).color
     }
 
     private func inputDescription(for typeId: String) -> String {
-        switch typeId {
-        case "text-improve", "language-improvement": return "Raw transcription"
-        case "prompt-optimizer": return "Improved text"
-        case "auto-type": return executionRecord?.outputText ?? entry.text
-        case "auto-enter": return "Sends Enter key"
-        default: return "Previous output"
+        let nodeInfo = registry.nodeOrDefault(for: typeId)
+        if typeId == "auto-type" {
+            return executionRecord?.outputText ?? entry.text
         }
+        return nodeInfo.inputDescription
     }
 
     private func outputText(for typeId: String, record: PipelineExecutionRecord) -> String? {
-        switch typeId {
-        case "text-improve", "language-improvement", "prompt-optimizer":
-            return record.outputText
-        case "auto-type", "auto-enter":
-            return nil
-        default:
+        let nodeInfo = registry.nodeOrDefault(for: typeId)
+        if nodeInfo.isAction {
             return nil
         }
+        if case .text = nodeInfo.outputType {
+            return record.outputText
+        }
+        return nil
     }
 
     private func isAction(for typeId: String) -> Bool {
-        switch typeId {
-        case "auto-type", "auto-enter": return true
-        default: return false
-        }
+        registry.nodeOrDefault(for: typeId).isAction
     }
 
     private func actionDescription(for typeId: String) -> String? {
-        switch typeId {
-        case "auto-type": return "Typed to active window"
-        case "auto-enter": return "Pressed Enter"
-        default: return nil
-        }
+        registry.nodeOrDefault(for: typeId).actionDescription
     }
 
     private func settingsSummary(for typeId: String) -> String? {
         guard let settings = entry.refinementSettings else { return nil }
         switch typeId {
-        case "text-improve":
+        case "text-improve", "language-improvement":
             var parts: [String] = []
             if settings.cleanup { parts.append("cleanup") }
             if settings.tone != "none" { parts.append(settings.tone) }
             if settings.promptMode { parts.append("prompt") }
-            return parts.isEmpty ? nil : parts.joined(separator: " + ")
-        case "language-improvement":
-            var parts: [String] = []
-            if settings.cleanup { parts.append("cleanup") }
-            if settings.tone != "none" { parts.append(settings.tone) }
             return parts.isEmpty ? nil : parts.joined(separator: " + ")
         case "prompt-optimizer":
             return settings.promptMode ? "enabled" : nil
@@ -2207,8 +2140,14 @@ struct BackgroundProgressBar: View {
 
     private let purpleColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
 
-    private var isActive: Bool {
-        modelService.state.isProcessing || isAIDownloading
+    // Show when there's active work OR pending models
+    private var shouldShow: Bool {
+        modelService.state.isProcessing || isAIDownloading || hasPendingModels
+    }
+
+    private var hasPendingModels: Bool {
+        // Check if Balanced or Best models are not ready
+        !modelService.isModelReady(.balanced) || !modelService.isModelReady(.best)
     }
 
     private var isAIDownloading: Bool {
@@ -2242,18 +2181,31 @@ struct BackgroundProgressBar: View {
         if modelService.state.isProcessing {
             return modelService.overallProgress
         }
-        return aiDownloadProgress
+        if isAIDownloading {
+            return aiDownloadProgress
+        }
+        // Pending but not started
+        return 0
     }
 
     private var currentMessage: String? {
         if modelService.state.isProcessing {
             return modelService.statusMessage
         }
-        return aiStatusMessage
+        if isAIDownloading {
+            return aiStatusMessage
+        }
+        // Show pending status
+        if hasPendingModels {
+            let pending = KoeModel.backgroundModels.filter { !modelService.isModelReady($0) }
+            let names = pending.map { $0.shortName }.joined(separator: ", ")
+            return "\(names) modes will download in background"
+        }
+        return nil
     }
 
     var body: some View {
-        if isActive {
+        if shouldShow {
             VStack(spacing: 4) {
                 // Progress bar
                 GeometryReader { geo in
@@ -2281,19 +2233,32 @@ struct BackgroundProgressBar: View {
                         Text("Paused - will resume after transcription")
                             .font(.system(size: 10))
                             .foregroundColor(KoeColors.textLight)
-                    } else if let message = currentMessage {
+                    } else if modelService.state.isProcessing || isAIDownloading {
                         ProgressView()
                             .scaleEffect(0.5)
                             .frame(width: 10, height: 10)
 
-                        Text(message)
-                            .font(.system(size: 10))
-                            .foregroundColor(KoeColors.textLight)
+                        if let message = currentMessage {
+                            Text(message)
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
+                        }
 
                         if let remaining = modelService.estimatedTimeRemaining, remaining > 30 {
                             Text("~\(formatTime(remaining)) left")
                                 .font(.system(size: 10))
                                 .foregroundColor(KoeColors.textLighter)
+                        }
+                    } else if hasPendingModels {
+                        // Pending but not started yet
+                        Image(systemName: "clock")
+                            .font(.system(size: 9))
+                            .foregroundColor(KoeColors.textLight)
+
+                        if let message = currentMessage {
+                            Text(message)
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
                         }
                     }
 

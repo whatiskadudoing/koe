@@ -14,7 +14,7 @@ public enum ModelPhase: String, Codable, Sendable {
 }
 
 /// Status for a single model's download/compilation
-public struct ModelDownloadStatus: Codable, Sendable {
+public struct ModelDownloadStatus: Codable, Sendable, Equatable {
     public var model: KoeModel
     public var phase: ModelPhase
     public var downloadProgress: Double  // 0.0 - 1.0
@@ -50,8 +50,8 @@ public struct ModelDownloadStatus: Codable, Sendable {
     }
 }
 
-/// Aggregated state for background model processing
-public struct BackgroundModelState: Codable {
+/// Aggregated state for background model processing (for persistence)
+public struct BackgroundModelState: Codable, Equatable {
     public var models: [String: ModelDownloadStatus]  // keyed by model.rawValue
     public var isProcessing: Bool
     public var isPaused: Bool
@@ -74,9 +74,16 @@ public struct BackgroundModelState: Codable {
 public final class BackgroundModelService: ObservableObject {
     public static let shared = BackgroundModelService()
 
-    // MARK: - Published State
-    @Published public private(set) var state: BackgroundModelState
+    // MARK: - Published State (individual properties for better SwiftUI observation)
+    @Published public private(set) var isProcessing: Bool = false
+    @Published public private(set) var isPaused: Bool = false
+    @Published public private(set) var currentModelName: String?
+    @Published public private(set) var currentPhase: ModelPhase = .pending
+    @Published public private(set) var currentDownloadProgress: Double = 0
+    @Published public private(set) var currentCompilationProgress: Double = 0
+    @Published public private(set) var modelStatuses: [String: ModelDownloadStatus] = [:]
     @Published public private(set) var isFirstLaunch: Bool = false
+    @Published public private(set) var hasPendingWork: Bool = false
 
     // MARK: - Private
     private let transcriber = WhisperKitTranscriber()
@@ -89,16 +96,30 @@ public final class BackgroundModelService: ObservableObject {
     private let hasCompletedFirstBackgroundKey = "HasCompletedFirstBackground"
 
     private init() {
+        logger.notice("BackgroundModelService initializing...")
+
         // Load persisted state
         if let data = UserDefaults.standard.data(forKey: stateKey),
            let savedState = try? JSONDecoder().decode(BackgroundModelState.self, from: data) {
-            self.state = savedState
-        } else {
-            self.state = BackgroundModelState()
+            logger.notice("Loaded persisted state: isProcessing=\(savedState.isProcessing), models=\(savedState.models.count)")
+            // Restore individual properties from saved state
+            self.modelStatuses = savedState.models
+            self.isPaused = savedState.isPaused
+            self.currentModelName = savedState.currentlyProcessing
+
+            // If was processing before, we need to resume
+            if savedState.isProcessing {
+                logger.notice("Previous session was processing - will resume")
+            }
         }
 
         // Check if this is first launch (no background models completed yet)
         isFirstLaunch = !UserDefaults.standard.bool(forKey: hasCompletedFirstBackgroundKey)
+
+        // Check if there's pending work
+        updateHasPendingWork()
+
+        logger.notice("BackgroundModelService initialized: isFirstLaunch=\(self.isFirstLaunch), hasPendingWork=\(self.hasPendingWork)")
 
         setupObservers()
     }
@@ -116,10 +137,11 @@ public final class BackgroundModelService: ObservableObject {
         let pendingModels = KoeModel.backgroundModels.filter { !isModelReady($0) }
         if pendingModels.isEmpty {
             logger.notice("All background models already ready")
+            hasPendingWork = false
             return
         }
 
-        logger.notice("Starting background model processing for \(pendingModels.count) models")
+        logger.notice("Starting background model processing for \(pendingModels.count) models: \(pendingModels.map { $0.shortName })")
 
         backgroundTask = Task {
             await processBackgroundModels()
@@ -129,7 +151,7 @@ public final class BackgroundModelService: ObservableObject {
     /// Pause background processing (call when transcription starts)
     public func pauseForTranscription() {
         isPausedForTranscription = true
-        state.isPaused = true
+        isPaused = true
         persistState()
         logger.notice("Background processing paused for transcription")
     }
@@ -137,7 +159,7 @@ public final class BackgroundModelService: ObservableObject {
     /// Resume background processing (call when transcription ends)
     public func resumeAfterTranscription() {
         isPausedForTranscription = false
-        state.isPaused = false
+        isPaused = false
         persistState()
         logger.notice("Background processing resumed")
     }
@@ -150,17 +172,26 @@ public final class BackgroundModelService: ObservableObject {
         }
 
         // Check our state first
-        if let status = state.models[model.rawValue], status.phase == .ready {
+        if let status = modelStatuses[model.rawValue], status.phase == .ready {
             return true
         }
 
         // Check file system as fallback (model might have been compiled before)
-        return transcriber.isModelDownloaded(model)
+        let isDownloaded = transcriber.isModelDownloaded(model)
+        if isDownloaded {
+            // Update our state to reflect this
+            var status = ModelDownloadStatus(model: model)
+            status.phase = .ready
+            status.downloadProgress = 1.0
+            status.compilationProgress = 1.0
+            modelStatuses[model.rawValue] = status
+        }
+        return isDownloaded
     }
 
     /// Get current status for a model
     public func statusFor(_ model: KoeModel) -> ModelDownloadStatus? {
-        state.models[model.rawValue]
+        modelStatuses[model.rawValue]
     }
 
     /// Overall progress for all background models (0.0 - 1.0)
@@ -172,7 +203,7 @@ public final class BackgroundModelService: ObservableObject {
         for model in backgroundModels {
             if isModelReady(model) {
                 total += 1.0
-            } else if let status = state.models[model.rawValue] {
+            } else if let status = modelStatuses[model.rawValue] {
                 total += status.totalProgress
             }
         }
@@ -181,21 +212,24 @@ public final class BackgroundModelService: ObservableObject {
 
     /// Human-readable status message
     public var statusMessage: String? {
-        guard state.isProcessing else { return nil }
-
-        if state.isPaused {
+        if isPaused {
             return "Paused"
         }
 
-        guard let currentModel = state.currentlyProcessing,
-              let model = KoeModel(rawValue: currentModel),
-              let status = state.models[currentModel] else {
+        guard isProcessing, let modelName = currentModelName,
+              let model = KoeModel(rawValue: modelName) else {
+            // Show pending models if not processing yet
+            if hasPendingWork && !isProcessing {
+                let pending = KoeModel.backgroundModels.filter { !isModelReady($0) }
+                let names = pending.map { $0.shortName }.joined(separator: ", ")
+                return "\(names) modes will download in background"
+            }
             return nil
         }
 
-        switch status.phase {
+        switch currentPhase {
         case .downloading:
-            let percent = Int(status.downloadProgress * 100)
+            let percent = Int(currentDownloadProgress * 100)
             return "Downloading \(model.shortName)... \(percent)%"
         case .compiling:
             return "Optimizing \(model.shortName)..."
@@ -206,14 +240,20 @@ public final class BackgroundModelService: ObservableObject {
 
     /// Estimated time remaining for current model
     public var estimatedTimeRemaining: TimeInterval? {
-        guard let currentModel = state.currentlyProcessing,
-              let status = state.models[currentModel] else {
+        guard let modelName = currentModelName,
+              let status = modelStatuses[modelName] else {
             return nil
         }
         return status.estimatedTimeRemaining
     }
 
     // MARK: - Private Implementation
+
+    private func updateHasPendingWork() {
+        let pending = KoeModel.backgroundModels.filter { !isModelReady($0) }
+        hasPendingWork = !pending.isEmpty
+        logger.notice("Pending work check: \(pending.count) models pending, hasPendingWork=\(self.hasPendingWork)")
+    }
 
     private func setupObservers() {
         // Observe transcription start/end for pausing
@@ -239,8 +279,10 @@ public final class BackgroundModelService: ObservableObject {
     }
 
     private func processBackgroundModels() async {
-        state.isProcessing = true
+        isProcessing = true
         persistState()
+
+        logger.notice("processBackgroundModels started")
 
         // Process models in order: Balanced, then Best
         for model in KoeModel.backgroundModels {
@@ -251,7 +293,7 @@ public final class BackgroundModelService: ObservableObject {
                 status.phase = .ready
                 status.downloadProgress = 1.0
                 status.compilationProgress = 1.0
-                state.models[model.rawValue] = status
+                modelStatuses[model.rawValue] = status
                 continue
             }
 
@@ -267,20 +309,26 @@ public final class BackgroundModelService: ObservableObject {
             await processModel(model)
         }
 
-        state.isProcessing = false
-        state.currentlyProcessing = nil
-        state.lastCompletedAt = Date()
+        isProcessing = false
+        currentModelName = nil
+        currentPhase = .pending
+        currentDownloadProgress = 0
+        currentCompilationProgress = 0
 
         // Mark first background completion
         let allReady = KoeModel.backgroundModels.allSatisfy { isModelReady($0) }
         if allReady {
             UserDefaults.standard.set(true, forKey: hasCompletedFirstBackgroundKey)
             isFirstLaunch = false
+            hasPendingWork = false
+
+            // Send final notification that everything is ready
+            await sendAllModelsReadyNotification()
         }
 
         persistState()
         backgroundTask = nil
-        logger.notice("Background model processing complete")
+        logger.notice("Background model processing complete. All ready: \(allReady)")
     }
 
     private func processModel(_ model: KoeModel) async {
@@ -290,8 +338,10 @@ public final class BackgroundModelService: ObservableObject {
         var status = ModelDownloadStatus(model: model)
         status.phase = .downloading
         status.startedAt = Date()
-        state.models[model.rawValue] = status
-        state.currentlyProcessing = model.rawValue
+        modelStatuses[model.rawValue] = status
+        currentModelName = model.rawValue
+        currentPhase = .downloading
+        currentDownloadProgress = 0
         persistState()
 
         do {
@@ -301,10 +351,10 @@ public final class BackgroundModelService: ObservableObject {
             try await transcriber.downloadOnly(model) { [weak self] progress in
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
-                    if var s = self.state.models[model.rawValue] {
+                    self.currentDownloadProgress = progress
+                    if var s = self.modelStatuses[model.rawValue] {
                         s.downloadProgress = progress
-                        self.state.models[model.rawValue] = s
-                        // Don't persist on every progress update - too frequent
+                        self.modelStatuses[model.rawValue] = s
                     }
                 }
             }
@@ -312,7 +362,9 @@ public final class BackgroundModelService: ObservableObject {
             // Update status for compilation phase
             status.phase = .compiling
             status.downloadProgress = 1.0
-            state.models[model.rawValue] = status
+            modelStatuses[model.rawValue] = status
+            currentPhase = .compiling
+            currentDownloadProgress = 1.0
             persistState()
 
             // Wait if paused before compilation
@@ -335,8 +387,10 @@ public final class BackgroundModelService: ObservableObject {
             status.phase = .ready
             status.compilationProgress = 1.0
             status.completedAt = Date()
-            state.models[model.rawValue] = status
-            state.currentlyProcessing = nil
+            modelStatuses[model.rawValue] = status
+            currentModelName = nil
+            currentPhase = .pending
+            currentCompilationProgress = 1.0
             persistState()
 
             // Send notification
@@ -348,8 +402,9 @@ public final class BackgroundModelService: ObservableObject {
             logger.error("Failed to process model \(model.shortName): \(error)")
             status.phase = .failed
             status.errorMessage = error.localizedDescription
-            state.models[model.rawValue] = status
-            state.currentlyProcessing = nil
+            modelStatuses[model.rawValue] = status
+            currentModelName = nil
+            currentPhase = .failed
             persistState()
         }
     }
@@ -383,10 +438,49 @@ public final class BackgroundModelService: ObservableObject {
         )
     }
 
+    private func sendAllModelsReadyNotification() async {
+        let content = UNMutableNotificationContent()
+        content.title = "Koe is Fully Optimized!"
+        content.body = "All speech recognition models are ready. Your app is now at full power."
+        content.sound = .default
+        content.categoryIdentifier = "ALL_MODELS_READY"
+
+        let request = UNNotificationRequest(
+            identifier: "all-models-ready",
+            content: content,
+            trigger: nil
+        )
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+            logger.notice("All models ready notification sent")
+        } catch {
+            logger.error("Failed to send all models ready notification: \(error)")
+        }
+    }
+
     private func persistState() {
+        let state = BackgroundModelState(
+            models: modelStatuses,
+            isProcessing: isProcessing,
+            isPaused: isPaused,
+            currentlyProcessing: currentModelName,
+            lastCompletedAt: nil
+        )
         if let data = try? JSONEncoder().encode(state) {
             UserDefaults.standard.set(data, forKey: stateKey)
         }
+    }
+}
+
+// Helper extension to create state from individual properties
+extension BackgroundModelState {
+    init(models: [String: ModelDownloadStatus], isProcessing: Bool, isPaused: Bool, currentlyProcessing: String?, lastCompletedAt: Date?) {
+        self.models = models
+        self.isProcessing = isProcessing
+        self.isPaused = isPaused
+        self.currentlyProcessing = currentlyProcessing
+        self.lastCompletedAt = lastCompletedAt
     }
 }
 
