@@ -14,23 +14,14 @@ quickWrite("\n\n\n                  声  Koe\n                  Loading...\n");
 
 // Import UI modules
 import { colors } from "./ui/colors.ts";
-import { clear, clearLine, hideCursor, showCursor, terminal, write } from "./ui/terminal.ts";
+import { clear, clearLine, hideCursor, showCursor, write } from "./ui/terminal.ts";
 import { getSpinnerFrame, miniWave } from "./ui/animations.ts";
-import {
-  errorBox,
-  formatDuration,
-  gradientProgressBar,
-  header,
-  progressBar,
-  stepIndicator,
-  successBox,
-} from "./ui/components.ts";
+import { errorBox, header, progressBar, stepIndicator, successBox } from "./ui/components.ts";
 
 // Import steps
 import { checkForUpdates, downloadApp } from "./steps/download.ts";
 import { installApp, openApp, resetPermissions } from "./steps/install.ts";
 import { downloadFastModel, FAST_MODEL } from "./steps/model.ts";
-import { optimizeModel, type OptimizeProgress } from "./steps/optimize.ts";
 
 // =============================================================================
 // INTRO ANIMATION
@@ -151,140 +142,6 @@ async function runModelDownload(): Promise<boolean> {
     console.log();
     return true;
   }
-}
-
-// =============================================================================
-// OPTIMIZATION WITH REAL PROGRESS
-// =============================================================================
-
-async function runOptimization(): Promise<{ success: boolean; duration: number }> {
-  console.log();
-  write(colors.white("  Optimizing for Apple Silicon...\n"));
-  console.log();
-
-  let _lastProgress: OptimizeProgress = {
-    percent: 0,
-    phase: "Starting...",
-    elapsed: 0,
-    estimatedRemaining: null,
-  };
-
-  // Progress display area (we'll update this in place)
-  const progressLineCount = 6; // Number of lines used for progress display
-
-  // Print initial progress area
-  for (let i = 0; i < progressLineCount; i++) {
-    console.log();
-  }
-
-  // Move cursor back up to progress area
-  terminal.moveUp(progressLineCount);
-  terminal.saveCursor();
-
-  // Spinner for compilation phase (no progress available)
-  let spinnerFrame = 0;
-  let spinnerInterval: number | null = null;
-  let compilationStartTime: number | null = null;
-
-  const updateDisplay = (progress: OptimizeProgress) => {
-    // Restore cursor to progress area
-    terminal.restoreCursor();
-
-    // Clear and redraw progress
-    clearLine();
-
-    // Calculate real-time elapsed during compilation
-    let displayElapsed = progress.elapsed;
-    let displayRemaining = progress.estimatedRemaining;
-
-    if (progress.percent < 0 && compilationStartTime) {
-      // Update elapsed time in real-time during compilation
-      displayElapsed = (Date.now() - compilationStartTime) / 1000;
-      // Estimate ~3-4 min total, subtract elapsed
-      displayRemaining = Math.max(0, 210 - displayElapsed);
-    }
-
-    if (progress.percent < 0) {
-      // Compilation phase - show spinner with elapsed time
-      const spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
-      const frame = spinner[spinnerFrame % 10];
-      write(
-        `  ${colors.accent(frame)} ${colors.white("Compiling...")} ${
-          colors.dim("(first run only, ~3-4 min)")
-        }\n`,
-      );
-    } else {
-      // Normal progress bar
-      write(`  ${gradientProgressBar(progress.percent / 100, 30)}\n`);
-    }
-
-    clearLine();
-    console.log();
-
-    // Stats box
-    clearLine();
-    const elapsedStr = formatDuration(displayElapsed);
-    const remainingStr = displayRemaining !== null
-      ? `~${formatDuration(displayRemaining)}`
-      : "calculating...";
-    write(`  ${colors.dim("Elapsed:")}    ${colors.white(elapsedStr)}\n`);
-    clearLine();
-    write(`  ${colors.dim("Remaining:")}  ${colors.white(remainingStr)}\n`);
-    clearLine();
-    write(`  ${colors.dim("Phase:")}      ${colors.accent(progress.phase)}\n`);
-    clearLine();
-  };
-
-  const result = await optimizeModel((progress) => {
-    _lastProgress = progress;
-
-    // Start spinner animation during compilation
-    if (progress.percent < 0 && !spinnerInterval) {
-      compilationStartTime = Date.now();
-      spinnerInterval = setInterval(() => {
-        spinnerFrame++;
-        updateDisplay(_lastProgress);
-      }, 80);
-    }
-
-    // Stop spinner when we have real progress
-    if (progress.percent >= 0 && spinnerInterval) {
-      clearInterval(spinnerInterval);
-      spinnerInterval = null;
-      compilationStartTime = null;
-    }
-
-    updateDisplay(progress);
-  });
-
-  // Clean up spinner
-  if (spinnerInterval) {
-    clearInterval(spinnerInterval);
-  }
-
-  // Move to end of progress area
-  terminal.restoreCursor();
-  terminal.moveDown(progressLineCount);
-
-  // Clear progress area and show result
-  terminal.moveUp(progressLineCount + 2);
-  for (let i = 0; i < progressLineCount + 2; i++) {
-    clearLine();
-    console.log();
-  }
-  terminal.moveUp(progressLineCount + 2);
-
-  if (result.success) {
-    write(
-      stepIndicator("done", `Optimized for Apple Silicon! (${formatDuration(result.duration)})`),
-    );
-    console.log();
-  } else {
-    write(stepIndicator("skipped", "Optimization skipped - will complete on first launch"));
-    console.log();
-  }
-
-  return result;
 }
 
 // =============================================================================
