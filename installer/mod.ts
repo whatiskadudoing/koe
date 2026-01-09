@@ -285,7 +285,7 @@ async function downloadModel(
   // Get list of files to download
   const files = await getModelFiles(model.id);
 
-  let downloadedBytes = 0;
+  let _downloadedBytes = 0;
   const estimatedTotalBytes = model.sizeBytes;
 
   for (let i = 0; i < files.length; i++) {
@@ -302,7 +302,7 @@ async function downloadModel(
     await downloadFile(fileUrl, destPath);
 
     // Update downloaded bytes estimate
-    downloadedBytes = Math.floor(estimatedTotalBytes * ((i + 1) / files.length));
+    _downloadedBytes = Math.floor(estimatedTotalBytes * ((i + 1) / files.length));
   }
 }
 
