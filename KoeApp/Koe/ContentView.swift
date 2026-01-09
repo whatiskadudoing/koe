@@ -2146,7 +2146,7 @@ struct BackgroundWorkExplanation: View {
                 VStack(alignment: .leading, spacing: 8) {
                     FeatureRow(icon: "hare.fill", text: "Fast mode - ready now", color: .green)
                     FeatureRow(icon: "gauge.medium", text: "Balanced mode - downloading...", color: .orange)
-                    FeatureRow(icon: "star.fill", text: "Best mode - coming soon", color: purpleColor)
+                    FeatureRow(icon: "star.fill", text: "Best mode - downloads next", color: purpleColor)
                 }
                 .padding(12)
                 .background(KoeColors.surface)
