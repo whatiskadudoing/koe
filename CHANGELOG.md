@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.1-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.12.0-beta.6...v1.12.1-beta.6) (2026-01-09)
+
+
+### Bug Fixes
+
+* update elapsed time in real-time during compilation phase ([0b6f04e](https://github.com/whatiskadudoing/koe/commit/0b6f04efc4adcf6d782ef048402a95a0e63e4c40))
+
 ## [1.12.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.11.2-beta.6...v1.12.0-beta.6) (2026-01-09)
 
 
