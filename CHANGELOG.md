@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/whatiskadudoing/koe/compare/v1.6.0...v1.7.0) (2026-01-09)
+
+
+### Features
+
+* add model precompilation to installer for instant app startup ([265b63b](https://github.com/whatiskadudoing/koe/commit/265b63b78935a603d26897a586ad655a4e300005))
+
 ## [1.6.0](https://github.com/whatiskadudoing/koe/compare/v1.5.0...v1.6.0) (2026-01-09)
 
 
