@@ -33,9 +33,27 @@ interface ModelInfo {
 
 // New turbo models - all downloaded during installation (~4.7 GB total)
 const TURBO_MODELS: ModelInfo[] = [
-  { id: "large-v3-v20240930_turbo_632MB", name: "Fast", size: "632 MB", sizeBytes: 632_000_000, description: "Fastest turbo model" },
-  { id: "large-v3_turbo_954MB", name: "Balanced", size: "954 MB", sizeBytes: 954_000_000, description: "Balanced turbo model" },
-  { id: "large-v3-v20240930_turbo", name: "Best Quality", size: "3.1 GB", sizeBytes: 3_100_000_000, description: "Best quality turbo model" },
+  {
+    id: "large-v3-v20240930_turbo_632MB",
+    name: "Fast",
+    size: "632 MB",
+    sizeBytes: 632_000_000,
+    description: "Fastest turbo model",
+  },
+  {
+    id: "large-v3_turbo_954MB",
+    name: "Balanced",
+    size: "954 MB",
+    sizeBytes: 954_000_000,
+    description: "Balanced turbo model",
+  },
+  {
+    id: "large-v3-v20240930_turbo",
+    name: "Best Quality",
+    size: "3.1 GB",
+    sizeBytes: 3_100_000_000,
+    description: "Best quality turbo model",
+  },
 ];
 
 const HF_REPO = "argmaxinc/whisperkit-coreml";
@@ -273,11 +291,12 @@ async function downloadModel(
   model: ModelInfo,
   modelIndex: number,
   totalModels: number,
-  updateProgress: (message: string, progress: number) => void
+  updateProgress: (message: string, progress: number) => void,
 ): Promise<void> {
   // Get model destination path (same as WhisperKit uses)
   const homeDir = Deno.env.get("HOME") || "~";
-  const modelDir = `${homeDir}/Library/Application Support/Koe/Models/models/argmaxinc/whisperkit-coreml/openai_whisper-${model.id}`;
+  const modelDir =
+    `${homeDir}/Library/Application Support/Koe/Models/models/argmaxinc/whisperkit-coreml/openai_whisper-${model.id}`;
 
   // Create directory
   await Deno.mkdir(modelDir, { recursive: true });
@@ -297,7 +316,10 @@ async function downloadModel(
     // Update progress
     const fileProgress = i / files.length;
     const overallProgress = (modelIndex + fileProgress) / totalModels;
-    updateProgress(`Downloading ${model.name} model (${i + 1}/${files.length})...`, overallProgress);
+    updateProgress(
+      `Downloading ${model.name} model (${i + 1}/${files.length})...`,
+      overallProgress,
+    );
 
     await downloadFile(fileUrl, destPath);
 
@@ -310,7 +332,7 @@ async function downloadModel(
 const INTRO_MESSAGES = [
   // Basics
   "Preparing everything...",
-  "Koe (声) means \"voice\" in Japanese",
+  'Koe (声) means "voice" in Japanese',
   "Hold Option + Space to start recording",
   "Release to transcribe instantly",
 
@@ -343,7 +365,7 @@ const INTRO_MESSAGES = [
   "Never miss important discussions",
 
   // Voice Commands
-  "Say \"kon\" to trigger hands-free",
+  'Say "kon" to trigger hands-free',
   "Train your voice for personal activation",
   "Only responds to your voice",
 
@@ -404,7 +426,11 @@ async function downloadAllModels(): Promise<boolean> {
     }
 
     const message = INTRO_MESSAGES[messageIndex];
-    write(`${CLEAR_LINE}  ${c.accent(spinner[frame % 10])} ${c.dim(message)}  ${progressBar(currentProgress)}`);
+    write(
+      `${CLEAR_LINE}  ${c.accent(spinner[frame % 10])} ${c.dim(message)}  ${
+        progressBar(currentProgress)
+      }`,
+    );
     frame++;
     await new Promise((r) => setTimeout(r, 80));
   }
@@ -513,7 +539,9 @@ async function main(): Promise<void> {
 
     if (!modelsSuccess) {
       write(SHOW_CURSOR);
-      console.log(c.error("\n  Setup failed. Please check your internet connection and try again.\n"));
+      console.log(
+        c.error("\n  Setup failed. Please check your internet connection and try again.\n"),
+      );
       Deno.exit(1);
     }
 

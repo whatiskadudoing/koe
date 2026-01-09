@@ -1,0 +1,3 @@
+[submodule "Packages/WhisperMetal"]
+	path = Packages/WhisperMetal
+	url = https://github.com/exPHAT/SwiftWhisper.git
