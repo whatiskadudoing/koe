@@ -68,7 +68,7 @@ enum MenuBarState {
 }
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     var statusItem: NSStatusItem?
     private var menuBarAnimationTimer: Timer?
     private var animationStartTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
@@ -97,6 +97,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSLog("🚀 Koe app launched!")
+
+        // Set notification delegate for handling model ready notifications
+        UNUserNotificationCenter.current().delegate = self
+
         setupMenuBar()
         setupCommandDetector()
         // NOTE: Model loading is now triggered by LoadingView when permissions are granted
@@ -427,6 +431,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupGlobalHotkey()
         coordinator.initializeWhenReady()
         // Note: Meeting monitoring is started in applicationDidFinishLaunching
+
+        // Start background model downloading/compilation
+        Task { @MainActor in
+            BackgroundModelService.shared.startBackgroundProcessing()
+        }
+
+        // Setup notification categories for model ready actions
+        setupNotificationCategories()
+    }
+
+    private func setupNotificationCategories() {
+        let switchAction = UNNotificationAction(
+            identifier: "SWITCH_MODEL",
+            title: "Switch Now",
+            options: [.foreground]
+        )
+
+        let laterAction = UNNotificationAction(
+            identifier: "LATER",
+            title: "Later",
+            options: []
+        )
+
+        let category = UNNotificationCategory(
+            identifier: "MODEL_READY",
+            actions: [switchAction, laterAction],
+            intentIdentifiers: []
+        )
+
+        UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
     @objc func handleHotkeyChanged() {
@@ -675,6 +709,49 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window.makeKeyAndOrderFront(nil)
             }
         }
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+
+        if response.notification.request.content.categoryIdentifier == "MODEL_READY",
+           let modelRaw = userInfo["modelRawValue"] as? String,
+           let model = KoeModel(rawValue: modelRaw) {
+
+            switch response.actionIdentifier {
+            case "SWITCH_MODEL":
+                // Switch to the new model
+                Task { @MainActor in
+                    AppState.shared.selectedModel = model.rawValue
+                    await RecordingCoordinator.shared.loadModel(model)
+                    logger.notice("Switched to model: \(model.shortName)")
+                }
+            case "LATER", UNNotificationDefaultActionIdentifier:
+                // Just open the app
+                Task { @MainActor in
+                    self.togglePopover()
+                }
+            default:
+                break
+            }
+        }
+
+        completionHandler()
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Show notification even when app is in foreground
+        completionHandler([.banner, .sound])
     }
 }
 

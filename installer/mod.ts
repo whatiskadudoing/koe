@@ -31,7 +31,8 @@ interface ModelInfo {
   description: string;
 }
 
-// New turbo models - all downloaded during installation (~4.7 GB total)
+// Only Fast model downloaded during installation
+// Balanced and Best are downloaded in background after app launch
 const TURBO_MODELS: ModelInfo[] = [
   {
     id: "large-v3-v20240930_turbo_632MB",
@@ -39,20 +40,6 @@ const TURBO_MODELS: ModelInfo[] = [
     size: "632 MB",
     sizeBytes: 632_000_000,
     description: "Fastest turbo model",
-  },
-  {
-    id: "large-v3_turbo_954MB",
-    name: "Balanced",
-    size: "954 MB",
-    sizeBytes: 954_000_000,
-    description: "Balanced turbo model",
-  },
-  {
-    id: "large-v3-v20240930_turbo",
-    name: "Best Quality",
-    size: "3.1 GB",
-    sizeBytes: 3_100_000_000,
-    description: "Best quality turbo model",
   },
 ];
 
@@ -335,19 +322,34 @@ async function precompileWithProgress(): Promise<boolean> {
 // MODEL DOWNLOAD
 // =============================================================================
 
-async function getModelFiles(modelId: string): Promise<string[]> {
-  // Get list of files in the model folder from HuggingFace API
-  const url = `https://huggingface.co/api/models/${HF_REPO}/tree/main/openai_whisper-${modelId}`;
+async function getModelFilesRecursive(path: string): Promise<string[]> {
+  // Get list of items at this path from HuggingFace API
+  const url = `https://huggingface.co/api/models/${HF_REPO}/tree/main/${path}`;
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`Failed to get model file list: ${response.status}`);
+    throw new Error(`Failed to get file list for ${path}: ${response.status}`);
   }
 
-  const files = await response.json();
-  return files
-    .filter((f: { type: string }) => f.type === "file")
-    .map((f: { path: string }) => f.path);
+  const items = await response.json();
+  const allFiles: string[] = [];
+
+  for (const item of items) {
+    if (item.type === "file") {
+      allFiles.push(item.path);
+    } else if (item.type === "directory") {
+      // Recursively get files from subdirectory
+      const subFiles = await getModelFilesRecursive(item.path);
+      allFiles.push(...subFiles);
+    }
+  }
+
+  return allFiles;
+}
+
+async function getModelFiles(modelId: string): Promise<string[]> {
+  // Get all files recursively from the model folder
+  return await getModelFilesRecursive(`openai_whisper-${modelId}`);
 }
 
 async function downloadFile(url: string, destPath: string): Promise<void> {
@@ -369,13 +371,13 @@ async function downloadModel(
 ): Promise<void> {
   // Get model destination path (same as WhisperKit uses)
   const homeDir = Deno.env.get("HOME") || "~";
-  const modelDir =
-    `${homeDir}/Library/Application Support/Koe/Models/models/argmaxinc/whisperkit-coreml/openai_whisper-${model.id}`;
+  const baseDir =
+    `${homeDir}/Library/Application Support/Koe/Models/models/argmaxinc/whisperkit-coreml`;
 
-  // Create directory
-  await Deno.mkdir(modelDir, { recursive: true });
+  // Create base directory
+  await Deno.mkdir(baseDir, { recursive: true });
 
-  // Get list of files to download
+  // Get list of files to download (includes full paths like openai_whisper-model/subdir/file.bin)
   const files = await getModelFiles(model.id);
 
   let _downloadedBytes = 0;
@@ -383,9 +385,13 @@ async function downloadModel(
 
   for (let i = 0; i < files.length; i++) {
     const filePath = files[i];
-    const fileName = filePath.split("/").pop() || filePath;
-    const destPath = `${modelDir}/${fileName}`;
+    // Preserve directory structure - filePath is like "openai_whisper-model-id/MelSpectrogram.mlmodelc/file.bin"
+    const destPath = `${baseDir}/${filePath}`;
     const fileUrl = `${MODEL_BASE_URL}/${filePath}`;
+
+    // Create parent directories if needed (for .mlmodelc subdirectories)
+    const parentDir = destPath.substring(0, destPath.lastIndexOf("/"));
+    await Deno.mkdir(parentDir, { recursive: true });
 
     // Update progress
     const fileProgress = i / files.length;
@@ -417,8 +423,9 @@ const INTRO_MESSAGES = [
 
   // Models
   "Three quality modes: Fast, Balanced, Best",
-  "Switch models anytime from the main window",
-  "Turbo models - fast and accurate",
+  "Balanced and Best prepare in background",
+  "Get notified when smarter modes are ready",
+  "Switch models anytime from settings",
 
   // Privacy
   "100% offline - no internet required",

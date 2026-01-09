@@ -260,6 +260,56 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
         lock.unlock()
     }
 
+    /// Check if a model exists on disk (downloaded but not necessarily loaded)
+    public func isModelDownloaded(_ model: KoeModel) -> Bool {
+        let modelName = model.rawValue
+
+        // Check bundled first
+        if getBundledModelPath(for: modelName) != nil {
+            return true
+        }
+
+        // Check downloaded
+        let modelFolder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Koe")
+            .appendingPathComponent("Models")
+            .appendingPathComponent("models/argmaxinc/whisperkit-coreml/openai_whisper-\(modelName)")
+
+        return FileManager.default.fileExists(atPath: modelFolder.path)
+    }
+
+    /// Download a model without loading it into memory (for background preparation)
+    /// Returns the download progress via callback
+    public func downloadOnly(_ model: KoeModel, progressCallback: ((Double) -> Void)? = nil) async throws {
+        let modelName = model.rawValue
+
+        // Check if already downloaded
+        if isModelDownloaded(model) {
+            progressCallback?(1.0)
+            return
+        }
+
+        // Use persistent location for model storage
+        let modelFolder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Koe")
+            .appendingPathComponent("Models")
+
+        try? FileManager.default.createDirectory(at: modelFolder, withIntermediateDirectories: true)
+
+        // Download model with progress
+        _ = try await WhisperKit.download(
+            variant: modelName,
+            downloadBase: modelFolder,
+            useBackgroundSession: true,
+            from: "argmaxinc/whisperkit-coreml",
+            progressCallback: { progress in
+                progressCallback?(progress.fractionCompleted)
+            }
+        )
+
+        progressCallback?(1.0)
+    }
+
     /// Transcribe audio data
     public func transcribe(audioData: Data, language: Language?) async throws -> Transcription {
         lock.lock()

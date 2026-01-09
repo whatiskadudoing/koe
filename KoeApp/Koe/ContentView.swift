@@ -136,6 +136,9 @@ struct ContentView: View {
 
     private var mainUI: some View {
         VStack(spacing: 0) {
+            // First launch banner (shows once when background models start downloading)
+            FirstLaunchBanner()
+
             // Top bar with tab toggle
             HStack {
                 Spacer()
@@ -154,6 +157,9 @@ struct ContentView: View {
             case .meetings:
                 MeetingsView()
             }
+
+            // Bottom progress bar for background model downloads
+            BackgroundProgressBar()
         }
     }
 
@@ -2115,5 +2121,143 @@ struct GlobalSettingsGroup<Content: View>: View {
         .padding(12)
         .background(KoeColors.surface)
         .cornerRadius(10)
+    }
+}
+
+// MARK: - First Launch Banner
+
+struct FirstLaunchBanner: View {
+    @ObservedObject private var service = BackgroundModelService.shared
+    @State private var isDismissed = false
+
+    private let bannerKey = "FirstLaunchBannerDismissed"
+
+    var body: some View {
+        if shouldShow {
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12))
+                        .foregroundColor(.purple)
+
+                    Text("Getting smarter in background...")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(KoeColors.textPrimary)
+
+                    Spacer()
+
+                    Button(action: dismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(KoeColors.textLight)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Text("Balanced and Best modes are downloading. You'll be notified when ready.")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textLight)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .background(Color.purple.opacity(0.08))
+            .cornerRadius(10)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private var shouldShow: Bool {
+        !isDismissed &&
+        !UserDefaults.standard.bool(forKey: bannerKey) &&
+        service.isFirstLaunch &&
+        service.state.isProcessing
+    }
+
+    private func dismiss() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            isDismissed = true
+        }
+        UserDefaults.standard.set(true, forKey: bannerKey)
+    }
+}
+
+// MARK: - Background Progress Bar
+
+struct BackgroundProgressBar: View {
+    @ObservedObject private var service = BackgroundModelService.shared
+
+    private let purpleColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
+
+    var body: some View {
+        if service.state.isProcessing {
+            VStack(spacing: 4) {
+                // Progress bar
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        // Background track
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.gray.opacity(0.15))
+                            .frame(height: 3)
+
+                        // Progress fill
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(purpleColor)
+                            .frame(width: geo.size.width * service.overallProgress, height: 3)
+                            .animation(.easeInOut(duration: 0.3), value: service.overallProgress)
+                    }
+                }
+                .frame(height: 3)
+
+                // Status text
+                HStack(spacing: 6) {
+                    if service.state.isPaused {
+                        Image(systemName: "pause.circle.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(.orange)
+                        Text("Paused - will resume after transcription")
+                            .font(.system(size: 10))
+                            .foregroundColor(KoeColors.textLight)
+                    } else if let message = service.statusMessage {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                            .frame(width: 10, height: 10)
+
+                        Text(message)
+                            .font(.system(size: 10))
+                            .foregroundColor(KoeColors.textLight)
+
+                        if let remaining = service.estimatedTimeRemaining, remaining > 30 {
+                            Text("~\(formatTime(remaining)) left")
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLighter)
+                        }
+                    }
+
+                    Spacer()
+
+                    // Overall progress percentage
+                    Text("\(Int(service.overallProgress * 100))%")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(purpleColor)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color(nsColor: NSColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0)))
+        }
+    }
+
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        if seconds < 60 {
+            return "\(Int(seconds))s"
+        } else if seconds < 3600 {
+            return "\(Int(seconds / 60))m"
+        } else {
+            let hours = Int(seconds / 3600)
+            let mins = Int((seconds.truncatingRemainder(dividingBy: 3600)) / 60)
+            return "\(hours)h \(mins)m"
+        }
     }
 }

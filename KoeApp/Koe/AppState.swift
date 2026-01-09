@@ -31,6 +31,25 @@ public final class AppState {
     public var isModelLoaded: Bool = false
     public var modelLoadingProgress: Double = 0.0
 
+    // Background model service for downloading additional models
+    @ObservationIgnored
+    public lazy var backgroundModelService = BackgroundModelService.shared
+
+    /// Check if a model is available for use
+    public func isModelAvailable(_ model: KoeModel) -> Bool {
+        backgroundModelService.isModelReady(model)
+    }
+
+    /// Models currently available for selection
+    public var availableModels: [KoeModel] {
+        KoeModel.allCases.filter { isModelAvailable($0) }
+    }
+
+    /// Whether background model processing is active
+    public var isBackgroundProcessing: Bool {
+        backgroundModelService.state.isProcessing
+    }
+
     // Refinement model state
     public var isRefinementModelLoaded: Bool = false
     public var refinementModelProgress: Double = 0.0

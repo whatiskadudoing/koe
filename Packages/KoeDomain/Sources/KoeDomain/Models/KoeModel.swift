@@ -32,4 +32,32 @@ public enum KoeModel: String, Codable, Sendable, CaseIterable {
     public static var allModelsForDownload: [KoeModel] {
         [.fast, .balanced, .best]
     }
+
+    /// Models downloaded during installation (only Fast for quick setup)
+    public static var installationModels: [KoeModel] {
+        [.fast]
+    }
+
+    /// Models downloaded in background after app launch
+    public static var backgroundModels: [KoeModel] {
+        [.balanced, .best]
+    }
+
+    /// Estimated size in bytes for progress tracking
+    public var estimatedBytes: Int64 {
+        switch self {
+        case .fast: return 632_000_000
+        case .balanced: return 954_000_000
+        case .best: return 3_100_000_000
+        }
+    }
+
+    /// Human-readable size string
+    public var sizeString: String {
+        switch self {
+        case .fast: return "632 MB"
+        case .balanced: return "954 MB"
+        case .best: return "3.1 GB"
+        }
+    }
 }
