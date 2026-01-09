@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.2-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.11.1-beta.6...v1.11.2-beta.6) (2026-01-09)
+
+
+### Bug Fixes
+
+* format installer TypeScript files ([8d7e3bd](https://github.com/whatiskadudoing/koe/commit/8d7e3bd4e3798e13ec677d6645a5fa3e34543db0))
+
 ## [1.11.1-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.11.0-beta.6...v1.11.1-beta.6) (2026-01-09)
 
 
