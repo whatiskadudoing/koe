@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.11.2-beta.6...v1.12.0-beta.6) (2026-01-09)
+
+
+### Features
+
+* add compiling phase detection for installer progress ([cde0db7](https://github.com/whatiskadudoing/koe/commit/cde0db77f8d61dc33211ebad2a11f861535789c3))
+
 ## [1.11.2-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.11.1-beta.6...v1.11.2-beta.6) (2026-01-09)
 
 
