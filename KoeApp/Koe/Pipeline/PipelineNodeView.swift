@@ -16,6 +16,7 @@ struct PipelineNodeView: View {
     let metrics: ElementExecutionMetrics?
     let onToggle: () -> Void
     let onOpenSettings: () -> Void
+    var onSetupRequired: ((NodeInfo) -> Void)?
 
     @State private var isHovered = false
     @State private var lastTapTime: Date = .distantPast
@@ -23,6 +24,41 @@ struct PipelineNodeView: View {
     private let nodeSize: CGFloat = 44
     private let cornerRadius: CGFloat = 10
     private let doubleTapThreshold: TimeInterval = 0.3
+
+    /// Check if this node requires setup
+    private var nodeSetupState: NodeSetupState {
+        let nodeInfo = stage.nodeInfo
+        guard nodeInfo.requiresSetup else { return .notNeeded }
+
+        // Check job scheduler for setup state
+        let queueState = JobScheduler.shared.setupState(for: nodeInfo.typeId)
+        if case .notNeeded = queueState {
+            // Not in queue - check if actually set up
+            // TODO: Add actual file verification here
+            return .setupRequired
+        }
+        return queueState
+    }
+
+    /// Whether setup is currently in progress
+    private var isSettingUp: Bool {
+        if case .settingUp = nodeSetupState { return true }
+        return false
+    }
+
+    /// Get setup progress (0.0 to 1.0)
+    private var setupProgress: Double {
+        if case .settingUp(let progress) = nodeSetupState {
+            return progress
+        }
+        return 0
+    }
+
+    /// Whether setup is required (not done yet)
+    private var needsSetup: Bool {
+        if case .setupRequired = nodeSetupState { return true }
+        return false
+    }
 
     /// Get the UI provider for this node
     private var uiProvider: NodeUIProvider {
@@ -61,7 +97,7 @@ struct PipelineNodeView: View {
     }
 
     /// Handle tap with manual double-tap detection
-    /// - Single tap: toggle immediately (for toggleable nodes)
+    /// - Single tap: toggle immediately (for toggleable nodes) or show setup popup
     /// - Double tap: open settings
     private func handleTap() {
         let now = Date()
@@ -75,6 +111,17 @@ struct PipelineNodeView: View {
             }
         } else {
             lastTapTime = now
+
+            // If setup is in progress, don't allow interaction
+            if isSettingUp {
+                return
+            }
+
+            // If setup is required, show setup confirmation
+            if needsSetup {
+                onSetupRequired?(stage.nodeInfo)
+                return
+            }
 
             // For toggleable nodes: single tap toggles immediately
             if stage.isToggleable {
@@ -102,8 +149,8 @@ struct PipelineNodeView: View {
                 uiProvider.pipelineIcon(context: uiContext)
                     .frame(width: nodeSize, height: nodeSize)
 
-                // Toggle indicator (for toggleable nodes)
-                if stage.isToggleable && !isRunning {
+                // Toggle indicator (for toggleable nodes) - hide during setup
+                if stage.isToggleable && !isRunning && !isSettingUp && !needsSetup {
                     NodeToggleIndicator(
                         isOn: $isEnabled,
                         size: 10
@@ -114,6 +161,42 @@ struct PipelineNodeView: View {
                 // Badge from provider (error indicator, etc.)
                 if !stage.isToggleable, let badge = uiProvider.pipelineBadge(context: uiContext) {
                     badge.offset(x: -4, y: 4)
+                }
+
+                // Experimental badge (flask icon in bottom-left)
+                if stage.nodeInfo.isExperimental {
+                    Image(systemName: "flask")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.orange)
+                        .frame(width: nodeSize, height: nodeSize, alignment: .bottomLeading)
+                        .offset(x: 4, y: -4)
+                }
+
+                // Setup required badge (download icon in bottom-right)
+                if needsSetup {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.orange)
+                        .frame(width: nodeSize, height: nodeSize, alignment: .bottomTrailing)
+                        .offset(x: -4, y: -4)
+                }
+
+                // Setting up indicator - iOS-style circular progress
+                if isSettingUp {
+                    ZStack {
+                        // Background track
+                        Circle()
+                            .stroke(Color.orange.opacity(0.2), lineWidth: 3)
+                            .frame(width: nodeSize + 6, height: nodeSize + 6)
+
+                        // Progress ring
+                        Circle()
+                            .trim(from: 0, to: setupProgress)
+                            .stroke(Color.orange, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .frame(width: nodeSize + 6, height: nodeSize + 6)
+                            .rotationEffect(.degrees(-90))
+                            .animation(.easeInOut(duration: 0.3), value: setupProgress)
+                    }
                 }
             }
             .overlay(

@@ -59,6 +59,8 @@ public struct Transcription: Identifiable, Codable, Sendable, Equatable {
     public let refinementSettings: RefinementSettings?
     /// ID linking to the PipelineExecutionRecord for detailed metrics
     public let pipelineRunId: UUID?
+    /// Whether this transcription used experimental features
+    public let isExperimental: Bool
 
     public init(
         id: UUID = UUID(),
@@ -70,7 +72,8 @@ public struct Transcription: Identifiable, Codable, Sendable, Equatable {
         wasRefined: Bool = false,
         originalText: String? = nil,
         refinementSettings: RefinementSettings? = nil,
-        pipelineRunId: UUID? = nil
+        pipelineRunId: UUID? = nil,
+        isExperimental: Bool = false
     ) {
         self.id = id
         self.text = text
@@ -82,5 +85,23 @@ public struct Transcription: Identifiable, Codable, Sendable, Equatable {
         self.originalText = originalText
         self.refinementSettings = refinementSettings
         self.pipelineRunId = pipelineRunId
+        self.isExperimental = isExperimental
+    }
+
+    // Custom decoder for backward compatibility with existing data
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        text = try container.decode(String.self, forKey: .text)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        language = try container.decodeIfPresent(Language.self, forKey: .language)
+        model = try container.decodeIfPresent(KoeModel.self, forKey: .model)
+        wasRefined = try container.decode(Bool.self, forKey: .wasRefined)
+        originalText = try container.decodeIfPresent(String.self, forKey: .originalText)
+        refinementSettings = try container.decodeIfPresent(RefinementSettings.self, forKey: .refinementSettings)
+        pipelineRunId = try container.decodeIfPresent(UUID.self, forKey: .pipelineRunId)
+        // Default to false for old transcriptions without this field
+        isExperimental = try container.decodeIfPresent(Bool.self, forKey: .isExperimental) ?? false
     }
 }

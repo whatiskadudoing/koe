@@ -512,6 +512,9 @@ public final class AppState {
     // MARK: - History Management
 
     public func addTranscription(_ text: String, duration: TimeInterval, wasRefined: Bool = false, originalText: String? = nil, refinementSettings: RefinementSettings? = nil, pipelineRunId: UUID? = nil) {
+        // Check if any experimental features were used
+        let usedExperimental = isWhisperKitEnabled || isCommandListeningEnabled || isAutoEnterEnabled
+
         let entry = Transcription(
             text: text,
             duration: duration,
@@ -521,7 +524,8 @@ public final class AppState {
             wasRefined: wasRefined,
             originalText: originalText,
             refinementSettings: refinementSettings,
-            pipelineRunId: pipelineRunId
+            pipelineRunId: pipelineRunId,
+            isExperimental: usedExperimental
         )
         transcriptionHistory.insert(entry, at: 0)
 

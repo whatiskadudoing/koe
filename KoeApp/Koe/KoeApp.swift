@@ -441,15 +441,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         coordinator.initializeWhenReady()
         // Note: Meeting monitoring is started in applicationDidFinishLaunching
 
-        // Start background model downloading/compilation
-        // Only start automatically if user has already seen the explanation (returning users)
-        // New users will see the explanation first, and processing starts when they dismiss it
-        Task { @MainActor in
-            let hasSeenExplanation = UserDefaults.standard.bool(forKey: "HasSeenBackgroundExplanation")
-            if hasSeenExplanation {
-                BackgroundModelService.shared.startBackgroundProcessing()
-            }
-        }
+        // Model downloading is now on-demand via the Setup queue
+        // No automatic background downloading
 
         // Setup notification categories for model ready actions
         setupNotificationCategories()

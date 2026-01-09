@@ -68,6 +68,19 @@ public struct NodeInfo: Identifiable, Sendable {
     /// Nodes with the same exclusiveGroup will auto-disable when another in the group is enabled
     public let exclusiveGroup: String?
 
+    // MARK: - Experimental
+
+    /// Whether this node uses experimental/beta features
+    public let isExperimental: Bool
+
+    // MARK: - Setup Requirements
+
+    /// Whether this node requires setup before use (download, compile, etc.)
+    public let requiresSetup: Bool
+
+    /// Setup requirements for this node (if requiresSetup is true)
+    public let setupRequirements: NodeSetupRequirements?
+
     // MARK: - Init
 
     public init(
@@ -86,7 +99,10 @@ public struct NodeInfo: Identifiable, Sendable {
         showsComparison: Bool = false,
         hasSettings: Bool = false,
         persistenceKey: String? = nil,
-        exclusiveGroup: String? = nil
+        exclusiveGroup: String? = nil,
+        isExperimental: Bool = false,
+        requiresSetup: Bool = false,
+        setupRequirements: NodeSetupRequirements? = nil
     ) {
         self.typeId = typeId
         self.displayName = displayName
@@ -104,6 +120,9 @@ public struct NodeInfo: Identifiable, Sendable {
         self.hasSettings = hasSettings
         self.persistenceKey = persistenceKey
         self.exclusiveGroup = exclusiveGroup
+        self.isExperimental = isExperimental
+        self.requiresSetup = requiresSetup
+        self.setupRequirements = setupRequirements
     }
 }
 
@@ -242,7 +261,8 @@ public final class NodeRegistry: @unchecked Sendable {
                 isAction: true,
                 actionDescription: "Triggers recording on voice command",
                 hasSettings: true,
-                persistenceKey: "isCommandListeningEnabled"
+                persistenceKey: "isCommandListeningEnabled",
+                isExperimental: true
             ),
 
             // Core Processing
@@ -282,7 +302,10 @@ public final class NodeRegistry: @unchecked Sendable {
                 inputDescription: "Audio recording",
                 hasSettings: true,
                 persistenceKey: "transcribeWhisperKitEnabled",
-                exclusiveGroup: "transcription"
+                exclusiveGroup: "transcription",
+                isExperimental: true,
+                requiresSetup: true,
+                setupRequirements: .whisperKit
             ),
 
             NodeInfo(
@@ -360,7 +383,8 @@ public final class NodeRegistry: @unchecked Sendable {
                 inputDescription: "After typing",
                 isAction: true,
                 actionDescription: "Sent Enter key",
-                persistenceKey: "isAutoEnterEnabled"
+                persistenceKey: "isAutoEnterEnabled",
+                isExperimental: true
             ),
         ])
     }

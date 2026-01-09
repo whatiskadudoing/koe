@@ -109,6 +109,11 @@ public protocol NodeUIProvider {
 
     /// Settings panel content (nil if no settings)
     func settingsPanel(context: NodeUIContext) -> AnyView?
+
+    // MARK: - Setup
+
+    /// Whether this node requires setup before use
+    var requiresSetup: Bool { get }
 }
 
 // MARK: - Default Implementation
@@ -289,6 +294,13 @@ open class DefaultNodeUIProvider: NodeUIProvider {
         nil
     }
 
+    // MARK: - Setup
+
+    open var requiresSetup: Bool {
+        // Default: no setup required
+        false
+    }
+
     // MARK: - Helpers
 
     func iconColor(for context: NodeUIContext) -> Color {
@@ -357,6 +369,7 @@ public final class NodeUIRegistry: @unchecked Sendable {
         register(TranscribeNodeUI())
         register(TriggerNodeUI(typeId: "hotkey-trigger"))
         register(TriggerNodeUI(typeId: "voice-trigger"))
+        register(WhisperKitNodeUI())
     }
 }
 
@@ -580,6 +593,19 @@ public class TriggerNodeUI: DefaultNodeUIProvider {
                     .stroke(context.nodeInfo.color.opacity(0.3), lineWidth: 1)
             )
         )
+    }
+}
+
+/// UI for WhisperKit transcription node (requires setup)
+public class WhisperKitNodeUI: DefaultNodeUIProvider {
+    public init() {
+        super.init(typeId: "transcribe-whisperkit")
+    }
+
+    public override var requiresSetup: Bool {
+        // WhisperKit requires model download/compilation
+        // Actual readiness is checked by JobScheduler
+        true
     }
 }
 

@@ -8,9 +8,30 @@ struct PipelineStripView: View {
     @Environment(AppState.self) private var appState
     @Binding var selectedStage: PipelineStageInfo?
 
+    /// State for setup confirmation popup
+    @State private var showSetupConfirmation = false
+    @State private var setupNodeInfo: NodeInfo?
+
     /// Node state controller - manages toggle states and relationships
     private var nodeController: NodeStateController<PipelineStageInfo> {
         NodeStateController.forPipeline(appState: appState)
+    }
+
+    /// Handle setup required callback
+    private func handleSetupRequired(_ nodeInfo: NodeInfo) {
+        setupNodeInfo = nodeInfo
+        showSetupConfirmation = true
+    }
+
+    /// Confirm setup and queue the job
+    private func confirmSetup() {
+        guard let nodeInfo = setupNodeInfo else { return }
+
+        // Create and submit the setup job
+        if nodeInfo.typeId == "transcribe-whisperkit" {
+            let job = JobScheduler.createWhisperKitSetupJob()
+            JobScheduler.shared.submit(job)
+        }
     }
 
     var body: some View {
@@ -21,7 +42,8 @@ struct PipelineStripView: View {
                 selectedStage: $selectedStage,
                 isHotkeyRunning: isHotkeyRunning,
                 isVoiceRunning: isVoiceRunning,
-                onOpenSettings: { stage in selectedStage = stage }
+                onOpenSettings: { stage in selectedStage = stage },
+                onSetupRequired: handleSetupRequired
             )
 
             // Pre-transcription stages (recorder)
@@ -38,7 +60,8 @@ struct PipelineStripView: View {
                         isRunning: isStageRunning(stage),
                         metrics: metricsFor(stage),
                         onToggle: { nodeController.toggle(stage) },
-                        onOpenSettings: { selectedStage = stage }
+                        onOpenSettings: { selectedStage = stage },
+                        onSetupRequired: handleSetupRequired
                     )
                 }
             }
@@ -48,7 +71,8 @@ struct PipelineStripView: View {
                 nodeController: nodeController,
                 selectedStage: $selectedStage,
                 isTranscribing: appState.recordingState == .transcribing,
-                onOpenSettings: { stage in selectedStage = stage }
+                onOpenSettings: { stage in selectedStage = stage },
+                onSetupRequired: handleSetupRequired
             )
 
             // Post-transcription stages (improve, type, enter)
@@ -65,7 +89,8 @@ struct PipelineStripView: View {
                         isRunning: isStageRunning(stage),
                         metrics: metricsFor(stage),
                         onToggle: { nodeController.toggle(stage) },
-                        onOpenSettings: { selectedStage = stage }
+                        onOpenSettings: { selectedStage = stage },
+                        onSetupRequired: handleSetupRequired
                     )
                 }
             }
@@ -74,6 +99,16 @@ struct PipelineStripView: View {
         .padding(.vertical, 12)
         .background(KoeColors.surface.opacity(0.5))
         .cornerRadius(16)
+        .alert("Setup Required", isPresented: $showSetupConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Set Up") {
+                confirmSetup()
+            }
+        } message: {
+            if let info = setupNodeInfo {
+                Text("\(info.displayName) needs to be set up before you can use it.")
+            }
+        }
     }
 
     // MARK: - Computed Properties
@@ -133,6 +168,7 @@ struct ParallelTriggersView: View {
     let isHotkeyRunning: Bool
     let isVoiceRunning: Bool
     let onOpenSettings: (PipelineStageInfo) -> Void
+    var onSetupRequired: ((NodeInfo) -> Void)?
 
     private var isAnyTriggerEnabled: Bool {
         nodeController.isEnabled(.hotkeyTrigger) || nodeController.isEnabled(.voiceTrigger)
@@ -185,7 +221,8 @@ struct ParallelTriggersView: View {
             isRunning: isRunning,
             metrics: nil,
             onToggle: { nodeController.toggle(stage) },
-            onOpenSettings: { onOpenSettings(stage) }
+            onOpenSettings: { onOpenSettings(stage) },
+            onSetupRequired: onSetupRequired
         )
         .opacity(isDimmedByOther ? 0.4 : 1.0)
     }
@@ -198,6 +235,7 @@ struct ParallelTranscriptionView: View {
     @Binding var selectedStage: PipelineStageInfo?
     let isTranscribing: Bool
     let onOpenSettings: (PipelineStageInfo) -> Void
+    var onSetupRequired: ((NodeInfo) -> Void)?
 
     private var isWhisperKitEnabled: Bool {
         nodeController.isEnabled(.transcribeWhisperKit)
@@ -260,7 +298,8 @@ struct ParallelTranscriptionView: View {
                 // Toggle with mutual exclusivity - disable the other transcription node
                 nodeController.toggleExclusive(stage, in: PipelineStageInfo.transcriptionStages)
             },
-            onOpenSettings: { onOpenSettings(stage) }
+            onOpenSettings: { onOpenSettings(stage) },
+            onSetupRequired: onSetupRequired
         )
         .opacity(isDimmedByOther ? 0.4 : 1.0)
     }

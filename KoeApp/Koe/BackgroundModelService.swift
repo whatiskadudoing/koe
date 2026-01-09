@@ -190,11 +190,6 @@ public final class BackgroundModelService: ObservableObject {
 
     /// Check if a model is ready for use
     public func isModelReady(_ model: KoeModel) -> Bool {
-        // Fast is always available (installed during setup)
-        if model == .turbo {
-            return true
-        }
-
         // Check our state first
         if let status = modelStatuses[model.rawValue], status.phase == .ready {
             return true
@@ -369,9 +364,6 @@ public final class BackgroundModelService: ObservableObject {
             UserDefaults.standard.set(true, forKey: hasCompletedFirstBackgroundKey)
             isFirstLaunch = false
             hasPendingWork = false
-
-            // Send final notification that everything is ready
-            await sendAllModelsReadyNotification()
         }
 
         persistState()
@@ -456,9 +448,6 @@ public final class BackgroundModelService: ObservableObject {
                     await autoSwitchToModel(model)
                 }
 
-                // Send notification
-                await sendModelReadyNotification(model)
-
                 logger.notice("Model \(model.shortName) ready!")
                 return  // Success, exit retry loop
 
@@ -511,62 +500,6 @@ public final class BackgroundModelService: ObservableObject {
         await RecordingCoordinator.shared.loadModel(name: model.rawValue)
 
         logger.notice("Auto-switched to \(model.shortName)")
-    }
-
-    private func sendModelReadyNotification(_ model: KoeModel) async {
-        let content = UNMutableNotificationContent()
-        content.title = "\(model.shortName) Mode Ready"
-
-        // Different message based on auto-switch setting
-        if autoSwitchToNewModels {
-            content.body = "Switched to \(model.shortName) for better accuracy."
-        } else {
-            content.body = "Tap to switch to \(model.shortName) for better accuracy."
-        }
-        content.sound = .default
-        content.userInfo = ["modelRawValue": model.rawValue]
-        content.categoryIdentifier = "MODEL_READY"
-
-        let request = UNNotificationRequest(
-            identifier: "model-ready-\(model.rawValue)",
-            content: content,
-            trigger: nil
-        )
-
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-            logger.notice("Notification sent for \(model.shortName)")
-        } catch {
-            logger.error("Failed to send notification: \(error)")
-        }
-
-        // Also post internal notification for UI updates
-        NotificationCenter.default.post(
-            name: .backgroundModelReady,
-            object: nil,
-            userInfo: ["model": model]
-        )
-    }
-
-    private func sendAllModelsReadyNotification() async {
-        let content = UNMutableNotificationContent()
-        content.title = "Koe is Fully Optimized!"
-        content.body = "All speech recognition models are ready. Your app is now at full power."
-        content.sound = .default
-        content.categoryIdentifier = "ALL_MODELS_READY"
-
-        let request = UNNotificationRequest(
-            identifier: "all-models-ready",
-            content: content,
-            trigger: nil
-        )
-
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-            logger.notice("All models ready notification sent")
-        } catch {
-            logger.error("Failed to send all models ready notification: \(error)")
-        }
     }
 
     private func persistState() {
