@@ -181,15 +181,31 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
   terminal.moveUp(progressLineCount);
   terminal.saveCursor();
 
-  const result = await optimizeModel((progress) => {
-    _lastProgress = progress;
+  // Spinner for compilation phase (no progress available)
+  let spinnerFrame = 0;
+  let spinnerInterval: number | null = null;
 
+  const updateDisplay = (progress: OptimizeProgress) => {
     // Restore cursor to progress area
     terminal.restoreCursor();
 
     // Clear and redraw progress
     clearLine();
-    write(`  ${gradientProgressBar(progress.percent / 100, 30)}\n`);
+
+    if (progress.percent < 0) {
+      // Compilation phase - show spinner with elapsed time
+      const spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+      const frame = spinner[spinnerFrame % 10];
+      write(
+        `  ${colors.accent(frame)} ${colors.white("Compiling...")} ${
+          colors.dim("(first run only, ~3-4 min)")
+        }\n`,
+      );
+    } else {
+      // Normal progress bar
+      write(`  ${gradientProgressBar(progress.percent / 100, 30)}\n`);
+    }
+
     clearLine();
     console.log();
 
@@ -205,7 +221,32 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
     clearLine();
     write(`  ${colors.dim("Phase:")}      ${colors.accent(progress.phase)}\n`);
     clearLine();
+  };
+
+  const result = await optimizeModel((progress) => {
+    _lastProgress = progress;
+
+    // Start spinner animation during compilation
+    if (progress.percent < 0 && !spinnerInterval) {
+      spinnerInterval = setInterval(() => {
+        spinnerFrame++;
+        updateDisplay(_lastProgress);
+      }, 80);
+    }
+
+    // Stop spinner when we have real progress
+    if (progress.percent >= 0 && spinnerInterval) {
+      clearInterval(spinnerInterval);
+      spinnerInterval = null;
+    }
+
+    updateDisplay(progress);
   });
+
+  // Clean up spinner
+  if (spinnerInterval) {
+    clearInterval(spinnerInterval);
+  }
 
   // Move to end of progress area
   terminal.restoreCursor();

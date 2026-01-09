@@ -58,6 +58,8 @@ export async function optimizeModel(
   let buffer = "";
   let lastPercent = 0;
 
+  let isCompiling = false;
+
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -88,8 +90,23 @@ export async function optimizeModel(
           }
         }
 
+        // Detect compilation phase (no progress updates during this)
+        if (line.includes("Compiling for Apple Neural Engine")) {
+          isCompiling = true;
+          const elapsed = (Date.now() - startTime) / 1000;
+          onProgress({
+            percent: -1, // Signal compilation phase (animated)
+            phase: "Compiling for Apple Neural Engine...",
+            elapsed,
+            estimatedRemaining: 180, // ~3 minutes typical
+          });
+        }
+
         // Also check for completion message
-        if (line.includes("Precompilation complete") || line.includes("compiled successfully")) {
+        if (
+          line.includes("Precompilation complete") ||
+          line.includes("compiled successfully")
+        ) {
           const elapsed = (Date.now() - startTime) / 1000;
           onProgress({
             percent: 100,
@@ -103,6 +120,17 @@ export async function optimizeModel(
   } catch (error) {
     // Reader error, continue to check process status
     console.error("Reader error:", error);
+  }
+
+  // If we exited normally while compiling, it probably succeeded
+  if (isCompiling && lastPercent < 100) {
+    const elapsed = (Date.now() - startTime) / 1000;
+    onProgress({
+      percent: 100,
+      phase: "Complete!",
+      elapsed,
+      estimatedRemaining: 0,
+    });
   }
 
   // Wait for process to complete

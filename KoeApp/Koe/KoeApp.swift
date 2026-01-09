@@ -140,8 +140,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
                 // Print progress updates
                 var lastProgress: Int = -1
+                var inCompilationPhase = false
                 for await progress in progressStream {
                     let percent = Int(progress * 100)
+
+                    // Detect compilation phase (progress = -1 means animated/compiling)
+                    if progress < 0 && !inCompilationPhase {
+                        inCompilationPhase = true
+                        print("[Koe] Compiling for Apple Neural Engine (this takes 3-4 minutes on first run)...")
+                        fflush(stdout)
+                    }
+
                     if percent != lastProgress && percent >= 0 {
                         print("[Koe] Progress: \(percent)%")
                         fflush(stdout)
