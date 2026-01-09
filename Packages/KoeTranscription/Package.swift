@@ -11,12 +11,13 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../KoeDomain"),
+        .package(path: "../WhisperMetal"),
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0")
     ],
     targets: [
         .target(
             name: "KoeTranscription",
-            dependencies: ["KoeDomain", "WhisperKit"]
+            dependencies: ["KoeDomain", "WhisperKit", "WhisperMetal"]
         )
     ]
 )

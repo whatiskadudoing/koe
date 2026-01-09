@@ -13,7 +13,6 @@ write("\x1b[2J\x1b[H"); // Clear screen
 write("\n\n\n                  声  Koe\n                  Loading...\n");
 
 // Now load dependencies
-import { Select } from "@cliffy/prompt";
 import { colors } from "@cliffy/colors";
 
 // =============================================================================
@@ -25,16 +24,22 @@ const APP_NAME = "Koe.app";
 const INSTALL_PATH = "/Applications";
 
 interface ModelInfo {
+  id: string;
   name: string;
   size: string;
+  sizeBytes: number;
   description: string;
 }
 
-const MODELS: Record<string, ModelInfo> = {
-  tiny: { name: "tiny", size: "75 MB", description: "Fastest" },
-  small: { name: "small", size: "466 MB", description: "Recommended" },
-  large: { name: "large", size: "2.9 GB", description: "Best quality" },
-};
+// New turbo models - all downloaded during installation (~4.7 GB total)
+const TURBO_MODELS: ModelInfo[] = [
+  { id: "large-v3-v20240930_turbo_632MB", name: "Fast", size: "632 MB", sizeBytes: 632_000_000, description: "Fastest turbo model" },
+  { id: "large-v3_turbo_954MB", name: "Balanced", size: "954 MB", sizeBytes: 954_000_000, description: "Balanced turbo model" },
+  { id: "large-v3-v20240930_turbo", name: "Best Quality", size: "3.1 GB", sizeBytes: 3_100_000_000, description: "Best quality turbo model" },
+];
+
+const HF_REPO = "argmaxinc/whisperkit-coreml";
+const MODEL_BASE_URL = `https://huggingface.co/${HF_REPO}/resolve/main`;
 
 // =============================================================================
 // COLORS
@@ -234,6 +239,186 @@ async function openApp(): Promise<void> {
   await open.output();
 }
 
+// =============================================================================
+// MODEL DOWNLOAD
+// =============================================================================
+
+async function getModelFiles(modelId: string): Promise<string[]> {
+  // Get list of files in the model folder from HuggingFace API
+  const url = `https://huggingface.co/api/models/${HF_REPO}/tree/main/openai_whisper-${modelId}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to get model file list: ${response.status}`);
+  }
+
+  const files = await response.json();
+  return files
+    .filter((f: { type: string }) => f.type === "file")
+    .map((f: { path: string }) => f.path);
+}
+
+async function downloadFile(url: string, destPath: string): Promise<void> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to download file: ${response.status}`);
+  }
+
+  const data = new Uint8Array(await response.arrayBuffer());
+  await Deno.writeFile(destPath, data);
+}
+
+async function downloadModel(
+  model: ModelInfo,
+  modelIndex: number,
+  totalModels: number,
+  updateProgress: (message: string, progress: number) => void
+): Promise<void> {
+  // Get model destination path (same as WhisperKit uses)
+  const homeDir = Deno.env.get("HOME") || "~";
+  const modelDir = `${homeDir}/Library/Application Support/Koe/Models/models/argmaxinc/whisperkit-coreml/openai_whisper-${model.id}`;
+
+  // Create directory
+  await Deno.mkdir(modelDir, { recursive: true });
+
+  // Get list of files to download
+  const files = await getModelFiles(model.id);
+
+  let downloadedBytes = 0;
+  const estimatedTotalBytes = model.sizeBytes;
+
+  for (let i = 0; i < files.length; i++) {
+    const filePath = files[i];
+    const fileName = filePath.split("/").pop() || filePath;
+    const destPath = `${modelDir}/${fileName}`;
+    const fileUrl = `${MODEL_BASE_URL}/${filePath}`;
+
+    // Update progress
+    const fileProgress = i / files.length;
+    const overallProgress = (modelIndex + fileProgress) / totalModels;
+    updateProgress(`Downloading ${model.name} model (${i + 1}/${files.length})...`, overallProgress);
+
+    await downloadFile(fileUrl, destPath);
+
+    // Update downloaded bytes estimate
+    downloadedBytes = Math.floor(estimatedTotalBytes * ((i + 1) / files.length));
+  }
+}
+
+// Friendly messages to show during download
+const INTRO_MESSAGES = [
+  // Basics
+  "Preparing everything...",
+  "Koe (声) means \"voice\" in Japanese",
+  "Hold Option + Space to start recording",
+  "Release to transcribe instantly",
+
+  // Where it works
+  "Works in any app - emails, notes, code...",
+  "Transcribe in Slack, Discord, VS Code...",
+  "Write emails, documents, messages hands-free",
+
+  // Models
+  "Three quality modes: Fast, Balanced, Best",
+  "Switch models anytime from the main window",
+  "Turbo models - fast and accurate",
+
+  // Privacy
+  "100% offline - no internet required",
+  "All transcription happens on your device",
+  "Your voice never leaves your Mac",
+  "No cloud, no subscriptions, no tracking",
+
+  // AI Refinement
+  "AI can clean up your transcriptions",
+  "Remove filler words automatically",
+  "Adjust tone: formal or casual",
+  "Prompt mode - optimize text for AI assistants",
+  "Works with local Ollama models",
+
+  // Meetings
+  "Auto-detects Zoom, Meet, Teams meetings",
+  "Record and transcribe meetings",
+  "Never miss important discussions",
+
+  // Voice Commands
+  "Say \"kon\" to trigger hands-free",
+  "Train your voice for personal activation",
+  "Only responds to your voice",
+
+  // Customization
+  "Customize your keyboard shortcut",
+  "Choose from multiple ring animations",
+  "Minimal, beautiful interface",
+
+  // Languages
+  "Supports 99+ languages",
+  "Auto-detects the language you speak",
+
+  // Tech
+  "Powered by WhisperKit",
+  "Optimized for Apple Silicon",
+  "Built with love in Swift",
+
+  // Closing
+  "Almost ready...",
+  "Just a moment more...",
+  "Finalizing setup...",
+];
+
+async function downloadAllModels(): Promise<boolean> {
+  const spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+  let frame = 0;
+  let messageIndex = 0;
+  let currentProgress = 0;
+  let done = false;
+  let errorMessage: string | null = null;
+
+  const updateProgress = (_message: string, progress: number) => {
+    currentProgress = progress;
+  };
+
+  // Start the download task
+  const _task = (async () => {
+    try {
+      for (let i = 0; i < TURBO_MODELS.length; i++) {
+        await downloadModel(TURBO_MODELS[i], i, TURBO_MODELS.length, updateProgress);
+      }
+      done = true;
+    } catch (e) {
+      errorMessage = e instanceof Error ? e.message : String(e);
+      done = true;
+    }
+  })();
+
+  // Animate while downloading - show friendly intro messages
+  let lastMessageChange = Date.now();
+  const messageInterval = 3000; // Change message every 3 seconds
+
+  while (!done) {
+    // Rotate through intro messages
+    if (Date.now() - lastMessageChange > messageInterval) {
+      messageIndex = (messageIndex + 1) % INTRO_MESSAGES.length;
+      lastMessageChange = Date.now();
+    }
+
+    const message = INTRO_MESSAGES[messageIndex];
+    write(`${CLEAR_LINE}  ${c.accent(spinner[frame % 10])} ${c.dim(message)}  ${progressBar(currentProgress)}`);
+    frame++;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+
+  // Show final state
+  if (errorMessage) {
+    write(`${CLEAR_LINE}  ${c.error("✗")} Setup failed - ${c.error(errorMessage)}\n`);
+    return false;
+  } else {
+    write(`${CLEAR_LINE}  ${c.success("✓")} Ready to go!\n`);
+    return true;
+  }
+}
+
 async function resetTCCPermissions(): Promise<void> {
   // Reset TCC accessibility permission for the bundle identifier
   // This clears any stale entries from previous ad-hoc signed builds
@@ -249,34 +434,6 @@ async function resetTCCPermissions(): Promise<void> {
 }
 
 // =============================================================================
-// MODEL SELECTION
-// =============================================================================
-
-async function selectModel(): Promise<string> {
-  clearScreen();
-  console.log(`
-
-
-
-                  ${c.accent("声")}  ${c.white("Koe")}
-                  ${staticWave()}
-
-             ${c.dim("Voice to Text")}
-`);
-
-  const model = await Select.prompt({
-    message: "Select model",
-    options: [
-      { value: "small", name: `Small   ${c.dim("466 MB")}  Recommended` },
-      { value: "tiny", name: `Tiny    ${c.dim("75 MB")}   Fastest` },
-      { value: "large", name: `Large   ${c.dim("2.9 GB")}  Best quality` },
-    ],
-  });
-
-  return model;
-}
-
-// =============================================================================
 // MAIN
 // =============================================================================
 
@@ -287,18 +444,16 @@ async function main(): Promise<void> {
     // Show intro animation
     await showIntro();
 
-    // Select model
-    write(SHOW_CURSOR);
-    let model: string;
-    try {
-      model = await selectModel();
-    } catch {
-      console.log(c.dim("\n  Cancelled.\n"));
-      Deno.exit(0);
-    }
-    write(HIDE_CURSOR);
+    clearScreen();
+    console.log(`
 
-    console.log();
+
+
+                  ${c.accent("声")}  ${c.white("Koe")}
+                  ${staticWave()}
+
+             ${c.dim("Voice to Text")}
+`);
 
     // Get latest release version
     let version = "latest";
@@ -352,9 +507,15 @@ async function main(): Promise<void> {
       Deno.exit(1);
     }
 
-    // Note: Model download happens within the app on first launch
-    // The model selection here is for future use when we implement pre-download
-    console.log(c.dim(`  ℹ ${MODELS[model].name} model will download on first use\n`));
+    // Download all turbo models (with friendly progress messages)
+    console.log();
+    const modelsSuccess = await downloadAllModels();
+
+    if (!modelsSuccess) {
+      write(SHOW_CURSOR);
+      console.log(c.error("\n  Setup failed. Please check your internet connection and try again.\n"));
+      Deno.exit(1);
+    }
 
     // Show success message
     console.log(`

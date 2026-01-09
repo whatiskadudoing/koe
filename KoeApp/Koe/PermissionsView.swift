@@ -4,11 +4,13 @@ import ApplicationServices
 import AppKit
 import KoeTextInsertion
 import Combine
+import UserNotifications
 
 enum PermissionStep {
     case microphone
     case screenRecording
     case accessibility
+    case notification
     case complete
 }
 
@@ -55,6 +57,9 @@ struct PermissionsView: View {
                                 .frame(width: 8, height: 8)
                             Circle()
                                 .fill(currentStep == .accessibility ? accentColor : (appState.hasAccessibilityPermission ? Color.green : lightGray.opacity(0.3)))
+                                .frame(width: 8, height: 8)
+                            Circle()
+                                .fill(currentStep == .notification ? accentColor : (appState.hasNotificationPermission ? Color.green : lightGray.opacity(0.3)))
                                 .frame(width: 8, height: 8)
                         }
                         .padding(.top, 4)
@@ -109,6 +114,21 @@ struct PermissionsView: View {
                                 removal: .move(edge: .leading).combined(with: .opacity)
                             ))
 
+                        case .notification:
+                            PermissionCard(
+                                icon: "bell.fill",
+                                title: "Notifications",
+                                description: "Koe needs notification permission to alert you when voice commands are triggered.",
+                                isGranted: appState.hasNotificationPermission,
+                                isRequesting: isRequestingPermission,
+                                buttonTitle: "Allow Notifications",
+                                onRequest: requestNotificationPermission
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+
                         case .complete:
                             EmptyView()
                         }
@@ -125,6 +145,7 @@ struct PermissionsView: View {
                         StatusPill(title: "Mic", isGranted: appState.hasMicrophonePermission)
                         StatusPill(title: "Screen", isGranted: appState.hasScreenRecordingPermission)
                         StatusPill(title: "Access", isGranted: appState.hasAccessibilityPermission)
+                        StatusPill(title: "Notify", isGranted: appState.hasNotificationPermission)
                     }
                 }
                 .padding(.horizontal, 40)
@@ -193,6 +214,8 @@ struct PermissionsView: View {
             currentStep = .screenRecording
         } else if !appState.hasAccessibilityPermission {
             currentStep = .accessibility
+        } else if !appState.hasNotificationPermission {
+            currentStep = .notification
         } else {
             currentStep = .complete
         }
@@ -241,6 +264,24 @@ struct PermissionsView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             isRequestingPermission = false
+        }
+    }
+
+    private func requestNotificationPermission() {
+        isRequestingPermission = true
+
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            DispatchQueue.main.async {
+                isRequestingPermission = false
+                appState.checkNotificationPermission()
+
+                if granted {
+                    // Move to next step with animation
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        updateStep()
+                    }
+                }
+            }
         }
     }
 

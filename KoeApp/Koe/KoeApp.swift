@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import KoeDomain
 import KoeAudio
 import KoeTranscription
@@ -8,6 +9,10 @@ import KoeStorage
 import KoeUI
 import KoeCore
 import KoeMeeting
+import KoeCommands
+import os.log
+
+private let logger = Logger(subsystem: "com.koe.voice", category: "AppDelegate")
 
 @main
 struct KoeApp: App {
@@ -42,20 +47,29 @@ struct KoeApp: App {
 }
 
 enum MenuBarState {
-    case loading    // Blue - model loading
-    case idle       // White - ready
-    case recording  // Red - recording
-    case processing // Orange - transcribing
+    case loading      // Blue - model loading
+    case idle         // White - ready
+    case recording    // Red - recording
+    case transcribing // Yellow - transcribing audio
+    case refining     // Purple - AI refinement
 }
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     private var menuBarAnimationTimer: Timer?
-    private var animationStartTime: Date = Date()
+    private var animationStartTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    private var currentTimerInterval: TimeInterval?
     private var currentAudioLevel: Float = 0.0
     private var menuBarState: MenuBarState = .loading
     private var downloadProgress: Float = 0.0
+
+    // Voice command detector
+    private let commandDetector = CommandDetector()
+
+    // Trigger system
+    private var triggerManager: TriggerManager?
+    private var hotkeyTrigger: HotkeyTrigger?
 
     // Use the shared coordinator
     private var coordinator: RecordingCoordinator {
@@ -63,7 +77,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSLog("🚀 Koe app launched!")
         setupMenuBar()
+        setupCommandDetector()
         // NOTE: Model loading is now triggered by LoadingView when permissions are granted
         // This prevents file access dialogs from appearing before the user goes through permissions
 
@@ -73,81 +89,182 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func setupCommandDetector() {
+        // Observe command listening state changes
+        NotificationCenter.default.addObserver(
+            forName: .commandListeningChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                await self.updateCommandListening()
+            }
+        }
+
+        // Observe voice profile training completion
+        NotificationCenter.default.addObserver(
+            forName: .voiceProfileTrained,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            self.commandDetector.reloadProfile()
+            logger.notice("[AppDelegate] Voice profile reloaded after training")
+        }
+
+        // Observe voice command settings changes
+        NotificationCenter.default.addObserver(
+            forName: .voiceCommandSettingsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            // Sync settings from AppState to CommandDetector
+            let newSettings = AppState.shared.voiceCommandSettings
+            self.commandDetector.settings = newSettings
+            logger.notice("[AppDelegate] Voice command settings updated: VAD=\(newSettings.vadEnabled), threshold=\(newSettings.confidenceThreshold)")
+        }
+
+        // Set up command handler - actually execute the detected command
+        commandDetector.onCommandDetected = { [weak self] result in
+            guard let self = self else { return }
+            logger.notice("[CommandDetector] Command detected: \(result.command.trigger) (confidence: \(result.confidence), verified: \(result.isVoiceVerified))")
+
+            guard result.shouldExecute else {
+                logger.notice("[CommandDetector] Command not executed: shouldExecute=false")
+                return
+            }
+
+            // Execute the command action
+            Task { @MainActor in
+                self.executeCommandAction(result.command.action)
+            }
+        }
+
+        // Observe voice command start recording notification
+        NotificationCenter.default.addObserver(
+            forName: .startRecordingFromVoiceCommand,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                // Mark this as a voice command triggered recording
+                AppState.shared.isVoiceCommandTriggered = true
+
+                // Start recording with VAD mode (voice command uses silence detection)
+                let langCode = AppState.shared.selectedLanguage
+                let language = Language.all.first { $0.code == langCode } ?? .auto
+                await self.coordinator.startRecording(mode: .vad, language: language)
+                logger.notice("[AppDelegate] Voice command triggered recording started")
+            }
+        }
+
+        // Observe voice command stop recording notification
+        NotificationCenter.default.addObserver(
+            forName: .stopRecordingFromVoiceCommand,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                let langCode = AppState.shared.selectedLanguage
+                let language = Language.all.first { $0.code == langCode } ?? .auto
+                await self.coordinator.stopRecording(mode: .vad, language: language)
+                AppState.shared.isVoiceCommandTriggered = false
+                logger.notice("[AppDelegate] Voice command triggered recording stopped")
+            }
+        }
+
+        // Start listening if enabled and profile exists
+        Task {
+            await updateCommandListening()
+        }
+    }
+
+    private func updateCommandListening() async {
+        let appState = AppState.shared
+        logger.notice("[AppDelegate] updateCommandListening: enabled=\(appState.isCommandListeningEnabled), hasProfile=\(appState.hasVoiceProfile)")
+
+        if appState.isCommandListeningEnabled && appState.hasVoiceProfile {
+            logger.notice("[AppDelegate] Starting command detection...")
+            await commandDetector.startDetection()
+        } else {
+            logger.notice("[AppDelegate] Stopping command detection")
+            commandDetector.stopDetection()
+        }
+    }
+
+    @MainActor
+    private func executeCommandAction(_ action: CommandAction) {
+        logger.notice("[AppDelegate] Executing command action: \(String(describing: action))")
+
+        switch action {
+        case .notification(let title, let body):
+            // Send a user notification
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
+            logger.notice("[AppDelegate] Notification sent: \(title)")
+
+        case .startRecording:
+            // Post notification to start recording
+            NotificationCenter.default.post(name: .startRecordingFromVoiceCommand, object: nil)
+            logger.notice("[AppDelegate] Start recording notification posted")
+
+        case .stopRecording:
+            // Post notification to stop recording
+            NotificationCenter.default.post(name: .stopRecordingFromVoiceCommand, object: nil)
+            logger.notice("[AppDelegate] Stop recording notification posted")
+
+        case .togglePipelineOption(let option):
+            // Toggle a pipeline option
+            NotificationCenter.default.post(
+                name: .togglePipelineOptionFromVoiceCommand,
+                object: nil,
+                userInfo: ["option": option]
+            )
+            logger.notice("[AppDelegate] Toggle pipeline option: \(option)")
+
+        case .custom(let identifier):
+            // Custom action - post notification with identifier
+            NotificationCenter.default.post(
+                name: .customVoiceCommandAction,
+                object: nil,
+                userInfo: ["identifier": identifier]
+            )
+            logger.notice("[AppDelegate] Custom action: \(identifier)")
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
-        coordinator.unregisterHotkey()
+        // Clean up trigger system
+        Task {
+            await triggerManager?.unregisterAll()
+        }
+        commandDetector.stopDetection()
         menuBarAnimationTimer?.invalidate()
     }
 
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        // Create menu
+        // Create simplified menu - just Open and Quit
         let menu = NSMenu()
-        menu.delegate = self
-
-        // Language selection submenu
-        let languageMenu = NSMenu()
-        let languages = [
-            ("en", "🇺🇸 English"),
-            ("es", "🇪🇸 Español"),
-            ("pt", "🇧🇷 Português"),
-            ("auto", "🌐 Auto-detect")
-        ]
-
-        let currentLanguage = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto"
-        for (code, name) in languages {
-            let item = NSMenuItem(title: name, action: #selector(selectLanguage(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = code
-            item.state = (code == currentLanguage) ? .on : .off
-            languageMenu.addItem(item)
-        }
-
-        let languageMenuItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
-        languageMenuItem.submenu = languageMenu
-        menu.addItem(languageMenuItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // Model selection submenu
-        let modelMenu = NSMenu()
-        let models = [
-            ("tiny", "Tiny - Fastest"),
-            ("base", "Base - Fast"),
-            ("small", "Small - Balanced"),
-            ("medium", "Medium - Accurate"),
-            ("large-v3", "Large - Best")
-        ]
-
-        let currentModel = UserDefaults.standard.string(forKey: "selectedModel") ?? "tiny"
-        for (id, name) in models {
-            let item = NSMenuItem(title: name, action: #selector(selectModel(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = id
-            item.state = (id == currentModel) ? .on : .off
-            modelMenu.addItem(item)
-        }
-
-        let modelMenuItem = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
-        modelMenuItem.submenu = modelMenu
-        menu.addItem(modelMenuItem)
-
-        // Info about multilingual support
-        let infoItem = NSMenuItem(title: "✨ All models support all languages", action: nil, keyEquivalent: "")
-        infoItem.isEnabled = false
-        menu.addItem(infoItem)
-
-        menu.addItem(NSMenuItem.separator())
 
         // Open window
         let openItem = NSMenuItem(title: "Open Koe", action: #selector(togglePopover), keyEquivalent: "")
         openItem.target = self
         menu.addItem(openItem)
-
-        // Settings
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
-        settingsItem.target = self
-        menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -206,10 +323,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil
         )
 
+        // Observe hotkey changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleHotkeyChanged),
+            name: .hotkeyChanged,
+            object: nil
+        )
+
         // Start with loading animation (blue waveform)
         menuBarState = .loading
         downloadProgress = 0.0
-        animationStartTime = Date()
+        animationStartTime = CFAbsoluteTimeGetCurrent()
         startMenuBarAnimation()
     }
 
@@ -225,38 +350,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Note: Meeting monitoring is started in applicationDidFinishLaunching
     }
 
-    @objc func selectLanguage(_ sender: NSMenuItem) {
-        guard let langCode = sender.representedObject as? String else { return }
-
-        // Update checkmarks in language menu
-        if let languageMenu = sender.menu {
-            for item in languageMenu.items {
-                item.state = (item.representedObject as? String == langCode) ? .on : .off
-            }
-        }
-
-        AppState.shared.selectedLanguage = langCode
-    }
-
-    @objc func selectModel(_ sender: NSMenuItem) {
-        guard let modelId = sender.representedObject as? String else { return }
-
-        // Update checkmarks in model menu
-        if let modelMenu = sender.menu {
-            for item in modelMenu.items {
-                item.state = (item.representedObject as? String == modelId) ? .on : .off
-            }
-        }
-
-        // Don't switch if already on this model
-        guard modelId != AppState.shared.selectedModel else { return }
-
-        AppState.shared.selectedModel = modelId
-        NotificationCenter.default.post(name: .reloadModel, object: modelId)
-    }
-
-    @objc func openSettings() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    @objc func handleHotkeyChanged() {
+        // Update the hotkey trigger with new settings
+        hotkeyTrigger?.updateShortcut(
+            keyCode: AppState.shared.hotkeyKeyCode,
+            modifiers: AppState.shared.hotkeyModifiers
+        )
+        logger.notice("Hotkey updated: \(AppState.shared.hotkeyDisplayString)")
     }
 
     @objc func quitApp() {
@@ -307,7 +407,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func setupGlobalHotkey() {
-        coordinator.setupHotkey()
+        // Use the new trigger system
+        Task {
+            await setupTriggers()
+        }
+    }
+
+    private func setupTriggers() async {
+        let manager = TriggerManager()
+        let hotkeyManager = KoeHotkeyManager()
+        let trigger = HotkeyTrigger(hotkeyManager: hotkeyManager)
+
+        // Configure shortcut from AppState
+        trigger.updateShortcut(
+            keyCode: AppState.shared.hotkeyKeyCode,
+            modifiers: AppState.shared.hotkeyModifiers
+        )
+
+        // Register the trigger
+        do {
+            try await manager.register(trigger)
+        } catch {
+            logger.error("Failed to register hotkey trigger: \(error)")
+        }
+
+        // Wire up coordinator to trigger events
+        coordinator.subscribeTo(triggerManager: manager)
+
+        // Store references
+        self.triggerManager = manager
+        self.hotkeyTrigger = trigger
+
+        logger.notice("Trigger system initialized with hotkey: \(AppState.shared.hotkeyDisplayString)")
     }
 
     func loadModel() {
@@ -329,8 +460,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .recording:
             menuBarState = .recording
 
-        case .processing:
-            menuBarState = .processing
+        case .transcribing:
+            menuBarState = .transcribing
+
+        case .refining:
+            menuBarState = .refining
         }
 
         // Optimize timer: fast animation when active, slow when idle
@@ -338,42 +472,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func adjustTimerForState() {
-        let needsFastAnimation = (menuBarState == .loading || menuBarState == .recording || menuBarState == .processing)
+        let needsFastAnimation = (menuBarState == .loading || menuBarState == .recording || menuBarState == .transcribing || menuBarState == .refining)
 
         if needsFastAnimation {
-            // Fast animation (20fps) for active states
-            startMenuBarAnimation(interval: 0.05)
+            // Smooth animation (30fps) for active states
+            startMenuBarAnimation(interval: 1.0 / 30.0)
         } else {
-            // Slow animation (2fps) when idle - just subtle breathing
-            startMenuBarAnimation(interval: 0.5)
+            // Slow animation (4fps) when idle - subtle breathing
+            startMenuBarAnimation(interval: 0.25)
         }
     }
 
-    private func startMenuBarAnimation(interval: TimeInterval = 0.05) {
-        // If timer exists with same interval, keep it
-        if menuBarAnimationTimer != nil {
-            // Check if we need to change interval by stopping and restarting
-            menuBarAnimationTimer?.invalidate()
+    private func startMenuBarAnimation(interval: TimeInterval = 1.0 / 30.0) {
+        // Only recreate timer if interval actually changed
+        if currentTimerInterval == interval && menuBarAnimationTimer != nil {
+            return
         }
 
-        animationStartTime = Date()
-        menuBarAnimationTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+        menuBarAnimationTimer?.invalidate()
+        currentTimerInterval = interval
+        animationStartTime = CFAbsoluteTimeGetCurrent()
+
+        // Use RunLoop.main directly for lower latency
+        menuBarAnimationTimer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+            DispatchQueue.main.async {
                 self?.updateAnimatedIcon()
             }
         }
+        RunLoop.main.add(menuBarAnimationTimer!, forMode: .common)
     }
 
     private func stopMenuBarAnimation() {
         menuBarAnimationTimer?.invalidate()
         menuBarAnimationTimer = nil
+        currentTimerInterval = nil
     }
 
     private func updateAnimatedIcon() {
         guard let button = statusItem?.button else { return }
 
-        // Use continuous time for smooth animation
-        let time = Date().timeIntervalSince(animationStartTime)
+        // Use continuous time for smooth animation (CFAbsoluteTime is more efficient than Date)
+        let time = CFAbsoluteTimeGetCurrent() - animationStartTime
 
         // Determine color and speed based on state
         let color: NSColor
@@ -390,11 +529,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             audioLevel = 0.3
             speed = 1.5  // Slow, subtle
         case .recording:
-            color = .systemRed
+            // Red for recording
+            color = KoeColors.nsColor(for: .recording)
             audioLevel = max(0.4, currentAudioLevel)  // Minimum visibility
             speed = 4.0  // Fast, responsive
-        case .processing:
-            color = .systemOrange
+        case .transcribing:
+            // Yellow for transcribing
+            color = KoeColors.nsColor(for: .transcribing)
+            audioLevel = 0.6
+            speed = 3.0  // Active
+        case .refining:
+            // Purple for AI refinement
+            color = KoeColors.nsColor(for: .refining)
             audioLevel = 0.6
             speed = 3.0  // Active
         }
@@ -467,30 +613,22 @@ extension Notification.Name {
     static let requestResumeMeetingDetection = Notification.Name("requestResumeMeetingDetection")
     static let meetingDetectedSwitchTab = Notification.Name("meetingDetectedSwitchTab")
     static let meetingEndedSwitchTab = Notification.Name("meetingEndedSwitchTab")
+
+    // Hotkey configuration
+    static let hotkeyChanged = Notification.Name("hotkeyChanged")
+
+    // Voice commands
+    static let commandListeningChanged = Notification.Name("commandListeningChanged")
+    static let voiceProfileTrained = Notification.Name("voiceProfileTrained")
+    static let voiceCommandSettingsChanged = Notification.Name("voiceCommandSettingsChanged")
+
+    // Voice command actions
+    static let startRecordingFromVoiceCommand = Notification.Name("startRecordingFromVoiceCommand")
+    static let stopRecordingFromVoiceCommand = Notification.Name("stopRecordingFromVoiceCommand")
+    static let togglePipelineOptionFromVoiceCommand = Notification.Name("togglePipelineOptionFromVoiceCommand")
+    static let customVoiceCommandAction = Notification.Name("customVoiceCommandAction")
+
+    // UI navigation
+    static let showVoiceTraining = Notification.Name("showVoiceTraining")
 }
 
-// MARK: - NSMenuDelegate
-extension AppDelegate: NSMenuDelegate {
-    func menuWillOpen(_ menu: NSMenu) {
-        // Update checkmarks when menu opens to ensure they reflect current state
-        let currentLanguage = UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto"
-        let currentModel = UserDefaults.standard.string(forKey: "selectedModel") ?? "tiny"
-
-        for item in menu.items {
-            if let submenu = item.submenu {
-                // Language submenu
-                if item.title == "Language" {
-                    for langItem in submenu.items {
-                        langItem.state = (langItem.representedObject as? String == currentLanguage) ? .on : .off
-                    }
-                }
-                // Model submenu
-                if item.title == "Model" {
-                    for modelItem in submenu.items {
-                        modelItem.state = (modelItem.representedObject as? String == currentModel) ? .on : .off
-                    }
-                }
-            }
-        }
-    }
-}

@@ -445,9 +445,9 @@ struct MeetingDetailView: View {
             do {
                 let transcriber = WhisperKitTranscriber()
 
-                // Load a small model for faster transcription
+                // Load the fast model for meeting transcription
                 transcriptionProgress = "Loading whisper model..."
-                try await transcriber.loadModel(.base)
+                try await transcriber.loadModel(.fast)
 
                 transcriptionProgress = "Transcribing audio..."
                 let transcript = try await transcriber.transcribeFile(url: audioURL, language: nil)

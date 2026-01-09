@@ -2,10 +2,10 @@
 //
 // This package contains:
 // - Models: RecordingState, TranscriptionMode, KoeModel, Language, Transcription,
-//           Meeting, MeetingState
+//           Meeting, MeetingState, ProcessingResult, ProcessingStep, RefinementModel
 // - Protocols: AudioRecordingService, TranscriptionService, TextInsertionService,
-//              TranscriptionRepository, HotkeyService
-// - Errors: AudioError, TranscriptionError, TextInsertionError, MeetingError
+//              TranscriptionRepository, HotkeyService, TextRefinementService
+// - Errors: AudioError, TranscriptionError, TextInsertionError, MeetingError, RefinementError
 
 // Re-export all public types
 @_exported import struct Foundation.UUID

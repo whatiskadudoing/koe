@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import KoeDomain
+import KoeUI
 
 // MARK: - Overlay Window Controller
 
@@ -32,8 +33,8 @@ class RecordingOverlayController {
         guard let screen = screen else { return }
 
         let screenFrame = screen.frame
-        let windowWidth: CGFloat = 200
-        let windowHeight: CGFloat = 50
+        let windowWidth: CGFloat = 112
+        let windowHeight: CGFloat = 112
         let x = screenFrame.origin.x + (screenFrame.width - windowWidth) / 2
         let y = screenFrame.origin.y + 100
 
@@ -48,7 +49,7 @@ class RecordingOverlayController {
         RecordingOverlayViewModel.shared.audioLevel = audioLevel
         RecordingOverlayViewModel.shared.state = state
 
-        if state == .recording || state == .processing {
+        if state.isBusy {
             self.show()
         } else {
             self.hide()
@@ -63,8 +64,8 @@ class RecordingOverlayController {
 
         let screenFrame = screen.frame
 
-        let windowWidth: CGFloat = 200
-        let windowHeight: CGFloat = 50
+        let windowWidth: CGFloat = 112
+        let windowHeight: CGFloat = 112
         // Center horizontally, position near bottom of the focused screen
         let x = screenFrame.origin.x + (screenFrame.width - windowWidth) / 2
         let y = screenFrame.origin.y + 100  // 100px from bottom of the screen
@@ -107,34 +108,65 @@ class RecordingOverlayViewModel: ObservableObject {
 struct OverlayContentView: View {
     @ObservedObject private var viewModel = RecordingOverlayViewModel.shared
 
-    // Japanese indigo accent color
-    private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
+    // Dark neutral background
+    private let backgroundColor = Color(nsColor: NSColor(red: 0.10, green: 0.10, blue: 0.12, alpha: 1.0))
+    private let circleSize: CGFloat = 56
 
     var body: some View {
         ZStack {
-            // Dark accent background (Japanese indigo)
-            RoundedRectangle(cornerRadius: 25)
-                .fill(accentColor.opacity(0.92))
+            // Animated ring (user-selected style)
+            AnimatedRing(
+                isActive: viewModel.state != .idle,
+                audioLevel: viewModel.state == .recording ? viewModel.audioLevel : 0,
+                color: stateColor,
+                style: AppState.shared.currentRingAnimationStyle
+            )
+            .frame(width: circleSize + 48, height: circleSize + 48)
 
-            if viewModel.state == .processing {
-                // Processing: show spinner + text
-                ProcessingIndicator()
-            } else {
-                // Recording: show waveform
-                SimpleWaveform(audioLevel: viewModel.audioLevel)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-            }
+            // Dark circle background
+            Circle()
+                .fill(backgroundColor)
+                .frame(width: circleSize, height: circleSize)
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
+
+            // Stage icon
+            Image(systemName: stageIcon)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(stateColor)
         }
-        .frame(width: 200, height: 50)
+        .frame(width: circleSize + 56, height: circleSize + 56)
+    }
+
+    /// Map recording state to pipeline stage to get the icon
+    private var currentStage: PipelineStageInfo {
+        switch viewModel.state {
+        case .idle:
+            return .hotkeyTrigger
+        case .recording:
+            return .recorder
+        case .transcribing:
+            return .transcribe
+        case .refining:
+            return .improve
+        }
+    }
+
+    private var stageIcon: String {
+        currentStage.icon
+    }
+
+    private var stateColor: Color {
+        KoeColors.color(for: viewModel.state)
     }
 }
 
 // MARK: - Processing Indicator (Waveform Progress)
 
 struct ProcessingIndicator: View {
+    let state: RecordingState
+
     var body: some View {
-        WaveformProgress()
+        WaveformProgress(state: state)
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
     }
@@ -143,7 +175,12 @@ struct ProcessingIndicator: View {
 // MARK: - Waveform Progress Animation
 
 struct WaveformProgress: View {
+    let state: RecordingState
     private let barCount = 20
+
+    private var stateColor: Color {
+        KoeColors.color(for: state)
+    }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 0.04)) { timeline in
@@ -198,13 +235,13 @@ struct WaveformProgress: View {
                     let path = RoundedRectangle(cornerRadius: 1.5)
                         .path(in: rect)
 
-                    // Color: white for processed, dim gray for unprocessed
+                    // Color: state color for processed, dim gray for unprocessed
                     if isProcessed {
                         // Glow effect at the leading edge
                         let edgeDist = abs(barProgress - progress) * CGFloat(barCount)
                         let glowIntensity = max(0, 1.0 - edgeDist / 2.0)
                         let brightness = 0.9 + glowIntensity * 0.1
-                        context.fill(path, with: .color(Color.white.opacity(brightness)))
+                        context.fill(path, with: .color(stateColor.opacity(brightness)))
                     } else {
                         context.fill(path, with: .color(Color.white.opacity(0.25)))
                     }
@@ -214,12 +251,17 @@ struct WaveformProgress: View {
     }
 }
 
-// MARK: - Simple White Waveform
+// MARK: - Simple Waveform (Live Recording)
 
 struct SimpleWaveform: View {
     let audioLevel: Float
+    let state: RecordingState
 
     private let barCount = 16
+
+    private var stateColor: Color {
+        KoeColors.color(for: state)
+    }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 0.03)) { timeline in
@@ -267,7 +309,8 @@ struct SimpleWaveform: View {
                     let path = RoundedRectangle(cornerRadius: 2)
                         .path(in: rect)
 
-                    context.fill(path, with: .color(.white))
+                    // Use state-based color (red for recording)
+                    context.fill(path, with: .color(stateColor))
                 }
             }
         }

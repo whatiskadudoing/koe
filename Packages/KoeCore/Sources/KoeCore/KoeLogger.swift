@@ -10,6 +10,7 @@ public struct KoeLogger: Sendable {
     public enum Category: String, Sendable {
         case audio = "Audio"
         case transcription = "Transcription"
+        case refinement = "Refinement"
         case hotkey = "Hotkey"
         case ui = "UI"
         case storage = "Storage"
@@ -91,6 +92,9 @@ public extension KoeLogger {
 
     /// Transcription logger
     static let transcription = KoeLogger(category: .transcription)
+
+    /// Refinement logger
+    static let refinement = KoeLogger(category: .refinement)
 
     /// Hotkey logger
     static let hotkey = KoeLogger(category: .hotkey)

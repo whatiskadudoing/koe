@@ -1,27 +1,35 @@
 public enum KoeModel: String, Codable, Sendable, CaseIterable {
-    case tiny = "tiny"
-    case base = "base"
-    case small = "small"
-    case medium = "medium"
-    case largeV3 = "large-v3"
+    case fast = "large-v3-v20240930_turbo_632MB"
+    case balanced = "large-v3_turbo_954MB"
+    case best = "large-v3-v20240930_turbo"
 
     public var displayName: String {
         switch self {
-        case .tiny: return "Tiny (39 MB) - Fastest"
-        case .base: return "Base (74 MB) - Fast"
-        case .small: return "Small (244 MB) - Balanced"
-        case .medium: return "Medium (769 MB) - Accurate"
-        case .largeV3: return "Large V3 (1.5 GB) - Best Quality"
+        case .fast: return "Fast (632 MB)"
+        case .balanced: return "Balanced (954 MB)"
+        case .best: return "Best Quality (3.1 GB)"
         }
     }
 
     public var shortName: String {
         switch self {
-        case .tiny: return "Tiny - Fastest"
-        case .base: return "Base - Fast"
-        case .small: return "Small - Balanced"
-        case .medium: return "Medium - Accurate"
-        case .largeV3: return "Large - Best"
+        case .fast: return "Fast"
+        case .balanced: return "Balanced"
+        case .best: return "Best Quality"
         }
+    }
+
+    /// Icon for the model toggle UI
+    public var icon: String {
+        switch self {
+        case .fast: return "hare"
+        case .balanced: return "scalemass"
+        case .best: return "star"
+        }
+    }
+
+    /// All models for download during installation
+    public static var allModelsForDownload: [KoeModel] {
+        [.fast, .balanced, .best]
     }
 }

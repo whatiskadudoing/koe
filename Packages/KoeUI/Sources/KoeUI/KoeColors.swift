@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import KoeDomain
 
 /// Koe design system colors - Japanese-inspired palette
 public enum KoeColors {
@@ -18,8 +20,55 @@ public enum KoeColors {
     // Surface colors
     public static let surface = Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0))
 
-    // State colors
-    public static let recording = Color.red.opacity(0.9)
+    // MARK: - State Colors
+
+    /// Red - Active recording
+    public static let stateRecording = Color(nsColor: NSColor(red: 0.90, green: 0.25, blue: 0.20, alpha: 1.0))
+
+    /// Yellow - Transcribing audio to text
+    public static let stateTranscribing = Color(nsColor: NSColor(red: 0.95, green: 0.75, blue: 0.20, alpha: 1.0))
+
+    /// Purple - AI refinement in progress
+    public static let stateRefining = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
+
+    /// Green - Completed successfully
+    public static let stateComplete = Color(nsColor: NSColor(red: 0.30, green: 0.75, blue: 0.45, alpha: 1.0))
+
+    /// White - Idle/ready state
+    public static let stateIdle = Color.white
+
+    // Legacy aliases
+    public static let recording = stateRecording
     public static let processing = accent
-    public static let idle = Color.white
+    public static let idle = stateIdle
+
+    // MARK: - State Color Functions
+
+    /// Get SwiftUI Color for a recording state
+    public static func color(for state: RecordingState) -> Color {
+        switch state {
+        case .idle:
+            return stateIdle
+        case .recording:
+            return stateRecording
+        case .transcribing:
+            return stateTranscribing
+        case .refining:
+            return stateRefining
+        }
+    }
+
+    /// Get NSColor for a recording state (for AppKit/menu bar)
+    public static func nsColor(for state: RecordingState) -> NSColor {
+        switch state {
+        case .idle:
+            return .white
+        case .recording:
+            return NSColor(red: 0.90, green: 0.25, blue: 0.20, alpha: 1.0)
+        case .transcribing:
+            return NSColor(red: 0.95, green: 0.75, blue: 0.20, alpha: 1.0)
+        case .refining:
+            return NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0)
+        }
+    }
 }
