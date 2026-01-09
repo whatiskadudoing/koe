@@ -69,12 +69,9 @@ Package.resolved
 *.profdata
 
 # -----------------------------------------------------------------------------
-# Claude / AI Tools
+# Claude / AI Tools (local settings only)
 # -----------------------------------------------------------------------------
-.claude/
-.claude*
-CLAUDE.md
-claude.md
+.claude/settings.local.json
 
 # -----------------------------------------------------------------------------
 # Editors & IDEs
