@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.10.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.9.0-beta.6...v1.10.0-beta.6) (2026-01-09)
+
+
+### Features
+
+* add auto-switch preference and disable non-ready models ([48d0664](https://github.com/whatiskadudoing/koe/commit/48d0664ac296733d5f2f555e515014ea166b71af))
+* add automatic retry logic for background model downloads ([964f2a3](https://github.com/whatiskadudoing/koe/commit/964f2a3588fdfef39f5f95048ea09082233956d1))
+
+
+### Bug Fixes
+
+* improve Best mode status text in explanation screen ([52e00aa](https://github.com/whatiskadudoing/koe/commit/52e00aac4e83ec19d31522d9b5991dc0d0674f86))
+
 ## [1.9.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.8.0-beta.6...v1.9.0-beta.6) (2026-01-09)
 
 
