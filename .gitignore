@@ -55,6 +55,9 @@ Package.resolved
 *.dSYM
 *.app
 *.framework
+# But allow llama.xcframework (tracked with Git LFS)
+!Packages/LLM/llama.cpp/llama.xcframework/**/*.framework
+!Packages/LLM/llama.cpp/llama.xcframework/**/*.framework/**
 *.dylib
 *.a
 *.o

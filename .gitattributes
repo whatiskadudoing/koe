@@ -1,0 +1,2 @@
+Packages/LLM/llama.cpp/llama.xcframework/**/*.framework/llama filter=lfs diff=lfs merge=lfs -text
+Packages/LLM/llama.cpp/llama.xcframework/**/*.framework/**/* filter=lfs diff=lfs merge=lfs -text
