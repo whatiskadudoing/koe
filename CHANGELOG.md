@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.0](https://github.com/whatiskadudoing/koe/compare/v1.5.0...v1.6.0) (2026-01-09)
+
+
+### Features
+
+* AI text refinement with pipeline data tracking ([#37](https://github.com/whatiskadudoing/koe/issues/37)) ([10aaa7b](https://github.com/whatiskadudoing/koe/commit/10aaa7bf5ed2404a84f99af9589ab4aa0b758f2c))
+
+
+### Bug Fixes
+
+* add llama.xcframework with Git LFS ([1b03684](https://github.com/whatiskadudoing/koe/commit/1b0368417ef33f9f718880ddf2f86a3006848a04))
+* add missing .gitmodules and format installer ([d79ca70](https://github.com/whatiskadudoing/koe/commit/d79ca709c9cc4c2fa140740314f1e59e88a42d11))
+* CI build issues ([286c80a](https://github.com/whatiskadudoing/koe/commit/286c80a07cc0d24cacf01656fb97c44c02c44813))
+* remove WhisperMetal dependency ([b3ed81e](https://github.com/whatiskadudoing/koe/commit/b3ed81eae8fe5d5484169d19d6bbc843aa53efa7))
+
 ## [1.5.0](https://github.com/whatiskadudoing/koe/compare/v1.4.11...v1.5.0) (2026-01-08)
 
 
