@@ -3,7 +3,7 @@
 
 .PHONY: all build build-release clean test format format-check lint lint-fix docs bundle
 .PHONY: installer-build installer-lint installer-fmt installer-fmt-check
-.PHONY: check ci setup help
+.PHONY: check ci setup help clean-install
 
 # Default target
 all: help
@@ -152,6 +152,43 @@ setup:
 	@echo "Development tools installed successfully!"
 
 #------------------------------------------------------------------------------
+# Clean Install (Full Reset for Testing)
+#------------------------------------------------------------------------------
+
+## Remove ALL app data for fresh install testing (app, data, prefs, permissions)
+clean-install:
+	@echo "=== Koe Full Clean Install Reset ==="
+	@echo ""
+	@echo "Stopping Koe if running..."
+	@-pkill -9 Koe 2>/dev/null || true
+	@sleep 1
+	@echo ""
+	@echo "Removing app from /Applications..."
+	@-rm -rf /Applications/Koe.app 2>/dev/null || true
+	@echo ""
+	@echo "Removing Application Support data..."
+	@-rm -rf ~/Library/Application\ Support/Koe 2>/dev/null || true
+	@echo ""
+	@echo "Removing Caches..."
+	@-rm -rf ~/Library/Caches/com.koe.voice 2>/dev/null || true
+	@echo ""
+	@echo "Removing Preferences (UserDefaults)..."
+	@-defaults delete com.koe.voice 2>/dev/null || true
+	@echo ""
+	@echo "Removing Saved Application State..."
+	@-rm -rf ~/Library/Saved\ Application\ State/com.koe.voice.savedState 2>/dev/null || true
+	@echo ""
+	@echo "Resetting TCC permissions (Accessibility, Microphone, Speech Recognition)..."
+	@-tccutil reset Accessibility com.koe.voice 2>/dev/null || true
+	@-tccutil reset Microphone com.koe.voice 2>/dev/null || true
+	@-tccutil reset SpeechRecognition com.koe.voice 2>/dev/null || true
+	@echo ""
+	@echo "=== Clean complete! Ready for fresh install test ==="
+	@echo ""
+	@echo "To test installer, run:"
+	@echo "  curl -fsSL https://raw.githubusercontent.com/anthropics/koe/main/install.sh | bash"
+
+#------------------------------------------------------------------------------
 # Help
 #------------------------------------------------------------------------------
 
@@ -187,3 +224,7 @@ help:
 	@echo "  make check          Run all checks (CI)"
 	@echo "  make ci             Full CI pipeline"
 	@echo "  make setup          Install dev tools"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make clean-install  Full reset for fresh install testing"
+	@echo "                      (removes app, data, prefs, permissions)"

@@ -28,6 +28,12 @@ make installer-fmt
 make installer-lint
 ```
 
+Testing fresh install:
+```
+make clean-install    # Full reset: app, data, prefs, TCC permissions
+```
+Then run the installer curl command to test from scratch.
+
 If you notice a missing or improvable make target, suggest adding it to the Makefile.
 
 ## Architecture
