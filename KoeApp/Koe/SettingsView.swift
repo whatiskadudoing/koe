@@ -317,9 +317,8 @@ struct TranscriptionModelSection: View {
 
     private var modelDescription: String {
         switch appState.currentKoeModel {
-        case .fast: return "Turbo • Fastest • ~400MB"
-        case .balanced: return "Turbo Medium • Balanced • ~800MB"
-        case .best: return "Turbo Large • Best quality • ~1.6GB"
+        case .turbo: return "Turbo • Fast & accurate • 954 MB"
+        case .large: return "Large • Best quality • 3.1 GB"
         }
     }
 }

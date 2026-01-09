@@ -447,7 +447,7 @@ struct MeetingDetailView: View {
 
                 // Load the fast model for meeting transcription
                 transcriptionProgress = "Loading whisper model..."
-                try await transcriber.loadModel(.fast)
+                try await transcriber.loadModel(.turbo)
 
                 transcriptionProgress = "Transcribing audio..."
                 let transcript = try await transcriber.transcribeFile(url: audioURL, language: nil)

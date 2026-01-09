@@ -21,7 +21,7 @@ import { errorBox, header, progressBar, stepIndicator, successBox } from "./ui/c
 // Import steps
 import { checkForUpdates, downloadApp } from "./steps/download.ts";
 import { installApp, openApp, resetPermissions } from "./steps/install.ts";
-import { downloadFastModel, FAST_MODEL } from "./steps/model.ts";
+import { downloadAIModel, downloadTurboModel, QWEN_MODEL, TURBO_MODEL } from "./steps/model.ts";
 
 // =============================================================================
 // INTRO ANIMATION
@@ -98,20 +98,18 @@ async function runStep(options: StepOptions): Promise<boolean> {
 }
 
 // =============================================================================
-// MODEL DOWNLOAD WITH PROGRESS
+// MODEL DOWNLOADS WITH PROGRESS
 // =============================================================================
 
-async function runModelDownload(): Promise<boolean> {
+async function runTurboModelDownload(): Promise<boolean> {
   let frame = 0;
   let done = false;
   let errorMsg = "";
   let currentProgress = 0;
-  let _currentFile = "";
 
   // Start download
-  const downloadPromise = downloadFastModel((progress) => {
+  const downloadPromise = downloadTurboModel((progress) => {
     currentProgress = progress.percent;
-    _currentFile = progress.fileName;
   })
     .then(() => {
       done = true;
@@ -124,7 +122,7 @@ async function runModelDownload(): Promise<boolean> {
   // Animate while downloading
   while (!done) {
     clearLine();
-    const msg = `Downloading Fast model (${FAST_MODEL.size})`;
+    const msg = `Downloading Turbo model (${TURBO_MODEL.size})`;
     write(`  ${getSpinnerFrame(frame)} ${msg}  ${progressBar(currentProgress)}`);
     frame++;
     await sleep(80);
@@ -134,11 +132,52 @@ async function runModelDownload(): Promise<boolean> {
 
   clearLine();
   if (errorMsg) {
-    write(stepIndicator("error", `Model download failed - ${errorMsg}`));
+    write(stepIndicator("error", `Turbo model download failed - ${errorMsg}`));
     console.log();
     return false;
   } else {
-    write(stepIndicator("done", `Fast model downloaded! (${FAST_MODEL.size})`));
+    write(stepIndicator("done", `Turbo model downloaded (${TURBO_MODEL.size})`));
+    console.log();
+    return true;
+  }
+}
+
+async function runAIModelDownload(): Promise<boolean> {
+  let frame = 0;
+  let done = false;
+  let errorMsg = "";
+  let currentProgress = 0;
+
+  // Start download
+  const downloadPromise = downloadAIModel((percent) => {
+    currentProgress = percent / 100;
+  })
+    .then(() => {
+      done = true;
+    })
+    .catch((e) => {
+      errorMsg = e instanceof Error ? e.message : String(e);
+      done = true;
+    });
+
+  // Animate while downloading
+  while (!done) {
+    clearLine();
+    const msg = `Downloading AI model (${QWEN_MODEL.size})`;
+    write(`  ${getSpinnerFrame(frame)} ${msg}  ${progressBar(currentProgress)}`);
+    frame++;
+    await sleep(80);
+  }
+
+  await downloadPromise;
+
+  clearLine();
+  if (errorMsg) {
+    write(stepIndicator("error", `AI model download failed - ${errorMsg}`));
+    console.log();
+    return false;
+  } else {
+    write(stepIndicator("done", `AI model downloaded (${QWEN_MODEL.size})`));
     console.log();
     return true;
   }
@@ -170,7 +209,11 @@ async function main(): Promise<void> {
 
     if (!checkSuccess) {
       showCursor();
-      console.log(errorBox("Failed to check for updates. Please check your internet connection."));
+      console.log(
+        errorBox(
+          "Failed to check for updates. Please check your internet connection.",
+        ),
+      );
       Deno.exit(1);
     }
 
@@ -212,17 +255,35 @@ async function main(): Promise<void> {
       Deno.exit(1);
     }
 
-    // Step 5: Download model
+    // Step 5: Download Turbo transcription model
     console.log();
-    const modelSuccess = await runModelDownload();
+    console.log(colors.white("  Downloading models...\n"));
 
-    if (!modelSuccess) {
+    const turboSuccess = await runTurboModelDownload();
+    if (!turboSuccess) {
       showCursor();
-      console.log(errorBox("Failed to download model. Please check your internet connection."));
+      console.log(
+        errorBox(
+          "Failed to download transcription model. Please check your internet connection.",
+        ),
+      );
       Deno.exit(1);
     }
 
-    // Success message (ANE optimization happens in background on first launch)
+    // Step 6: Download AI model
+    const aiSuccess = await runAIModelDownload();
+    if (!aiSuccess) {
+      // AI model is optional, just warn
+      write(
+        stepIndicator(
+          "skipped",
+          "AI model skipped - will download on first use",
+        ),
+      );
+      console.log();
+    }
+
+    // Success message
     console.log();
     console.log(successBox(version));
     console.log();

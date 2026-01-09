@@ -2,9 +2,15 @@
  * Model download step
  */
 
-import { downloadModel, FAST_MODEL, type ModelInfo } from "../utils/huggingface.ts";
+import {
+  downloadQwenModel,
+  downloadWhisperModel,
+  type ModelInfo,
+  QWEN_MODEL,
+  TURBO_MODEL,
+} from "../utils/huggingface.ts";
 
-export { FAST_MODEL, type ModelInfo };
+export { type ModelInfo, QWEN_MODEL, TURBO_MODEL };
 
 export interface ModelProgress {
   currentFile: number;
@@ -14,12 +20,12 @@ export interface ModelProgress {
 }
 
 /**
- * Download the Fast model (required for basic functionality)
+ * Download the Turbo model (primary transcription model)
  */
-export async function downloadFastModel(
+export async function downloadTurboModel(
   onProgress: (progress: ModelProgress) => void,
 ): Promise<void> {
-  await downloadModel(FAST_MODEL, (current, total, fileName) => {
+  await downloadWhisperModel(TURBO_MODEL, (current, total, fileName) => {
     onProgress({
       currentFile: current,
       totalFiles: total,
@@ -30,7 +36,16 @@ export async function downloadFastModel(
 }
 
 /**
- * Check if model is already downloaded
+ * Download the Qwen AI model (text refinement)
+ */
+export async function downloadAIModel(
+  onProgress: (percent: number) => void,
+): Promise<void> {
+  await downloadQwenModel(onProgress);
+}
+
+/**
+ * Check if WhisperKit model is already downloaded
  */
 export async function isModelDownloaded(model: ModelInfo): Promise<boolean> {
   const homeDir = Deno.env.get("HOME") || "~";
@@ -44,3 +59,7 @@ export async function isModelDownloaded(model: ModelInfo): Promise<boolean> {
     return false;
   }
 }
+
+// Legacy exports for backwards compatibility
+export const FAST_MODEL = TURBO_MODEL;
+export const downloadFastModel = downloadTurboModel;

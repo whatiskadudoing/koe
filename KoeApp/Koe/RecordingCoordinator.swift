@@ -55,6 +55,9 @@ public final class RecordingCoordinator {
     private let voiceVerifier = VoiceVerifier()
     private let voiceProfileManager = VoiceProfileManager()
 
+    // Target lock for cross-app text insertion
+    private let targetLockService = TargetLockService.shared
+
     // VAD processor with longer timeout for voice commands (3 seconds to allow thinking)
     private let voiceCommandVADProcessor = VADProcessor(
         silenceThreshold: 0.012,
@@ -198,7 +201,7 @@ public final class RecordingCoordinator {
     }
 
     public func loadModel(name: String) async {
-        let model = KoeModel(rawValue: name) ?? .fast
+        let model = KoeModel(rawValue: name) ?? .turbo
         await loadModel(model)
     }
 
@@ -258,6 +261,14 @@ public final class RecordingCoordinator {
         }
 
         logger.info("Starting recording - mode: \(mode.rawValue), language: \(language.code)")
+
+        // Lock the current text field as our insertion target
+        let targetLocked = targetLockService.lockCurrentTarget()
+        if targetLocked {
+            logger.info("Target locked: \(targetLockService.lockedAppBundleId ?? "unknown")")
+        } else {
+            logger.warning("Could not lock target - will insert at current focus")
+        }
 
         // Reset state
         resetRecordingState()
@@ -557,6 +568,14 @@ public final class RecordingCoordinator {
                 // Pipeline handles text insertion and auto-enter
                 // Play success sound
                 NSSound(named: "Pop")?.play()
+
+            } catch let targetError as PipelineManager.TargetLostError {
+                // Target was lost (user switched apps) - don't try fallback insertion
+                // Sound already played by PipelineManager, just copy to clipboard
+                logger.warning("Target lost: \(targetError.reason) - copying to clipboard instead")
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(transcribedText, forType: .string)
+                AppState.shared.errorMessage = "Target lost - text copied to clipboard (Cmd+V to paste)"
 
             } catch {
                 logger.error("Pipeline failed, falling back to direct insertion", error: error)

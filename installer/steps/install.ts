@@ -11,14 +11,14 @@ const INSTALL_PATH = "/Applications";
 export async function installApp(zipPath: string): Promise<void> {
   const tempDir = zipPath.replace("/Koe.zip", "");
 
-  // Extract zip
-  const unzip = new Deno.Command("unzip", {
-    args: ["-o", zipPath, "-d", tempDir],
+  // Extract zip using ditto (preserves symlinks and macOS metadata)
+  const ditto = new Deno.Command("ditto", {
+    args: ["-xk", zipPath, tempDir],
     stdout: "null",
     stderr: "null",
   });
-  const unzipResult = await unzip.output();
-  if (!unzipResult.success) {
+  const dittoResult = await ditto.output();
+  if (!dittoResult.success) {
     throw new Error("Failed to extract app");
   }
 

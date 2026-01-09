@@ -191,7 +191,7 @@ public final class BackgroundModelService: ObservableObject {
     /// Check if a model is ready for use
     public func isModelReady(_ model: KoeModel) -> Bool {
         // Fast is always available (installed during setup)
-        if model == .fast {
+        if model == .turbo {
             return true
         }
 

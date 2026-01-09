@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import KoePipeline
 import KoeRefinement
 import KoeTextInsertion
@@ -17,6 +18,7 @@ public final class PipelineManager {
 
     private let aiService: AIService
     private let textInserter: TextInsertionServiceImpl
+    private let targetLockService: TargetLockService
 
     // MARK: - Pipeline State
 
@@ -26,10 +28,12 @@ public final class PipelineManager {
 
     public init(
         aiService: AIService = AIService.shared,
-        textInserter: TextInsertionServiceImpl = TextInsertionServiceImpl()
+        textInserter: TextInsertionServiceImpl = TextInsertionServiceImpl(),
+        targetLockService: TargetLockService = TargetLockService.shared
     ) {
         self.aiService = aiService
         self.textInserter = textInserter
+        self.targetLockService = targetLockService
 
         // Register built-in stages and actions
         registerBuiltInElements()
@@ -179,10 +183,12 @@ public final class PipelineManager {
         case "auto-type":
             if let action = element as? AutoTypeAction {
                 action.instantInsertHandler = { [weak self] text in
-                    try await self?.textInserter.insertText(text)
+                    guard let self = self else { return }
+                    try await self.insertWithTargetLock(text)
                 }
                 action.typeHandler = { [weak self] text, _, _ in
-                    try await self?.textInserter.insertText(text)
+                    guard let self = self else { return }
+                    try await self.insertWithTargetLock(text)
                 }
             }
 
@@ -252,6 +258,52 @@ public final class PipelineManager {
         Keep the original meaning. Do NOT add bullet points or extra structure.
         Reply with ONLY the edited text. No explanations. No quotes. Just the text.
         """
+    }
+
+    // MARK: - Target Lock Integration
+
+    /// Error thrown when text insertion target cannot be restored
+    public struct TargetLostError: Error {
+        public let reason: String
+    }
+
+    /// Insert text with target lock awareness.
+    /// If the user switched apps, attempts to restore focus to the original target.
+    /// If restoration fails, skips insertion and plays a feedback sound.
+    private func insertWithTargetLock(_ text: String) async throws {
+        // Check if we have a locked target and need to restore
+        let result = targetLockService.prepareForInsertion()
+
+        switch result {
+        case .alreadyFocused:
+            // Same app, target still valid - proceed normally
+            NSLog("[Pipeline] Target still focused, inserting text")
+            try await textInserter.insertText(text)
+
+        case .restored:
+            // Successfully restored focus - small delay then insert
+            NSLog("[Pipeline] Focus restored to locked target, inserting text")
+            try await Task.sleep(nanoseconds: 100_000_000) // 100ms delay after app switch
+            try await textInserter.insertText(text)
+
+        case .failed(let reason):
+            // Could not restore target - skip insertion, play feedback sound
+            NSLog("[Pipeline] Target lost: \(reason) - skipping text insertion")
+
+            // Play system sound to notify user
+            _ = await MainActor.run {
+                NSSound(named: "Basso")?.play()
+            }
+
+            // Clear the locked target since we couldn't use it
+            targetLockService.clearTarget()
+
+            // Throw error to indicate insertion was skipped
+            throw TargetLostError(reason: reason)
+        }
+
+        // Clear target after successful insertion
+        targetLockService.clearTarget()
     }
 }
 

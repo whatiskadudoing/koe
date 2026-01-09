@@ -58,9 +58,10 @@ runs:
         chmod +x dist/Koe.app/Contents/MacOS/Koe
 
         # Copy llama.framework if it exists (required for AI features)
+        # Use ditto to preserve symlinks and macOS metadata
         if [ -d ".build/arm64-apple-macosx/release/llama.framework" ]; then
           echo "Copying llama.framework..."
-          cp -R .build/arm64-apple-macosx/release/llama.framework dist/Koe.app/Contents/Frameworks/
+          ditto .build/arm64-apple-macosx/release/llama.framework dist/Koe.app/Contents/Frameworks/llama.framework
           # Add rpath so executable can find the framework
           install_name_tool -add_rpath @executable_path/../Frameworks dist/Koe.app/Contents/MacOS/Koe 2>/dev/null || true
           echo "Framework copied successfully"
@@ -92,5 +93,6 @@ runs:
       shell: bash
       run: |
         cd KoeApp/dist
-        zip -r Koe-macos-arm64.zip Koe.app
+        # Use ditto to create ZIP (preserves symlinks and macOS metadata)
+        ditto -c -k --sequesterRsrc --keepParent Koe.app Koe-macos-arm64.zip
         echo "zip-path=KoeApp/dist/Koe-macos-arm64.zip" >> $GITHUB_OUTPUT

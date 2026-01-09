@@ -78,7 +78,7 @@ public final class AppState {
     @ObservationIgnored
     private var _selectedModel: String {
         get {
-            let stored = UserDefaults.standard.string(forKey: "selectedModel") ?? KoeModel.fast.rawValue
+            let stored = UserDefaults.standard.string(forKey: "selectedModel") ?? KoeModel.turbo.rawValue
             return Self.migrateModelIfNeeded(stored)
         }
         set { UserDefaults.standard.set(newValue, forKey: "selectedModel") }
@@ -88,11 +88,11 @@ public final class AppState {
     private static func migrateModelIfNeeded(_ modelName: String) -> String {
         switch modelName {
         case "tiny", "base", "small":
-            return KoeModel.fast.rawValue
+            return KoeModel.turbo.rawValue
         case "medium":
-            return KoeModel.balanced.rawValue
+            return KoeModel.turbo.rawValue
         case "large-v3":
-            return KoeModel.best.rawValue
+            return KoeModel.large.rawValue
         default:
             // Already a new model name or unknown
             return modelName
@@ -312,7 +312,7 @@ public final class AppState {
 
     // Computed properties for typed access
     public var currentKoeModel: KoeModel {
-        KoeModel(rawValue: selectedModel) ?? .fast
+        KoeModel(rawValue: selectedModel) ?? .turbo
     }
 
     public var currentLanguage: Language {

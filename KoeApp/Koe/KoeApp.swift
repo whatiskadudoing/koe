@@ -135,7 +135,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
                 // Start loading in background
                 let loadTask = Task {
-                    try await transcriber.loadModel(.fast)
+                    try await transcriber.loadModel(.turbo)
                 }
 
                 // Print progress updates
