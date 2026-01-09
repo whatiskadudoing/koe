@@ -24,7 +24,7 @@ public struct SettingsModal<Content: View>: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack {
                 Image(systemName: icon)
@@ -43,24 +43,28 @@ public struct SettingsModal<Content: View>: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(KoeColors.textLight)
                         .padding(8)
-                        .background(KoeColors.surface)
+                        .background(Color.white)
                         .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.06), radius: 4, y: 1)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
+            .padding(.top, 20)
 
-            Divider()
-                .padding(.horizontal, 16)
-
-            // Content
-            content()
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+            // Content card (matches global settings style)
+            VStack(spacing: 0) {
+                content()
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+            }
+            .background(Color.white)
+            .cornerRadius(12)
+            .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 20)
         }
-        .background(Color.white)
+        .background(KoeColors.background)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.15), radius: 20, y: 8)
         .frame(minWidth: 340, maxWidth: 420)
