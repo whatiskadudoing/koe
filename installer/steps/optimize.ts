@@ -39,7 +39,7 @@ function calculateETA(percent: number, elapsed: number): number | null {
  * Run model optimization with real-time progress parsing
  */
 export async function optimizeModel(
-  onProgress: (progress: OptimizeProgress) => void
+  onProgress: (progress: OptimizeProgress) => void,
 ): Promise<OptimizeResult> {
   const appBinary = getAppBinaryPath();
   const startTime = Date.now();
@@ -142,7 +142,8 @@ export async function optimizeModel(
 export async function isOptimizationNeeded(): Promise<boolean> {
   // Check if compiled model exists
   const homeDir = Deno.env.get("HOME") || "~";
-  const compiledModelPath = `${homeDir}/Library/Application Support/Koe/Models/models/argmaxinc/whisperkit-coreml/openai_whisper-large-v3-v20240930_turbo_632MB`;
+  const compiledModelPath =
+    `${homeDir}/Library/Application Support/Koe/Models/models/argmaxinc/whisperkit-coreml/openai_whisper-large-v3-v20240930_turbo_632MB`;
 
   try {
     // Check for .mlmodelc directories which indicate compiled models

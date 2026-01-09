@@ -29,7 +29,9 @@ export function miniWave(t: number): string {
 
 // Static wave (for non-animated display)
 export function staticWave(): string {
-  return `${colors.accent("▃")} ${colors.purple("▅")} ${colors.accent("▇")} ${colors.purple("▅")} ${colors.accent("▃")}`;
+  return `${colors.accent("▃")} ${colors.purple("▅")} ${colors.accent("▇")} ${colors.purple("▅")} ${
+    colors.accent("▃")
+  }`;
 }
 
 // Pulsing dot animation

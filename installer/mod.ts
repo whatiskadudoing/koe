@@ -14,21 +14,21 @@ quickWrite("\n\n\n                  声  Koe\n                  Loading...\n");
 
 // Import UI modules
 import { colors } from "./ui/colors.ts";
-import { terminal, write, clearLine, hideCursor, showCursor, clear } from "./ui/terminal.ts";
-import { miniWave, getSpinnerFrame } from "./ui/animations.ts";
+import { clear, clearLine, hideCursor, showCursor, terminal, write } from "./ui/terminal.ts";
+import { getSpinnerFrame, miniWave } from "./ui/animations.ts";
 import {
-  progressBar,
-  gradientProgressBar,
-  stepIndicator,
-  header,
-  successBox,
   errorBox,
   formatDuration,
+  gradientProgressBar,
+  header,
+  progressBar,
+  stepIndicator,
+  successBox,
 } from "./ui/components.ts";
 
 // Import steps
 import { checkForUpdates, downloadApp } from "./steps/download.ts";
-import { installApp, resetPermissions, openApp } from "./steps/install.ts";
+import { installApp, openApp, resetPermissions } from "./steps/install.ts";
 import { downloadFastModel, FAST_MODEL } from "./steps/model.ts";
 import { optimizeModel, type OptimizeProgress } from "./steps/optimize.ts";
 
@@ -74,8 +74,13 @@ async function runStep(options: StepOptions): Promise<boolean> {
 
   // Start the task
   const taskPromise = action()
-    .then(() => { done = true; })
-    .catch((e) => { error = e; done = true; });
+    .then(() => {
+      done = true;
+    })
+    .catch((e) => {
+      error = e;
+      done = true;
+    });
 
   // Animate while task runs
   while (!done) {
@@ -117,8 +122,13 @@ async function runModelDownload(): Promise<boolean> {
     currentProgress = progress.percent;
     _currentFile = progress.fileName;
   })
-    .then(() => { done = true; })
-    .catch((e) => { errorMsg = e instanceof Error ? e.message : String(e); done = true; });
+    .then(() => {
+      done = true;
+    })
+    .catch((e) => {
+      errorMsg = e instanceof Error ? e.message : String(e);
+      done = true;
+    });
 
   // Animate while downloading
   while (!done) {
@@ -210,7 +220,9 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
   terminal.moveUp(progressLineCount + 2);
 
   if (result.success) {
-    write(stepIndicator("done", `Optimized for Apple Silicon! (${formatDuration(result.duration)})`));
+    write(
+      stepIndicator("done", `Optimized for Apple Silicon! (${formatDuration(result.duration)})`),
+    );
     console.log();
   } else {
     write(stepIndicator("skipped", "Optimization skipped - will complete on first launch"));
@@ -317,7 +329,6 @@ async function main(): Promise<void> {
     console.log();
     showCursor();
     Deno.exit(0);
-
   } catch (error) {
     showCursor();
     console.log();

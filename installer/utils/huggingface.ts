@@ -60,7 +60,7 @@ export async function getModelFiles(modelId: string): Promise<string[]> {
  */
 export async function downloadModelFile(
   filePath: string,
-  destPath: string
+  destPath: string,
 ): Promise<void> {
   const url = `${MODEL_BASE_URL}/${filePath}`;
   const response = await fetch(url);
@@ -86,7 +86,7 @@ export function getModelDestDir(): string {
  */
 export async function downloadModel(
   model: ModelInfo,
-  onProgress: (current: number, total: number, fileName: string) => void
+  onProgress: (current: number, total: number, fileName: string) => void,
 ): Promise<void> {
   const baseDir = getModelDestDir();
 

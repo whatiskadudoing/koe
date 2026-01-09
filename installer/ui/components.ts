@@ -51,7 +51,7 @@ export function gradientProgressBar(progress: number, width: number = 25): strin
 export function progressBarWithStats(
   progress: number,
   elapsedSeconds: number,
-  width: number = 25
+  width: number = 25,
 ): string {
   const bar = gradientProgressBar(progress, width);
   const elapsed = formatDuration(elapsedSeconds);
@@ -118,7 +118,7 @@ export function box(lines: string[], style: BoxStyle = "rounded", padding: numbe
 
   // Calculate max width (accounting for ANSI escape codes)
   // deno-lint-ignore no-control-regex
-const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, "");
+  const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, "");
   const maxContentWidth = Math.max(...lines.map((l) => stripAnsi(l).length));
   const innerWidth = maxContentWidth + padding * 2;
 
@@ -208,11 +208,13 @@ export function errorBox(message: string): string {
 export function optimizationStats(
   elapsed: number,
   remaining: number | null,
-  phase: string
+  phase: string,
 ): string {
   const lines = [
     `${colors.dim("Elapsed:")}    ${colors.white(formatDuration(elapsed))}`,
-    `${colors.dim("Remaining:")}  ${remaining ? colors.white("~" + formatDuration(remaining)) : colors.dim("calculating...")}`,
+    `${colors.dim("Remaining:")}  ${
+      remaining ? colors.white("~" + formatDuration(remaining)) : colors.dim("calculating...")
+    }`,
     `${colors.dim("Phase:")}      ${colors.accent(phase)}`,
   ];
 
@@ -251,7 +253,7 @@ export function formatBytes(bytes: number): string {
 export function centerText(text: string, width?: number): string {
   const termWidth = width ?? 80;
   // deno-lint-ignore no-control-regex
-const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, "");
+  const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, "");
   const visibleLength = stripAnsi(text).length;
   const padding = Math.max(0, Math.floor((termWidth - visibleLength) / 2));
   return " ".repeat(padding) + text;

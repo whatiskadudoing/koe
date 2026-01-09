@@ -13,19 +13,19 @@ const bgRgb = (r: number, g: number, b: number) => (text: string) =>
 
 export const colors = {
   // Brand colors
-  accent: rgb(102, 126, 234),      // #667eea - Primary blue
-  purple: rgb(118, 75, 162),       // #764ba2 - Secondary purple
+  accent: rgb(102, 126, 234), // #667eea - Primary blue
+  purple: rgb(118, 75, 162), // #764ba2 - Secondary purple
 
   // Status colors
-  success: rgb(72, 187, 120),      // #48bb78 - Green
-  error: rgb(229, 62, 62),         // #e53e3e - Red
-  warning: rgb(236, 201, 75),      // #ecc94b - Yellow
-  info: rgb(66, 153, 225),         // #4299e1 - Blue
+  success: rgb(72, 187, 120), // #48bb78 - Green
+  error: rgb(229, 62, 62), // #e53e3e - Red
+  warning: rgb(236, 201, 75), // #ecc94b - Yellow
+  info: rgb(66, 153, 225), // #4299e1 - Blue
 
   // Text colors
   white: (text: string) => `\x1b[1;37m${text}\x1b[0m`,
-  dim: rgb(113, 128, 150),         // #718096 - Gray
-  muted: rgb(160, 174, 192),       // #a0aec0 - Light gray
+  dim: rgb(113, 128, 150), // #718096 - Gray
+  muted: rgb(160, 174, 192), // #a0aec0 - Light gray
 
   // Background colors
   bgAccent: bgRgb(102, 126, 234),

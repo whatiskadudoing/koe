@@ -2,7 +2,7 @@
  * Model download step
  */
 
-import { FAST_MODEL, downloadModel, type ModelInfo } from "../utils/huggingface.ts";
+import { downloadModel, FAST_MODEL, type ModelInfo } from "../utils/huggingface.ts";
 
 export { FAST_MODEL, type ModelInfo };
 
@@ -17,7 +17,7 @@ export interface ModelProgress {
  * Download the Fast model (required for basic functionality)
  */
 export async function downloadFastModel(
-  onProgress: (progress: ModelProgress) => void
+  onProgress: (progress: ModelProgress) => void,
 ): Promise<void> {
   await downloadModel(FAST_MODEL, (current, total, fileName) => {
     onProgress({
@@ -34,7 +34,8 @@ export async function downloadFastModel(
  */
 export async function isModelDownloaded(model: ModelInfo): Promise<boolean> {
   const homeDir = Deno.env.get("HOME") || "~";
-  const modelPath = `${homeDir}/Library/Application Support/Koe/Models/models/argmaxinc/whisperkit-coreml/openai_whisper-${model.id}`;
+  const modelPath =
+    `${homeDir}/Library/Application Support/Koe/Models/models/argmaxinc/whisperkit-coreml/openai_whisper-${model.id}`;
 
   try {
     const stat = await Deno.stat(modelPath);

@@ -2,7 +2,7 @@
  * App download step
  */
 
-import { getLatestRelease, downloadWithProgress } from "../utils/github.ts";
+import { downloadWithProgress, getLatestRelease } from "../utils/github.ts";
 
 export interface DownloadResult {
   version: string;
@@ -22,9 +22,10 @@ export async function checkForUpdates(): Promise<string> {
  */
 export async function downloadApp(
   version: string,
-  onProgress?: (downloaded: number, total: number | null) => void
+  onProgress?: (downloaded: number, total: number | null) => void,
 ): Promise<string> {
-  const url = `https://github.com/whatiskadudoing/koe/releases/download/${version}/Koe-macos-arm64.zip`;
+  const url =
+    `https://github.com/whatiskadudoing/koe/releases/download/${version}/Koe-macos-arm64.zip`;
 
   if (onProgress) {
     return await downloadWithProgress(url, onProgress);

@@ -16,7 +16,7 @@ export interface ReleaseInfo {
  */
 export async function getLatestRelease(): Promise<ReleaseInfo> {
   const response = await fetch(
-    `https://api.github.com/repos/${REPO}/releases/latest`
+    `https://api.github.com/repos/${REPO}/releases/latest`,
   );
 
   if (!response.ok) {
@@ -29,7 +29,8 @@ export async function getLatestRelease(): Promise<ReleaseInfo> {
     version: data.tag_name,
     tagName: data.tag_name,
     publishedAt: data.published_at,
-    downloadUrl: `https://github.com/${REPO}/releases/download/${data.tag_name}/Koe-macos-arm64.zip`,
+    downloadUrl:
+      `https://github.com/${REPO}/releases/download/${data.tag_name}/Koe-macos-arm64.zip`,
   };
 }
 
@@ -58,7 +59,7 @@ export async function downloadFile(url: string): Promise<string> {
  */
 export async function downloadWithProgress(
   url: string,
-  onProgress: (downloaded: number, total: number | null) => void
+  onProgress: (downloaded: number, total: number | null) => void,
 ): Promise<string> {
   const response = await fetch(url);
 
