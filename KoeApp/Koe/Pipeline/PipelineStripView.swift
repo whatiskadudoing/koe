@@ -88,17 +88,9 @@ struct PipelineStripView: View {
     }
 
     private func isConnectorActive(stage: PipelineStageInfo, previousIndex: Int) -> Bool {
-        let stages = PipelineStageInfo.sequentialStages
-
-        // First connector connects from triggers to first sequential stage
-        if previousIndex < 0 {
-            return isAnyTriggerEnabled && nodeController.isEnabled(stage)
-        }
-
-        guard previousIndex < stages.count else { return false }
-
-        let previousStage = stages[previousIndex]
-        return nodeController.isEnabled(previousStage) && nodeController.isEnabled(stage)
+        // Sequential connectors are always active - they just show the flow path
+        // The nodes themselves show enabled/disabled state via opacity
+        return true
     }
 
     private func metricsFor(_ stage: PipelineStageInfo) -> ElementExecutionMetrics? {
@@ -122,6 +114,14 @@ struct ParallelTriggersView: View {
         nodeController.isEnabled(.hotkeyTrigger) || nodeController.isEnabled(.voiceTrigger)
     }
 
+    private var isHotkeyEnabled: Bool {
+        nodeController.isEnabled(.hotkeyTrigger)
+    }
+
+    private var isVoiceEnabled: Bool {
+        nodeController.isEnabled(.voiceTrigger)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Triggers stacked vertically
@@ -142,9 +142,10 @@ struct ParallelTriggersView: View {
             }
 
             // Merge lines from both triggers
+            // Lines are active based on whether trigger is ENABLED (not just running)
             PipelineMergeConnector(
-                isTopActive: isHotkeyRunning,
-                isBottomActive: isVoiceRunning,
+                isTopActive: isHotkeyEnabled,
+                isBottomActive: isVoiceEnabled,
                 isMergeActive: isAnyTriggerEnabled,
                 activeColor: KoeColors.accent
             )

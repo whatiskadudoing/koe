@@ -165,15 +165,25 @@ final class NodeStateController<Node: Hashable & Sendable> {
     // MARK: - SwiftUI Bindings
 
     /// Get a binding for a node's toggle state
+    /// Returns the user's toggle preference (isToggledOn), not the effective state (isEnabled)
+    /// This ensures toggling works correctly even when requirements aren't met or node is dimmed
+    ///
+    /// Note: Captures the getter/setter closures directly instead of `self` to avoid
+    /// issues with the controller being deallocated before the binding is used.
     func binding(for node: Node) -> Binding<Bool> {
         let nodeInfo = info(for: node)
+        let getPersisted = getPersistedState
+        let setPersisted = setPersistedState
+        let alwaysEnabled = nodeInfo.isAlwaysEnabled
+        let isToggleable = nodeInfo.isUserToggleable
+
         return Binding(
-            get: { [weak self] in
-                self?.state(for: node).isEnabled ?? false
+            get: {
+                alwaysEnabled || getPersisted(node)
             },
-            set: { [weak self] newValue in
-                guard nodeInfo.isUserToggleable else { return }
-                self?.setPersistedState(node, newValue)
+            set: { newValue in
+                guard isToggleable else { return }
+                setPersisted(node, newValue)
             }
         )
     }

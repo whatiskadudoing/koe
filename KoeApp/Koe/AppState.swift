@@ -105,26 +105,8 @@ public final class AppState {
         set { UserDefaults.standard.set(newValue, forKey: "selectedLanguage") }
     }
 
-    @ObservationIgnored
-    private var _isRefinementEnabled: Bool {
-        get {
-            // Default to false if not set (user must opt-in)
-            if UserDefaults.standard.object(forKey: "isRefinementEnabled") == nil {
-                return false
-            }
-            return UserDefaults.standard.bool(forKey: "isRefinementEnabled")
-        }
-        set { UserDefaults.standard.set(newValue, forKey: "isRefinementEnabled") }
-    }
-
-    @ObservationIgnored
-    private var _isAutoEnterEnabled: Bool {
-        get {
-            // Default to false if not set
-            return UserDefaults.standard.bool(forKey: "isAutoEnterEnabled")
-        }
-        set { UserDefaults.standard.set(newValue, forKey: "isAutoEnterEnabled") }
-    }
+    // Refinement and AutoEnter use stored properties for proper @Observable tracking
+    // Loaded from UserDefaults in init(), saved in didSet
 
     // Ollama settings
     @ObservationIgnored
@@ -166,14 +148,24 @@ public final class AppState {
         set { _selectedLanguage = newValue }
     }
 
-    public var isRefinementEnabled: Bool {
-        get { _isRefinementEnabled }
-        set { _isRefinementEnabled = newValue }
+    // Stored properties for proper @Observable tracking
+    public var isRefinementEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isRefinementEnabled, forKey: "isRefinementEnabled")
+        }
     }
 
-    public var isAutoEnterEnabled: Bool {
-        get { _isAutoEnterEnabled }
-        set { _isAutoEnterEnabled = newValue }
+    public var isAutoEnterEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isAutoEnterEnabled, forKey: "isAutoEnterEnabled")
+        }
+    }
+
+    /// Whether to copy transcribed text to clipboard when target is lost (user switched apps)
+    /// If false, text is simply discarded when target cannot be restored
+    public var copyToClipboardOnTargetLost: Bool {
+        get { UserDefaults.standard.object(forKey: "copyToClipboardOnTargetLost") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "copyToClipboardOnTargetLost") }
     }
 
     // Ollama settings
@@ -358,6 +350,14 @@ public final class AppState {
     }
 
     private func loadRefinementOptions() {
+        // Load toggle states for pipeline nodes
+        if UserDefaults.standard.object(forKey: "isRefinementEnabled") != nil {
+            isRefinementEnabled = UserDefaults.standard.bool(forKey: "isRefinementEnabled")
+        }
+        if UserDefaults.standard.object(forKey: "isAutoEnterEnabled") != nil {
+            isAutoEnterEnabled = UserDefaults.standard.bool(forKey: "isAutoEnterEnabled")
+        }
+
         // Load saved refinement options
         if UserDefaults.standard.object(forKey: "isCleanupEnabled") != nil {
             isCleanupEnabled = UserDefaults.standard.bool(forKey: "isCleanupEnabled")

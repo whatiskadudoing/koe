@@ -61,6 +61,8 @@ struct PipelineNodeView: View {
     }
 
     /// Handle tap with manual double-tap detection
+    /// - Single tap: toggle immediately (for toggleable nodes)
+    /// - Double tap: open settings
     private func handleTap() {
         let now = Date()
         let timeSinceLastTap = now.timeIntervalSince(lastTapTime)
@@ -74,15 +76,10 @@ struct PipelineNodeView: View {
         } else {
             lastTapTime = now
 
-            // For toggleable nodes: single tap also toggles (with delay)
+            // For toggleable nodes: single tap toggles immediately
             if stage.isToggleable {
-                let capturedTime = now
-                DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapThreshold) { [self] in
-                    if lastTapTime == capturedTime {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            isEnabled.toggle()
-                        }
-                    }
+                withAnimation(.easeOut(duration: 0.15)) {
+                    isEnabled.toggle()
                 }
             }
         }
