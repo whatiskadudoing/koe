@@ -117,7 +117,8 @@ export function box(lines: string[], style: BoxStyle = "rounded", padding: numbe
   const chars = boxChars[style];
 
   // Calculate max width (accounting for ANSI escape codes)
-  const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, "");
+  // deno-lint-ignore no-control-regex
+const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, "");
   const maxContentWidth = Math.max(...lines.map((l) => stripAnsi(l).length));
   const innerWidth = maxContentWidth + padding * 2;
 
@@ -249,7 +250,8 @@ export function formatBytes(bytes: number): string {
  */
 export function centerText(text: string, width?: number): string {
   const termWidth = width ?? 80;
-  const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, "");
+  // deno-lint-ignore no-control-regex
+const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, "");
   const visibleLength = stripAnsi(text).length;
   const padding = Math.max(0, Math.floor((termWidth - visibleLength) / 2));
   return " ".repeat(padding) + text;

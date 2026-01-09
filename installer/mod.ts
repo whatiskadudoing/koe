@@ -15,18 +15,15 @@ quickWrite("\n\n\n                  声  Koe\n                  Loading...\n");
 // Import UI modules
 import { colors } from "./ui/colors.ts";
 import { terminal, write, clearLine, hideCursor, showCursor, clear } from "./ui/terminal.ts";
-import { miniWave, staticWave, getSpinnerFrame } from "./ui/animations.ts";
+import { miniWave, getSpinnerFrame } from "./ui/animations.ts";
 import {
   progressBar,
   gradientProgressBar,
-  progressBarWithStats,
   stepIndicator,
   header,
   successBox,
   errorBox,
-  optimizationStats,
   formatDuration,
-  formatBytes,
 } from "./ui/components.ts";
 
 // Import steps
@@ -155,7 +152,7 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
   write(colors.white("  Optimizing for Apple Silicon...\n"));
   console.log();
 
-  let lastProgress: OptimizeProgress = {
+  let _lastProgress: OptimizeProgress = {
     percent: 0,
     phase: "Starting...",
     elapsed: 0,
@@ -175,7 +172,7 @@ async function runOptimization(): Promise<{ success: boolean; duration: number }
   terminal.saveCursor();
 
   const result = await optimizeModel((progress) => {
-    lastProgress = progress;
+    _lastProgress = progress;
 
     // Restore cursor to progress area
     terminal.restoreCursor();
@@ -302,7 +299,7 @@ async function main(): Promise<void> {
     }
 
     // Step 6: Optimize model (with real progress!)
-    const optimizeResult = await runOptimization();
+    await runOptimization();
 
     // Success message
     console.log();
