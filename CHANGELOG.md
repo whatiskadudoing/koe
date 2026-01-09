@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.15.0-beta.1](https://github.com/whatiskadudoing/koe/compare/v1.14.0-beta.1...v1.15.0-beta.1) (2026-01-09)
+
+
+### Features
+
+* add CLAUDE.md and slash commands for Claude Code optimization ([79a2af2](https://github.com/whatiskadudoing/koe/commit/79a2af21e4be57df8615015bbf9f56c9c71be918))
+* simplify model system and fix CI/CD packaging ([b52a325](https://github.com/whatiskadudoing/koe/commit/b52a32562758c9f65c3c46b98fc6238bfa437b2b))
+
 ## [1.13.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.12.1-beta.6...v1.13.0-beta.6) (2026-01-09)
 
 
