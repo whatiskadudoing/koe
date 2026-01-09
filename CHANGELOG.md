@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.11.0-beta.6...v1.11.1-beta.6) (2026-01-09)
+
+
+### Bug Fixes
+
+* lint errors in installer ([9bd31a7](https://github.com/whatiskadudoing/koe/commit/9bd31a742928532f8dd42288b26d2331667ad931))
+
 ## [1.11.0-beta.6](https://github.com/whatiskadudoing/koe/compare/v1.10.0-beta.6...v1.11.0-beta.6) (2026-01-09)
 
 
