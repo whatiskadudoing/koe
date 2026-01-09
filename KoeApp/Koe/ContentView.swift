@@ -1519,6 +1519,7 @@ struct PipelineStepCard: View {
 
 struct RefinementToggle: View {
     @Environment(AppState.self) private var appState
+    @ObservedObject private var aiService = AIService.shared
     @State private var isWorking = false
     @State private var statusMessage: String = ""
 
@@ -1526,13 +1527,33 @@ struct RefinementToggle: View {
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let purpleColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
 
+    private var isAIBusy: Bool {
+        switch aiService.status {
+        case .loading, .downloading:
+            return true
+        default:
+            return isWorking
+        }
+    }
+
+    private var aiStatusText: String? {
+        switch aiService.status {
+        case .downloading(let progress, let description):
+            return "\(description) \(Int(progress * 100))%"
+        case .loading:
+            return "Loading model..."
+        default:
+            return nil
+        }
+    }
+
     var body: some View {
         @Bindable var appState = appState
 
         VStack(spacing: 6) {
             HStack(spacing: 6) {
                 // AI icon or loading indicator
-                if isWorking {
+                if isAIBusy {
                     ProgressView()
                         .scaleEffect(0.5)
                         .frame(width: 11, height: 11)
@@ -1551,23 +1572,30 @@ struct RefinementToggle: View {
                 ))
                     .toggleStyle(.switch)
                     .scaleEffect(0.65)
-                    .disabled(isWorking)
+                    .disabled(isAIBusy)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(Color(nsColor: NSColor(red: 0.92, green: 0.91, blue: 0.89, alpha: 1.0)))
             .cornerRadius(14)
 
-            // Status text - show tier and mode when enabled
-            Text(statusText)
+            // Status text - show AI status when busy, otherwise tier and mode
+            Text(aiStatusText ?? statusText)
                 .font(.system(size: 10))
-                .foregroundColor(statusColor)
+                .foregroundColor(aiStatusText != nil ? .orange : statusColor)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
-        .help(appState.isRefinementEnabled
+        .help(helpText)
+    }
+
+    private var helpText: String {
+        if isAIBusy {
+            return "AI model is being prepared..."
+        }
+        return appState.isRefinementEnabled
             ? "AI: \(appState.currentAITier.displayName)"
-            : "Enable AI refinement")
+            : "Enable AI refinement"
     }
 
     private func handleToggle(_ newValue: Bool) {
@@ -1949,19 +1977,7 @@ struct GlobalSettingsContent: View {
 
                         Spacer()
 
-                        Picker("", selection: $appState.selectedModel) {
-                            ForEach(KoeModel.allCases, id: \.rawValue) { model in
-                                Text(model.displayName).tag(model.rawValue)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .frame(width: 100)
-                        .onChange(of: appState.selectedModel) { _, newModel in
-                            Task {
-                                await RecordingCoordinator.shared.loadModel(name: newModel)
-                            }
-                        }
+                        ModelPicker()
                     }
 
                     // Language
@@ -2186,12 +2202,58 @@ struct FirstLaunchBanner: View {
 // MARK: - Background Progress Bar
 
 struct BackgroundProgressBar: View {
-    @ObservedObject private var service = BackgroundModelService.shared
+    @ObservedObject private var modelService = BackgroundModelService.shared
+    @ObservedObject private var aiService = AIService.shared
 
     private let purpleColor = Color(nsColor: NSColor(red: 0.58, green: 0.35, blue: 0.78, alpha: 1.0))
 
+    private var isActive: Bool {
+        modelService.state.isProcessing || isAIDownloading
+    }
+
+    private var isAIDownloading: Bool {
+        if case .downloading = aiService.status { return true }
+        if case .loading = aiService.status { return true }
+        return false
+    }
+
+    private var aiDownloadProgress: Double {
+        if case .downloading(let progress, _) = aiService.status {
+            return progress
+        }
+        if case .loading = aiService.status {
+            return 0.5 // Indeterminate loading
+        }
+        return 0
+    }
+
+    private var aiStatusMessage: String? {
+        switch aiService.status {
+        case .downloading(_, let description):
+            return "AI: \(description)"
+        case .loading:
+            return "AI: Loading model..."
+        default:
+            return nil
+        }
+    }
+
+    private var currentProgress: Double {
+        if modelService.state.isProcessing {
+            return modelService.overallProgress
+        }
+        return aiDownloadProgress
+    }
+
+    private var currentMessage: String? {
+        if modelService.state.isProcessing {
+            return modelService.statusMessage
+        }
+        return aiStatusMessage
+    }
+
     var body: some View {
-        if service.state.isProcessing {
+        if isActive {
             VStack(spacing: 4) {
                 // Progress bar
                 GeometryReader { geo in
@@ -2204,22 +2266,22 @@ struct BackgroundProgressBar: View {
                         // Progress fill
                         RoundedRectangle(cornerRadius: 2)
                             .fill(purpleColor)
-                            .frame(width: geo.size.width * service.overallProgress, height: 3)
-                            .animation(.easeInOut(duration: 0.3), value: service.overallProgress)
+                            .frame(width: geo.size.width * max(0.02, currentProgress), height: 3)
+                            .animation(.easeInOut(duration: 0.3), value: currentProgress)
                     }
                 }
                 .frame(height: 3)
 
                 // Status text
                 HStack(spacing: 6) {
-                    if service.state.isPaused {
+                    if modelService.state.isPaused {
                         Image(systemName: "pause.circle.fill")
                             .font(.system(size: 9))
                             .foregroundColor(.orange)
                         Text("Paused - will resume after transcription")
                             .font(.system(size: 10))
                             .foregroundColor(KoeColors.textLight)
-                    } else if let message = service.statusMessage {
+                    } else if let message = currentMessage {
                         ProgressView()
                             .scaleEffect(0.5)
                             .frame(width: 10, height: 10)
@@ -2228,7 +2290,7 @@ struct BackgroundProgressBar: View {
                             .font(.system(size: 10))
                             .foregroundColor(KoeColors.textLight)
 
-                        if let remaining = service.estimatedTimeRemaining, remaining > 30 {
+                        if let remaining = modelService.estimatedTimeRemaining, remaining > 30 {
                             Text("~\(formatTime(remaining)) left")
                                 .font(.system(size: 10))
                                 .foregroundColor(KoeColors.textLighter)
@@ -2238,9 +2300,11 @@ struct BackgroundProgressBar: View {
                     Spacer()
 
                     // Overall progress percentage
-                    Text("\(Int(service.overallProgress * 100))%")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(purpleColor)
+                    if currentProgress > 0 {
+                        Text("\(Int(currentProgress * 100))%")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(purpleColor)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -2259,5 +2323,95 @@ struct BackgroundProgressBar: View {
             let mins = Int((seconds.truncatingRemainder(dividingBy: 3600)) / 60)
             return "\(hours)h \(mins)m"
         }
+    }
+}
+
+// MARK: - Model Picker with Availability
+
+struct ModelPicker: View {
+    @Environment(AppState.self) private var appState
+    @ObservedObject private var modelService = BackgroundModelService.shared
+    @State private var showUnavailableAlert = false
+    @State private var attemptedModel: KoeModel?
+
+    var body: some View {
+        @Bindable var appState = appState
+
+        Menu {
+            ForEach(KoeModel.allCases, id: \.rawValue) { model in
+                let isAvailable = modelService.isModelReady(model)
+                let status = modelService.statusFor(model)
+
+                Button(action: {
+                    if isAvailable {
+                        appState.selectedModel = model.rawValue
+                        Task {
+                            await RecordingCoordinator.shared.loadModel(name: model.rawValue)
+                        }
+                    } else {
+                        attemptedModel = model
+                        showUnavailableAlert = true
+                    }
+                }) {
+                    HStack {
+                        Text(model.displayName)
+
+                        Spacer()
+
+                        if !isAvailable {
+                            if let status = status {
+                                switch status.phase {
+                                case .downloading:
+                                    Text("Downloading...")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                case .compiling:
+                                    Text("Preparing...")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                case .pending:
+                                    Image(systemName: "hourglass")
+                                        .foregroundColor(.gray)
+                                case .failed:
+                                    Image(systemName: "exclamationmark.triangle")
+                                        .foregroundColor(.red)
+                                default:
+                                    EmptyView()
+                                }
+                            } else {
+                                Image(systemName: "hourglass")
+                                    .foregroundColor(.gray)
+                            }
+                        } else if model.rawValue == appState.selectedModel {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(currentModelName)
+                    .font(.system(size: 11))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8))
+            }
+            .foregroundColor(KoeColors.textPrimary)
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: 100, alignment: .trailing)
+        .alert("Model Not Ready", isPresented: $showUnavailableAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let model = attemptedModel {
+                Text("\(model.shortName) is being prepared in the background. You'll be notified when it's ready.")
+            }
+        }
+    }
+
+    private var currentModelName: String {
+        if let model = KoeModel(rawValue: appState.selectedModel) {
+            return model.shortName
+        }
+        return "Fast"
     }
 }
