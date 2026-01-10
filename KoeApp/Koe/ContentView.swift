@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var selectedPipelineStage: PipelineStageInfo?
 
     enum AppTab {
+        case chat
         case dictation
         case meetings
         case queue
@@ -175,6 +176,8 @@ struct ContentView: View {
 
             // Content based on selected tab
             switch selectedTab {
+            case .chat:
+                ChatView()
             case .dictation:
                 dictationView
             case .meetings:
@@ -284,6 +287,19 @@ struct TabToggle: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            // Chat tab - bubble icon
+            TabIconButton(
+                icon: "bubble.left.and.bubble.right.fill",
+                isSelected: selectedTab == .chat,
+                selectedColor: accentColor,
+                unselectedColor: lightGray
+            ) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    selectedTab = .chat
+                    onManualSwitch?(.chat)
+                }
+            }
+
             // Dictation tab - waveform icon
             TabIconButton(
                 icon: "waveform",
