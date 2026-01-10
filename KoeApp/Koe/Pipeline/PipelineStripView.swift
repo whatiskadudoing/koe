@@ -55,84 +55,82 @@ struct PipelineStripView: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 0) {
-            // Parallel triggers section (includes merge connector)
-            ParallelTriggersView(
-                nodeController: nodeController,
-                selectedStage: $selectedStage,
-                isHotkeyRunning: isHotkeyRunning,
-                isVoiceRunning: isVoiceRunning,
-                onOpenSettings: { stage in selectedStage = stage },
-                onSetupRequired: handleSetupRequired,
-                onOpenComposite: onOpenComposite
-            )
+        PipelineContainer {
+            HStack(alignment: .center, spacing: 0) {
+                // Parallel triggers section (includes merge connector)
+                ParallelTriggersView(
+                    nodeController: nodeController,
+                    selectedStage: $selectedStage,
+                    isHotkeyRunning: isHotkeyRunning,
+                    isVoiceRunning: isVoiceRunning,
+                    onOpenSettings: { stage in selectedStage = stage },
+                    onSetupRequired: handleSetupRequired,
+                    onOpenComposite: onOpenComposite
+                )
 
-            // Pre-transcription stages (recorder)
-            ForEach(Array(PipelineStageInfo.preTranscriptionStages.enumerated()), id: \.element.id) { index, stage in
-                HStack(spacing: 0) {
-                    if index > 0 {
-                        PipelineConnector(isActive: true, color: activeTriggerColor)
+                // Pre-transcription stages (recorder)
+                ForEach(Array(PipelineStageInfo.preTranscriptionStages.enumerated()), id: \.element.id) { index, stage in
+                    HStack(spacing: 0) {
+                        if index > 0 {
+                            PipelineConnector(isActive: true, color: activeTriggerColor)
+                        }
+
+                        PipelineNodeView(
+                            stage: stage,
+                            isEnabled: nodeController.binding(for: stage),
+                            isSelected: selectedStage == stage,
+                            isRunning: isStageRunning(stage),
+                            metrics: metricsFor(stage),
+                            onToggle: { nodeController.toggle(stage) },
+                            onOpenSettings: { selectedStage = stage },
+                            onSetupRequired: handleSetupRequired,
+                            onOpenComposite: onOpenComposite
+                        )
                     }
-
-                    PipelineNodeView(
-                        stage: stage,
-                        isEnabled: nodeController.binding(for: stage),
-                        isSelected: selectedStage == stage,
-                        isRunning: isStageRunning(stage),
-                        metrics: metricsFor(stage),
-                        onToggle: { nodeController.toggle(stage) },
-                        onOpenSettings: { selectedStage = stage },
-                        onSetupRequired: handleSetupRequired,
-                        onOpenComposite: onOpenComposite
-                    )
                 }
-            }
 
-            // Parallel transcription engines section
-            ParallelTranscriptionView(
-                nodeController: nodeController,
-                selectedStage: $selectedStage,
-                isTranscribing: appState.recordingState == .transcribing,
-                onOpenSettings: { stage in selectedStage = stage },
-                onSetupRequired: handleSetupRequired,
-                onOpenComposite: onOpenComposite
-            )
+                // Parallel transcription engines section
+                ParallelTranscriptionView(
+                    nodeController: nodeController,
+                    selectedStage: $selectedStage,
+                    isTranscribing: appState.recordingState == .transcribing,
+                    onOpenSettings: { stage in selectedStage = stage },
+                    onSetupRequired: handleSetupRequired,
+                    onOpenComposite: onOpenComposite
+                )
 
-            // Parallel AI processing engines section
-            ParallelAIProcessingView(
-                nodeController: nodeController,
-                selectedStage: $selectedStage,
-                isRefining: appState.recordingState == .refining,
-                onOpenSettings: { stage in selectedStage = stage },
-                onSetupRequired: handleSetupRequired,
-                onOpenComposite: onOpenComposite
-            )
+                // Parallel AI processing engines section
+                ParallelAIProcessingView(
+                    nodeController: nodeController,
+                    selectedStage: $selectedStage,
+                    isRefining: appState.recordingState == .refining,
+                    onOpenSettings: { stage in selectedStage = stage },
+                    onSetupRequired: handleSetupRequired,
+                    onOpenComposite: onOpenComposite
+                )
 
-            // Post-AI processing stages (type, enter)
-            ForEach(Array(PipelineStageInfo.postAIProcessingStages.enumerated()), id: \.element.id) { index, stage in
-                HStack(spacing: 0) {
-                    if index > 0 {
-                        PipelineConnector(isActive: true, color: activeTriggerColor)
+                // Post-AI processing stages (type, enter)
+                ForEach(Array(PipelineStageInfo.postAIProcessingStages.enumerated()), id: \.element.id) { index, stage in
+                    HStack(spacing: 0) {
+                        if index > 0 {
+                            PipelineConnector(isActive: true, color: activeTriggerColor)
+                        }
+
+                        PipelineNodeView(
+                            stage: stage,
+                            isEnabled: nodeController.binding(for: stage),
+                            isSelected: selectedStage == stage,
+                            isRunning: isStageRunning(stage),
+                            metrics: metricsFor(stage),
+                            onToggle: { nodeController.toggle(stage) },
+                            onOpenSettings: { selectedStage = stage },
+                            onSetupRequired: handleSetupRequired,
+                            onOpenComposite: onOpenComposite
+                        )
                     }
-
-                    PipelineNodeView(
-                        stage: stage,
-                        isEnabled: nodeController.binding(for: stage),
-                        isSelected: selectedStage == stage,
-                        isRunning: isStageRunning(stage),
-                        metrics: metricsFor(stage),
-                        onToggle: { nodeController.toggle(stage) },
-                        onOpenSettings: { selectedStage = stage },
-                        onSetupRequired: handleSetupRequired,
-                        onOpenComposite: onOpenComposite
-                    )
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(KoeColors.surface.opacity(0.5))
-        .cornerRadius(16)
         .alert("Setup Required", isPresented: $showSetupConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Set Up") {
@@ -221,7 +219,7 @@ struct ParallelTriggersView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Triggers stacked vertically
-            VStack(spacing: 8) {
+            VStack(spacing: PipelineLayout.nodeSpacing) {
                 // Hotkey trigger - uses controller for state and dimming
                 triggerNode(
                     stage: .hotkeyTrigger,
@@ -236,14 +234,12 @@ struct ParallelTriggersView: View {
                     isDimmedByOther: isHotkeyRunning
                 )
             }
+            .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: 2))
 
             // Merge lines from both triggers
-            // Lines are active based on whether trigger is ENABLED (not just running)
-            PipelineMergeConnector(
-                isTopActive: isHotkeyEnabled,
-                isBottomActive: isVoiceEnabled,
-                isMergeActive: isAnyTriggerEnabled,
-                activeColor: KoeColors.accent
+            MergeConnector(
+                nodeStates: [isHotkeyEnabled, isVoiceEnabled],
+                activeColor: PipelineLayout.activeColor
             )
         }
     }
@@ -300,17 +296,14 @@ struct ParallelTranscriptionView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Split connector from recorder to 3 transcription nodes
-            TranscriptionSplitConnector(
-                isTopActive: isAppleEnabled,
-                isMiddleActive: isBalancedEnabled,
-                isBottomActive: isAccurateEnabled,
-                isSplitActive: true,
-                activeColor: KoeColors.accent
+            // Split connector from recorder to transcription nodes
+            SplitConnector(
+                nodeStates: [isAppleEnabled, isBalancedEnabled, isAccurateEnabled],
+                activeColor: PipelineLayout.activeColor
             )
 
             // Transcription engines stacked vertically
-            VStack(spacing: 4) {
+            VStack(spacing: PipelineLayout.nodeSpacing) {
                 // Apple Speech
                 transcriptionNode(
                     stage: .transcribeApple,
@@ -329,14 +322,12 @@ struct ParallelTranscriptionView: View {
                     isRunning: isTranscribing && isAccurateEnabled
                 )
             }
+            .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: 3))
 
-            // Merge connector from 3 transcription nodes to next stage
-            TranscriptionMergeConnector(
-                isTopActive: isAppleEnabled,
-                isMiddleActive: isBalancedEnabled,
-                isBottomActive: isAccurateEnabled,
-                isMergeActive: isAnyTranscriptionEnabled,
-                activeColor: KoeColors.accent
+            // Merge connector from transcription nodes to next stage
+            MergeConnector(
+                nodeStates: [isAppleEnabled, isBalancedEnabled, isAccurateEnabled],
+                activeColor: PipelineLayout.activeColor
             )
         }
     }
@@ -399,14 +390,14 @@ struct ParallelAIProcessingView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Split connector from transcription merge to 3 AI nodes
-            GenericSplitConnector(
+            // Split connector from transcription merge to AI nodes
+            SplitConnector(
                 nodeStates: [isFastEnabled, isBalancedEnabled, isReasoningEnabled],
-                activeColor: KoeColors.accent
+                activeColor: PipelineLayout.activeColor
             )
 
             // AI engines stacked vertically
-            VStack(spacing: 4) {
+            VStack(spacing: PipelineLayout.nodeSpacing) {
                 // Fast
                 aiNode(
                     stage: .aiFast,
@@ -425,11 +416,12 @@ struct ParallelAIProcessingView: View {
                     isRunning: isRefining && isReasoningEnabled
                 )
             }
+            .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: 3))
 
-            // Merge connector from 3 AI nodes to next stage
-            GenericMergeConnector(
+            // Merge connector from AI nodes to next stage
+            MergeConnector(
                 nodeStates: [isFastEnabled, isBalancedEnabled, isReasoningEnabled],
-                activeColor: KoeColors.accent
+                activeColor: PipelineLayout.activeColor
             )
         }
     }
@@ -454,368 +446,6 @@ struct ParallelAIProcessingView: View {
             onOpenComposite: onOpenComposite
         )
         .opacity(isDimmed ? 0.4 : (isEnabled ? 1.0 : 0.6))
-    }
-}
-
-// MARK: - Transcription Split Connector (1 input to 3 outputs)
-
-struct TranscriptionSplitConnector: View {
-    let isTopActive: Bool
-    let isMiddleActive: Bool
-    let isBottomActive: Bool
-    let isSplitActive: Bool
-    let activeColor: Color
-
-    private let nodeHeight: CGFloat = 60  // Total slot height
-    private let nodeSize: CGFloat = 44    // Actual node visual size
-    private let spacing: CGFloat = 4
-    private let inputWidth: CGFloat = 20
-    private let splitWidth: CGFloat = 16
-
-    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
-
-    var body: some View {
-        Canvas { context, size in
-            let midY = size.height / 2
-            let topY = nodeSize / 2  // Center of first node visual
-            let bottomY = size.height - (nodeSize / 2)  // Center of last node visual
-            let splitX = inputWidth
-
-            // Input line from previous node to split point
-            var inPath = Path()
-            inPath.move(to: CGPoint(x: 0, y: midY))
-            inPath.addLine(to: CGPoint(x: splitX, y: midY))
-            context.stroke(
-                inPath,
-                with: .color(isSplitActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round)
-            )
-
-            // Line from split point to top node (Apple Speech)
-            var topPath = Path()
-            topPath.move(to: CGPoint(x: splitX, y: midY))
-            topPath.addLine(to: CGPoint(x: splitX, y: topY))
-            topPath.addLine(to: CGPoint(x: size.width, y: topY))
-            context.stroke(
-                topPath,
-                with: .color(isTopActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-            )
-
-            // Line from split point to middle node (Balanced)
-            var middlePath = Path()
-            middlePath.move(to: CGPoint(x: splitX, y: midY))
-            middlePath.addLine(to: CGPoint(x: size.width, y: midY))
-            context.stroke(
-                middlePath,
-                with: .color(isMiddleActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round)
-            )
-
-            // Line from split point to bottom node (Accurate)
-            var bottomPath = Path()
-            bottomPath.move(to: CGPoint(x: splitX, y: midY))
-            bottomPath.addLine(to: CGPoint(x: splitX, y: bottomY))
-            bottomPath.addLine(to: CGPoint(x: size.width, y: bottomY))
-            context.stroke(
-                bottomPath,
-                with: .color(isBottomActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-            )
-        }
-        .frame(width: inputWidth + splitWidth, height: (nodeHeight * 3) + (spacing * 2))
-    }
-}
-
-// MARK: - Transcription Merge Connector (3 inputs to 1 output)
-
-struct TranscriptionMergeConnector: View {
-    let isTopActive: Bool
-    let isMiddleActive: Bool
-    let isBottomActive: Bool
-    let isMergeActive: Bool
-    let activeColor: Color
-
-    private let nodeHeight: CGFloat = 60  // Total slot height
-    private let nodeSize: CGFloat = 44    // Actual node visual size
-    private let spacing: CGFloat = 4
-    private let mergeWidth: CGFloat = 16
-    private let outputWidth: CGFloat = 20
-
-    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
-
-    var body: some View {
-        Canvas { context, size in
-            let midY = size.height / 2
-            let topY = nodeSize / 2  // Center of first node visual
-            let bottomY = size.height - (nodeSize / 2)  // Center of last node visual
-            let mergeX = mergeWidth
-
-            // Line from top node to merge point
-            var topPath = Path()
-            topPath.move(to: CGPoint(x: 0, y: topY))
-            topPath.addLine(to: CGPoint(x: mergeX, y: topY))
-            topPath.addLine(to: CGPoint(x: mergeX, y: midY))
-            context.stroke(
-                topPath,
-                with: .color(isTopActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-            )
-
-            // Line from middle node to merge point
-            var middlePath = Path()
-            middlePath.move(to: CGPoint(x: 0, y: midY))
-            middlePath.addLine(to: CGPoint(x: mergeX, y: midY))
-            context.stroke(
-                middlePath,
-                with: .color(isMiddleActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round)
-            )
-
-            // Line from bottom node to merge point
-            var bottomPath = Path()
-            bottomPath.move(to: CGPoint(x: 0, y: bottomY))
-            bottomPath.addLine(to: CGPoint(x: mergeX, y: bottomY))
-            bottomPath.addLine(to: CGPoint(x: mergeX, y: midY))
-            context.stroke(
-                bottomPath,
-                with: .color(isBottomActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-            )
-
-            // Output line from merge point to next node
-            var outPath = Path()
-            outPath.move(to: CGPoint(x: mergeX, y: midY))
-            outPath.addLine(to: CGPoint(x: size.width, y: midY))
-            context.stroke(
-                outPath,
-                with: .color(isMergeActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round)
-            )
-        }
-        .frame(width: mergeWidth + outputWidth, height: (nodeHeight * 3) + (spacing * 2))
-    }
-}
-
-// MARK: - Generic Parallel Section Connectors (Reusable for any number of nodes)
-
-/// Generic split connector that works with any number of nodes
-struct GenericSplitConnector: View {
-    let nodeStates: [Bool]  // Active state for each node
-    let activeColor: Color
-    let nodeHeight: CGFloat = 60  // Total slot height per node (includes node + spacing)
-    let spacing: CGFloat = 4
-
-    private let inputWidth: CGFloat = 20
-    private let splitWidth: CGFloat = 16
-    private let nodeSize: CGFloat = 44  // Actual visual node size
-    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
-
-    var body: some View {
-        Canvas { context, size in
-            let midY = size.height / 2
-            let splitX = inputWidth
-            let hasAnyActive = nodeStates.contains(true)
-
-            // Input line from previous node to split point
-            var inPath = Path()
-            inPath.move(to: CGPoint(x: 0, y: midY))
-            inPath.addLine(to: CGPoint(x: splitX, y: midY))
-            context.stroke(
-                inPath,
-                with: .color(hasAnyActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round)
-            )
-
-            // Lines from split point to each node
-            for (index, isActive) in nodeStates.enumerated() {
-                // Calculate Y position: aim at center of actual node visual (not center of slot)
-                let nodeY = (CGFloat(index) * nodeHeight) + (CGFloat(index) * spacing) + (nodeSize / 2)
-
-                var path = Path()
-                path.move(to: CGPoint(x: splitX, y: midY))
-                path.addLine(to: CGPoint(x: splitX, y: nodeY))
-                path.addLine(to: CGPoint(x: size.width, y: nodeY))
-                context.stroke(
-                    path,
-                    with: .color(isActive ? activeColor : inactiveColor),
-                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                )
-            }
-        }
-        .frame(
-            width: inputWidth + splitWidth,
-            height: (CGFloat(nodeStates.count) * nodeHeight) + (CGFloat(max(0, nodeStates.count - 1)) * spacing)
-        )
-    }
-}
-
-/// Generic merge connector that works with any number of nodes
-struct GenericMergeConnector: View {
-    let nodeStates: [Bool]  // Active state for each node
-    let activeColor: Color
-    let nodeHeight: CGFloat = 60  // Total slot height per node (includes node + spacing)
-    let spacing: CGFloat = 4
-
-    private let mergeWidth: CGFloat = 16
-    private let outputWidth: CGFloat = 20
-    private let nodeSize: CGFloat = 44  // Actual visual node size
-    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
-
-    var body: some View {
-        Canvas { context, size in
-            let midY = size.height / 2
-            let mergeX = mergeWidth
-            let hasAnyActive = nodeStates.contains(true)
-
-            // Lines from each node to merge point
-            for (index, isActive) in nodeStates.enumerated() {
-                // Calculate Y position: aim at center of actual node visual (not center of slot)
-                let nodeY = (CGFloat(index) * nodeHeight) + (CGFloat(index) * spacing) + (nodeSize / 2)
-
-                var path = Path()
-                path.move(to: CGPoint(x: 0, y: nodeY))
-                path.addLine(to: CGPoint(x: mergeX, y: nodeY))
-                path.addLine(to: CGPoint(x: mergeX, y: midY))
-                context.stroke(
-                    path,
-                    with: .color(isActive ? activeColor : inactiveColor),
-                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                )
-            }
-
-            // Output line from merge point to next node
-            var outPath = Path()
-            outPath.move(to: CGPoint(x: mergeX, y: midY))
-            outPath.addLine(to: CGPoint(x: size.width, y: midY))
-            context.stroke(
-                outPath,
-                with: .color(hasAnyActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round)
-            )
-        }
-        .frame(
-            width: mergeWidth + outputWidth,
-            height: (CGFloat(nodeStates.count) * nodeHeight) + (CGFloat(max(0, nodeStates.count - 1)) * spacing)
-        )
-    }
-}
-
-// MARK: - Split Connector
-
-struct PipelineSplitConnector: View {
-    let isTopActive: Bool
-    let isBottomActive: Bool
-    let isSplitActive: Bool
-    let activeColor: Color
-
-    private let nodeHeight: CGFloat = 60
-    private let spacing: CGFloat = 8
-    private let inputWidth: CGFloat = 20
-    private let splitWidth: CGFloat = 16
-
-    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
-
-    var body: some View {
-        Canvas { context, size in
-            let midY = size.height / 2
-            let topY = nodeHeight / 2
-            let bottomY = size.height - (nodeHeight / 2)
-            let splitX = inputWidth
-
-            // Input line from previous node to split point
-            var inPath = Path()
-            inPath.move(to: CGPoint(x: 0, y: midY))
-            inPath.addLine(to: CGPoint(x: splitX, y: midY))
-            context.stroke(
-                inPath,
-                with: .color(isSplitActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round)
-            )
-
-            // Line from split point to top transcription node
-            var topPath = Path()
-            topPath.move(to: CGPoint(x: splitX, y: midY))
-            topPath.addLine(to: CGPoint(x: splitX, y: topY))
-            topPath.addLine(to: CGPoint(x: size.width, y: topY))
-            context.stroke(
-                topPath,
-                with: .color(isTopActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-            )
-
-            // Line from split point to bottom transcription node
-            var bottomPath = Path()
-            bottomPath.move(to: CGPoint(x: splitX, y: midY))
-            bottomPath.addLine(to: CGPoint(x: splitX, y: bottomY))
-            bottomPath.addLine(to: CGPoint(x: size.width, y: bottomY))
-            context.stroke(
-                bottomPath,
-                with: .color(isBottomActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-            )
-        }
-        .frame(width: inputWidth + splitWidth, height: (nodeHeight * 2) + spacing)
-    }
-}
-
-// MARK: - Merge Connector
-
-struct PipelineMergeConnector: View {
-    let isTopActive: Bool
-    let isBottomActive: Bool
-    let isMergeActive: Bool  // Whether the output line should be active
-    let activeColor: Color
-
-    // Match the actual node size (44) + label (~16) = 60
-    private let nodeHeight: CGFloat = 60
-    private let spacing: CGFloat = 8
-    private let mergeWidth: CGFloat = 16  // Width for the merge lines
-    private let outputWidth: CGFloat = 20  // Width for output line
-
-    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
-
-    var body: some View {
-        Canvas { context, size in
-            let midY = size.height / 2
-            // Position lines at the vertical center of each trigger node
-            let topY = nodeHeight / 2
-            let bottomY = size.height - (nodeHeight / 2)
-            let mergeX = mergeWidth  // X position where lines merge
-
-            // Line from top trigger to merge point
-            var topPath = Path()
-            topPath.move(to: CGPoint(x: 0, y: topY))
-            topPath.addLine(to: CGPoint(x: mergeX, y: topY))
-            topPath.addLine(to: CGPoint(x: mergeX, y: midY))
-            context.stroke(
-                topPath,
-                with: .color(isTopActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-            )
-
-            // Line from bottom trigger to merge point
-            var bottomPath = Path()
-            bottomPath.move(to: CGPoint(x: 0, y: bottomY))
-            bottomPath.addLine(to: CGPoint(x: mergeX, y: bottomY))
-            bottomPath.addLine(to: CGPoint(x: mergeX, y: midY))
-            context.stroke(
-                bottomPath,
-                with: .color(isBottomActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-            )
-
-            // Output line from merge point to next node
-            var outPath = Path()
-            outPath.move(to: CGPoint(x: mergeX, y: midY))
-            outPath.addLine(to: CGPoint(x: size.width, y: midY))
-            context.stroke(
-                outPath,
-                with: .color(isMergeActive ? activeColor : inactiveColor),
-                style: StrokeStyle(lineWidth: 2, lineCap: .round)
-            )
-        }
-        .frame(width: mergeWidth + outputWidth, height: (nodeHeight * 2) + spacing)
     }
 }
 

@@ -26,8 +26,9 @@ struct PipelineNodeView: View {
     @State private var isHovered = false
     @State private var lastTapTime: Date = .distantPast
 
-    private let nodeSize: CGFloat = 44
-    private let cornerRadius: CGFloat = 10
+    // Use shared layout constants
+    private var nodeSize: CGFloat { PipelineLayout.nodeSize }
+    private var cornerRadius: CGFloat { PipelineLayout.cornerRadius }
     private let doubleTapThreshold: TimeInterval = 0.3
 
     /// Check if this node requires setup
@@ -155,109 +156,112 @@ struct PipelineNodeView: View {
     }
 
     private var nodeContent: some View {
-        VStack(spacing: 4) {
-            ZStack(alignment: .topTrailing) {
-                // Background from provider
-                uiProvider.pipelineBackground(context: uiContext)
-                    .frame(width: nodeSize, height: nodeSize)
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-                    .shadow(
-                        color: .black.opacity(isHovered ? 0.10 : 0.05),
-                        radius: isHovered ? 8 : 4,
-                        y: 2
-                    )
+        ZStack {
+            // Background from provider
+            uiProvider.pipelineBackground(context: uiContext)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                .shadow(
+                    color: .black.opacity(isHovered ? 0.10 : 0.05),
+                    radius: isHovered ? 8 : 4,
+                    y: 2
+                )
+
+            // Content: Icon centered, label at bottom (inside card)
+            VStack(spacing: 0) {
+                Spacer()
+                    .frame(height: 8) // Space for top badges
 
                 // Icon from provider
                 uiProvider.pipelineIcon(context: uiContext)
-                    .frame(width: nodeSize, height: nodeSize)
+                    .frame(width: nodeSize - 16, height: nodeSize - 28)
 
-                // Toggle indicator (for toggleable nodes) - hide during setup
-                if stage.isToggleable && !isRunning && !isSettingUp && !needsSetup {
-                    NodeToggleIndicator(
-                        isOn: $isEnabled,
-                        size: 10
-                    )
-                    .offset(x: -2, y: 2)
+                // Name label inside card
+                Text(displayName)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(labelColor)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.bottom, 4)
+            }
+
+            // Top badge bar - all status icons organized at top
+            HStack(spacing: 2) {
+                // Left side badges
+                HStack(spacing: 2) {
+                    // Experimental badge (flask icon)
+                    if stage.nodeInfo.isExperimental && !stage.nodeInfo.isComposite {
+                        Image(systemName: "flask.fill")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundColor(.orange)
+                    }
+
+                    // Composite node badge (layers icon) - clickable to expand
+                    if stage.nodeInfo.isComposite {
+                        Button(action: {
+                            onOpenComposite?(stage.nodeInfo)
+                        }) {
+                            Image(systemName: "square.stack.3d.up.fill")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundColor(.blue)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
-                // Badge from provider (error indicator, etc.)
-                if !stage.isToggleable, let badge = uiProvider.pipelineBadge(context: uiContext) {
-                    badge.offset(x: -4, y: 4)
-                }
+                Spacer()
 
-                // Experimental badge (flask icon in bottom-left)
-                if stage.nodeInfo.isExperimental && !stage.nodeInfo.isComposite {
-                    Image(systemName: "flask")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(.orange)
-                        .frame(width: nodeSize, height: nodeSize, alignment: .bottomLeading)
-                        .offset(x: 4, y: -4)
-                }
+                // Right side badges
+                HStack(spacing: 2) {
+                    // Setup required badge (download icon)
+                    if needsSetup && !setupFailed && !isSettingUp {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.orange)
+                    }
 
-                // Composite node badge (layers icon in bottom-left) - clickable to expand
-                if stage.nodeInfo.isComposite {
-                    Button(action: {
-                        onOpenComposite?(stage.nodeInfo)
-                    }) {
-                        Image(systemName: "square.stack.3d.up.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.blue)
-                            .padding(2)
+                    // Setup failed badge (warning icon)
+                    if setupFailed {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.red)
+                    }
+
+                    // Setting up indicator - percentage badge
+                    if isSettingUp {
+                        Text("\(Int(setupProgress * 100))%")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
                             .background(
-                                Circle()
-                                    .fill(Color.white.opacity(0.9))
+                                Capsule()
+                                    .fill(Color.orange)
                             )
                     }
-                    .buttonStyle(.plain)
-                    .frame(width: nodeSize, height: nodeSize, alignment: .bottomLeading)
-                    .offset(x: 2, y: -2)
-                }
 
-                // Setup required badge (download icon in bottom-right)
-                if needsSetup && !setupFailed {
-                    Image(systemName: "arrow.down.circle.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.orange)
-                        .frame(width: nodeSize, height: nodeSize, alignment: .bottomTrailing)
-                        .offset(x: -4, y: -4)
-                }
+                    // Badge from provider (error indicator, etc.)
+                    if !stage.isToggleable, let badge = uiProvider.pipelineBadge(context: uiContext) {
+                        badge
+                    }
 
-                // Setup failed badge (warning icon in bottom-right)
-                if setupFailed {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.red)
-                        .frame(width: nodeSize, height: nodeSize, alignment: .bottomTrailing)
-                        .offset(x: -4, y: -4)
-                }
-
-                // Setting up indicator - percentage badge only
-                if isSettingUp {
-                    Text("\(Int(setupProgress * 100))%")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(Color.orange)
+                    // Toggle indicator (for toggleable nodes) - hide during setup
+                    if stage.isToggleable && !isRunning && !isSettingUp && !needsSetup && !setupFailed {
+                        NodeToggleIndicator(
+                            isOn: $isEnabled,
+                            size: 8
                         )
-                        .frame(width: nodeSize, height: nodeSize, alignment: .topTrailing)
-                        .offset(x: 6, y: -6)
+                    }
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(borderColor, lineWidth: 2)
-            )
-
-            // Name label
-            Text(displayName)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(labelColor)
-                .fixedSize()
-                .lineLimit(1)
+            .padding(.horizontal, 4)
+            .padding(.top, 3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .frame(width: nodeSize, height: nodeSize)
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(borderColor, lineWidth: 2)
+        )
         .opacity(effectiveOpacity)
         .scaleEffect(isHovered ? 1.05 : 1.0)
         .help(setupErrorMessage ?? stage.nodeInfo.displayName)

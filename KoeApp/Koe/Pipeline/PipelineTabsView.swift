@@ -231,14 +231,16 @@ struct SubPipelineContent: View {
             }
             .padding(.top, 20)
 
-            // Main pipeline canvas (reusing same style)
+            // Sub-pipeline canvas wrapped in reusable container
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .center, spacing: 0) {
-                    if let node = parentNode {
-                        SubPipelineCanvas(parentNode: node)
+                PipelineContainer {
+                    HStack(alignment: .center, spacing: 0) {
+                        if let node = parentNode {
+                            SubPipelineCanvas(parentNode: node)
+                        }
                     }
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 24)
             }
 
             Spacer()
@@ -280,50 +282,52 @@ struct SubPipelineCanvas: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Capability nodes section - use same generic connectors as main pipeline
+            // Capability nodes section - use reusable connectors
             if !capabilityNodes.isEmpty {
                 // Split connector before capabilities
-                GenericSplitConnector(
+                SplitConnector(
                     nodeStates: capabilityNodes.map { isNodeEnabled($0) },
-                    activeColor: KoeColors.accent
+                    activeColor: PipelineLayout.activeColor
                 )
 
                 // Capability nodes
-                VStack(spacing: 4) {
+                VStack(spacing: PipelineLayout.nodeSpacing) {
                     ForEach(capabilityNodes) { node in
                         let isActive = isNodeEnabled(node)
                         SubPipelineNodeView(node: node)
                             .opacity(hasActiveCapability && !isActive ? 0.4 : 1.0)
                     }
                 }
+                .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: capabilityNodes.count))
 
                 // Merge connector after capabilities
-                GenericMergeConnector(
+                MergeConnector(
                     nodeStates: capabilityNodes.map { isNodeEnabled($0) },
-                    activeColor: activeCapability?.color ?? KoeColors.accent
+                    activeColor: activeCapability?.color ?? PipelineLayout.activeColor
                 )
             }
 
-            // Language nodes section - use same generic connectors
+            // Language nodes section - use reusable connectors
             if !languageNodes.isEmpty && hasActiveCapability {
-                GenericSplitConnector(
+                SplitConnector(
                     nodeStates: languageNodes.map { isNodeEnabled($0) },
-                    activeColor: KoeColors.accent
+                    activeColor: PipelineLayout.activeColor
                 )
 
                 // Language nodes
-                VStack(spacing: 4) {
+                VStack(spacing: PipelineLayout.nodeSpacing) {
                     ForEach(languageNodes) { node in
                         let isActive = isNodeEnabled(node)
                         SubPipelineNodeView(node: node)
                             .opacity(hasActiveLanguage && !isActive ? 0.4 : 1.0)
                     }
                 }
+                .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: languageNodes.count))
 
                 // Merge connector from languages
-                GenericMergeConnector(
+                MergeConnector(
                     nodeStates: languageNodes.map { isNodeEnabled($0) },
-                    activeColor: activeLanguage?.color ?? KoeColors.accent
+                    activeColor: activeLanguage?.color ?? PipelineLayout.activeColor
                 )
             }
 
@@ -374,53 +378,56 @@ struct SubPipelineNodeView: View {
         return UserDefaults.standard.bool(forKey: key)
     }
 
-    private let nodeSize: CGFloat = 44
-    private let cornerRadius: CGFloat = 10
-
     var body: some View {
-        VStack(spacing: 4) {
-            ZStack(alignment: .topTrailing) {
-                // Background
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(isEnabled ? node.color.opacity(0.15) : KoeColors.surface)
-                    .frame(width: nodeSize, height: nodeSize)
-                    .shadow(
-                        color: .black.opacity(isHovered ? 0.10 : 0.05),
-                        radius: isHovered ? 8 : 4,
-                        y: 2
-                    )
+        ZStack {
+            // Background
+            RoundedRectangle(cornerRadius: PipelineLayout.cornerRadius)
+                .fill(isEnabled ? node.color.opacity(0.15) : KoeColors.surface)
+                .shadow(
+                    color: .black.opacity(isHovered ? 0.10 : 0.05),
+                    radius: isHovered ? 8 : 4,
+                    y: 2
+                )
+
+            // Content: Icon centered, label at bottom
+            VStack(spacing: 0) {
+                Spacer()
+                    .frame(height: 8) // Space for top badges
 
                 // Icon
                 Image(systemName: node.icon)
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(isEnabled ? node.color : KoeColors.textLight)
-                    .frame(width: nodeSize, height: nodeSize)
 
-                // Toggle indicator
+                // Label inside card
+                Text(node.displayName)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(isEnabled ? KoeColors.textSecondary : KoeColors.textLight)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.bottom, 4)
+            }
+
+            // Top badge bar - toggle indicator at top right
+            HStack(spacing: 2) {
+                Spacer()
+
+                // Toggle indicator (for toggleable nodes)
                 if node.isUserToggleable {
                     Circle()
                         .fill(isEnabled ? Color.green : Color.gray.opacity(0.3))
-                        .frame(width: 10, height: 10)
-                        .offset(x: -2, y: 2)
-                } else if node.isAlwaysEnabled {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.green)
-                        .offset(x: -2, y: 2)
+                        .frame(width: 8, height: 8)
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(isEnabled ? node.color : KoeColors.textLighter.opacity(0.3), lineWidth: 2)
-            )
-
-            // Label
-            Text(node.displayName)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(isEnabled ? KoeColors.accent : KoeColors.textSecondary)
-                .fixedSize()
-                .lineLimit(1)
+            .padding(.horizontal, 4)
+            .padding(.top, 3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .frame(width: PipelineLayout.nodeWidth, height: PipelineLayout.nodeSize)
+        .overlay(
+            RoundedRectangle(cornerRadius: PipelineLayout.cornerRadius)
+                .stroke(isEnabled ? node.color : KoeColors.textLighter.opacity(0.3), lineWidth: PipelineLayout.connectorLineWidth)
+        )
         .opacity(isEnabled ? 1.0 : 0.6)
         .scaleEffect(isHovered ? 1.05 : 1.0)
         .onTapGesture {
