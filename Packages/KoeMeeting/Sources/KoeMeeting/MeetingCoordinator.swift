@@ -1,6 +1,6 @@
 import Foundation
-import KoeDomain
 import KoeCore
+import KoeDomain
 import KoeStorage
 
 /// Coordinates meeting detection, recording, and storage
@@ -246,7 +246,8 @@ public final class MeetingCoordinator {
 
         stopAudioLevelMonitoring()
 
-        KoeLogger.meeting.info("Stopped recording meeting: \(meeting.appName), duration: \(String(format: "%.1f", duration))s")
+        KoeLogger.meeting.info(
+            "Stopped recording meeting: \(meeting.appName), duration: \(String(format: "%.1f", duration))s")
     }
 
     // MARK: - Meeting Management
@@ -276,7 +277,10 @@ public final class MeetingCoordinator {
     public func transcribeMeeting(_ meeting: Meeting) async throws -> String {
         // This will be implemented to use WhisperKitTranscriber
         // For now, return a placeholder
-        throw MeetingError.transcriptionFailed(underlying: NSError(domain: "KoeMeeting", code: -1, userInfo: [NSLocalizedDescriptionKey: "Transcription not yet implemented"]))
+        throw MeetingError.transcriptionFailed(
+            underlying: NSError(
+                domain: "KoeMeeting", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Transcription not yet implemented"]))
     }
 
     /// Update meeting with transcript
@@ -314,7 +318,9 @@ public final class MeetingCoordinator {
         switch event {
         case .meetingStarted(let bundleId, let appName):
             debugLog("Received meeting started event: \(appName) (\(bundleId))")
-            debugLog("autoRecordMeetings=\(autoRecordMeetings), isRecording=\(meetingState.isRecording), isDetectionPaused=\(isDetectionPaused)")
+            debugLog(
+                "autoRecordMeetings=\(autoRecordMeetings), isRecording=\(meetingState.isRecording), isDetectionPaused=\(isDetectionPaused)"
+            )
 
             // Skip if detection is paused (dictation is active)
             if isDetectionPaused {
@@ -326,11 +332,14 @@ public final class MeetingCoordinator {
             if autoRecordMeetings && !meetingState.isRecording {
                 // Check debounce: skip if we recently attempted to record this same meeting
                 if let lastTime = lastRecordingAttemptTime,
-                   let lastBundleId = lastRecordingAttemptBundleId,
-                   lastBundleId == bundleId {
+                    let lastBundleId = lastRecordingAttemptBundleId,
+                    lastBundleId == bundleId
+                {
                     let elapsed = Date().timeIntervalSince(lastTime)
                     if elapsed < recordingCooldownSeconds {
-                        debugLog("Debounce: Skipping recording attempt for \(appName) - cooldown active (\(Int(recordingCooldownSeconds - elapsed))s remaining)")
+                        debugLog(
+                            "Debounce: Skipping recording attempt for \(appName) - cooldown active (\(Int(recordingCooldownSeconds - elapsed))s remaining)"
+                        )
                         return
                     }
                 }

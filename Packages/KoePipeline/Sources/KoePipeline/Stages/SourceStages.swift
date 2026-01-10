@@ -83,7 +83,7 @@ public final class TranscriptionStage: PipelineStage, @unchecked Sendable {
     public var isEnabled: Bool = true
     public var configuration: [String: Any] = [
         "model": "tiny",
-        "language": "auto"
+        "language": "auto",
     ]
 
     /// Handler for transcription (injected from app)

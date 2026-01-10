@@ -6,11 +6,11 @@ import os.log
 
 /// Status phase for a model's download/compilation
 public enum ModelPhase: String, Codable, Sendable {
-    case pending        // Not started
-    case downloading    // Downloading from HuggingFace
-    case compiling      // ANE compilation in progress
-    case ready          // Fully available
-    case failed         // Error occurred
+    case pending  // Not started
+    case downloading  // Downloading from HuggingFace
+    case compiling  // ANE compilation in progress
+    case ready  // Fully available
+    case failed  // Error occurred
 }
 
 /// Status for a single model's download/compilation
@@ -124,8 +124,10 @@ public final class BackgroundModelService: ObservableObject {
 
         // Load persisted state
         if let data = UserDefaults.standard.data(forKey: stateKey),
-           let savedState = try? JSONDecoder().decode(BackgroundModelState.self, from: data) {
-            logger.notice("Loaded persisted state: isProcessing=\(savedState.isProcessing), models=\(savedState.models.count)")
+            let savedState = try? JSONDecoder().decode(BackgroundModelState.self, from: data)
+        {
+            logger.notice(
+                "Loaded persisted state: isProcessing=\(savedState.isProcessing), models=\(savedState.models.count)")
             // Restore individual properties from saved state
             self.modelStatuses = savedState.models
             self.isPaused = savedState.isPaused
@@ -143,7 +145,9 @@ public final class BackgroundModelService: ObservableObject {
         // Check if there's pending work
         updateHasPendingWork()
 
-        logger.notice("BackgroundModelService initialized: isFirstLaunch=\(self.isFirstLaunch), hasPendingWork=\(self.hasPendingWork), autoSwitch=\(self.autoSwitchToNewModels)")
+        logger.notice(
+            "BackgroundModelService initialized: isFirstLaunch=\(self.isFirstLaunch), hasPendingWork=\(self.hasPendingWork), autoSwitch=\(self.autoSwitchToNewModels)"
+        )
 
         setupObservers()
     }
@@ -165,7 +169,9 @@ public final class BackgroundModelService: ObservableObject {
             return
         }
 
-        logger.notice("Starting background model processing for \(pendingModels.count) models: \(pendingModels.map { $0.shortName })")
+        logger.notice(
+            "Starting background model processing for \(pendingModels.count) models: \(pendingModels.map { $0.shortName })"
+        )
 
         backgroundTask = Task {
             await processBackgroundModels()
@@ -236,7 +242,8 @@ public final class BackgroundModelService: ObservableObject {
         }
 
         guard isProcessing, let modelName = currentModelName,
-              let model = KoeModel(rawValue: modelName) else {
+            let model = KoeModel(rawValue: modelName)
+        else {
             // Show pending models if not processing yet
             if hasPendingWork && !isProcessing {
                 let pending = KoeModel.backgroundModels.filter { !isModelReady($0) }
@@ -268,7 +275,8 @@ public final class BackgroundModelService: ObservableObject {
     /// Estimated time remaining for current model
     public var estimatedTimeRemaining: TimeInterval? {
         guard let modelName = currentModelName,
-              let status = modelStatuses[modelName] else {
+            let status = modelStatuses[modelName]
+        else {
             return nil
         }
         return status.estimatedTimeRemaining
@@ -282,7 +290,8 @@ public final class BackgroundModelService: ObservableObject {
             if isModelReady(model) { return false }
             // Check if permanently failed (all retries exhausted)
             if let status = modelStatuses[model.rawValue],
-               status.phase == .failed && status.retryCount > maxRetries {
+                status.phase == .failed && status.retryCount > maxRetries
+            {
                 return false
             }
             return true
@@ -335,14 +344,16 @@ public final class BackgroundModelService: ObservableObject {
 
             // Skip if permanently failed (all retries exhausted)
             if let status = modelStatuses[model.rawValue],
-               status.phase == .failed && status.retryCount > maxRetries {
-                logger.notice("Model \(model.shortName) permanently failed after \(status.retryCount) attempts, skipping")
+                status.phase == .failed && status.retryCount > maxRetries
+            {
+                logger.notice(
+                    "Model \(model.shortName) permanently failed after \(status.retryCount) attempts, skipping")
                 continue
             }
 
             // Wait if paused
             while isPausedForTranscription {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                try? await Task.sleep(nanoseconds: 500_000_000)  // 500ms
             }
 
             // Check for cancellation
@@ -443,11 +454,6 @@ public final class BackgroundModelService: ObservableObject {
                 currentCompilationProgress = 1.0
                 persistState()
 
-                // Auto-switch to better model if enabled
-                if autoSwitchToNewModels {
-                    await autoSwitchToModel(model)
-                }
-
                 logger.notice("Model \(model.shortName) ready!")
                 return  // Success, exit retry loop
 
@@ -490,17 +496,8 @@ public final class BackgroundModelService: ObservableObject {
         }
     }
 
-    private func autoSwitchToModel(_ model: KoeModel) async {
-        logger.notice("Auto-switching to \(model.shortName) model")
-
-        // Update AppState's selected model
-        AppState.shared.selectedModel = model.rawValue
-
-        // Load the new model
-        await RecordingCoordinator.shared.loadModel(name: model.rawValue)
-
-        logger.notice("Auto-switched to \(model.shortName)")
-    }
+    // Model switching removed - only one model (turbo) is used
+    // Model loading is handled by the WhisperKit node lifecycle
 
     private func persistState() {
         let state = BackgroundModelState(
@@ -518,7 +515,10 @@ public final class BackgroundModelService: ObservableObject {
 
 // Helper extension to create state from individual properties
 extension BackgroundModelState {
-    init(models: [String: ModelDownloadStatus], isProcessing: Bool, isPaused: Bool, currentlyProcessing: String?, lastCompletedAt: Date?) {
+    init(
+        models: [String: ModelDownloadStatus], isProcessing: Bool, isPaused: Bool, currentlyProcessing: String?,
+        lastCompletedAt: Date?
+    ) {
         self.models = models
         self.isProcessing = isProcessing
         self.isPaused = isPaused

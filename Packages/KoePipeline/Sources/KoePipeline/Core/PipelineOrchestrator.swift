@@ -116,17 +116,19 @@ public actor PipelineOrchestrator {
             let next = enabledElements[i + 1]
 
             guard let currentInfo = elementInfoMap[current.id],
-                  let nextInfo = elementInfoMap[next.id] else { continue }
+                let nextInfo = elementInfoMap[next.id]
+            else { continue }
 
             let outputType = currentInfo.connectionRules.producesOutput
             let acceptedTypes = nextInfo.connectionRules.acceptsInput
 
             if !acceptedTypes.contains(.any) && !acceptedTypes.contains(outputType) {
-                errors.append(.incompatibleConnection(
-                    from: current.typeId,
-                    to: next.typeId,
-                    reason: "Output type '\(outputType)' not accepted by next element"
-                ))
+                errors.append(
+                    .incompatibleConnection(
+                        from: current.typeId,
+                        to: next.typeId,
+                        reason: "Output type '\(outputType)' not accepted by next element"
+                    ))
             }
         }
 

@@ -1,5 +1,5 @@
-import SwiftUI
 import KoeUI
+import SwiftUI
 
 /// Connecting line between pipeline nodes
 struct PipelineConnector: View {

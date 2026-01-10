@@ -1,15 +1,15 @@
+import KoeAudio
+import KoeCommands
+import KoeCore
+import KoeDomain
+import KoeHotkey
+import KoeMeeting
+import KoeStorage
+import KoeTextInsertion
+import KoeTranscription
+import KoeUI
 import SwiftUI
 import UserNotifications
-import KoeDomain
-import KoeAudio
-import KoeTranscription
-import KoeHotkey
-import KoeTextInsertion
-import KoeStorage
-import KoeUI
-import KoeCore
-import KoeMeeting
-import KoeCommands
 import os.log
 
 private let logger = Logger(subsystem: "com.koe.voice", category: "AppDelegate")
@@ -60,11 +60,11 @@ struct KoeApp: App {
 }
 
 enum MenuBarState {
-    case loading      // Blue - model loading
-    case idle         // White - ready
-    case recording    // Red - recording
-    case transcribing // Yellow - transcribing audio
-    case refining     // Purple - AI refinement
+    case loading  // Blue - model loading
+    case idle  // White - ready
+    case recording  // Red - recording
+    case transcribing  // Yellow - transcribing audio
+    case refining  // Purple - AI refinement
 }
 
 @MainActor
@@ -97,6 +97,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         }
 
         NSLog("🚀 Koe app launched!")
+
+        // Register node lifecycle handlers for resource management
+        registerNodeLifecycleHandlers()
 
         // Set notification delegate for handling model ready notifications
         UNUserNotificationCenter.current().delegate = self
@@ -135,7 +138,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
                 // Start loading in background
                 let loadTask = Task {
-                    try await transcriber.loadModel(.turbo)
+                    try await transcriber.loadModel(.balanced)
                 }
 
                 // Print progress updates
@@ -215,13 +218,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             // Sync settings from AppState to CommandDetector
             let newSettings = AppState.shared.voiceCommandSettings
             self.commandDetector.settings = newSettings
-            logger.notice("[AppDelegate] Voice command settings updated: VAD=\(newSettings.vadEnabled), threshold=\(newSettings.confidenceThreshold)")
+            logger.notice(
+                "[AppDelegate] Voice command settings updated: VAD=\(newSettings.vadEnabled), threshold=\(newSettings.confidenceThreshold)"
+            )
         }
 
         // Set up command handler - actually execute the detected command
         commandDetector.onCommandDetected = { [weak self] result in
             guard let self = self else { return }
-            logger.notice("[CommandDetector] Command detected: \(result.command.trigger) (confidence: \(result.confidence), verified: \(result.isVoiceVerified))")
+            logger.notice(
+                "[CommandDetector] Command detected: \(result.command.trigger) (confidence: \(result.confidence), verified: \(result.isVoiceVerified))"
+            )
 
             guard result.shouldExecute else {
                 logger.notice("[CommandDetector] Command not executed: shouldExecute=false")
@@ -246,9 +253,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                 AppState.shared.isVoiceCommandTriggered = true
 
                 // Start recording with VAD mode (voice command uses silence detection)
-                let langCode = AppState.shared.selectedLanguage
-                let language = Language.all.first { $0.code == langCode } ?? .auto
-                await self.coordinator.startRecording(mode: .vad, language: language)
+                await self.coordinator.startRecording(mode: .vad, language: .auto)
                 logger.notice("[AppDelegate] Voice command triggered recording started")
             }
         }
@@ -261,9 +266,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         ) { [weak self] _ in
             guard let self = self else { return }
             Task { @MainActor in
-                let langCode = AppState.shared.selectedLanguage
-                let language = Language.all.first { $0.code == langCode } ?? .auto
-                await self.coordinator.stopRecording(mode: .vad, language: language)
+                await self.coordinator.stopRecording(mode: .vad, language: .auto)
                 AppState.shared.isVoiceCommandTriggered = false
                 logger.notice("[AppDelegate] Voice command triggered recording stopped")
             }
@@ -277,7 +280,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
     private func updateCommandListening() async {
         let appState = AppState.shared
-        logger.notice("[AppDelegate] updateCommandListening: enabled=\(appState.isCommandListeningEnabled), hasProfile=\(appState.hasVoiceProfile)")
+        logger.notice(
+            "[AppDelegate] updateCommandListening: enabled=\(appState.isCommandListeningEnabled), hasProfile=\(appState.hasVoiceProfile)"
+        )
 
         if appState.isCommandListeningEnabled && appState.hasVoiceProfile {
             logger.notice("[AppDelegate] Starting command detection...")
@@ -497,8 +502,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
 
         // Show native macOS notification via osascript
         let script = """
-        display notification "Ready! Hold Option+Space to transcribe." with title "Koe 声" sound name "Glass"
-        """
+            display notification "Ready! Hold Option+Space to transcribe." with title "Koe 声" sound name "Glass"
+            """
 
         let process = Process()
         process.launchPath = "/usr/bin/osascript"
@@ -561,12 +566,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         logger.notice("Trigger system initialized with hotkey: \(AppState.shared.hotkeyDisplayString)")
     }
 
-    func loadModel() {
-        Task {
-            await coordinator.loadModel(name: AppState.shared.selectedModel)
-        }
-    }
-
     @objc func updateMenuBarIcon() {
         let state = AppState.shared.recordingState
 
@@ -592,7 +591,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private func adjustTimerForState() {
-        let needsFastAnimation = (menuBarState == .loading || menuBarState == .recording || menuBarState == .transcribing || menuBarState == .refining)
+        let needsFastAnimation =
+            (menuBarState == .loading || menuBarState == .recording || menuBarState == .transcribing
+                || menuBarState == .refining)
 
         if needsFastAnimation {
             // Smooth animation (30fps) for active states
@@ -707,7 +708,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     }
 
     @objc func togglePopover() {
-        if let window = NSApplication.shared.windows.first(where: { $0.title == "Koe" || $0.contentView is NSHostingView<ContentView> }) {
+        if let window = NSApplication.shared.windows.first(where: {
+            $0.title == "Koe" || $0.contentView is NSHostingView<ContentView>
+        }) {
             window.makeKeyAndOrderFront(nil)
             NSApplication.shared.activate(ignoringOtherApps: true)
         } else {
@@ -725,30 +728,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let userInfo = response.notification.request.content.userInfo
-
-        if response.notification.request.content.categoryIdentifier == "MODEL_READY",
-           let modelRaw = userInfo["modelRawValue"] as? String,
-           let model = KoeModel(rawValue: modelRaw) {
-
-            switch response.actionIdentifier {
-            case "SWITCH_MODEL":
-                // Switch to the new model
-                Task { @MainActor in
-                    AppState.shared.selectedModel = model.rawValue
-                    await RecordingCoordinator.shared.loadModel(model)
-                    logger.notice("Switched to model: \(model.shortName)")
-                }
-            case "LATER", UNNotificationDefaultActionIdentifier:
-                // Just open the app
-                Task { @MainActor in
-                    self.togglePopover()
-                }
-            default:
-                break
-            }
+        // Handle notification tap - just open the app
+        Task { @MainActor in
+            self.togglePopover()
         }
-
         completionHandler()
     }
 
@@ -767,6 +750,7 @@ extension Notification.Name {
     static let audioLevelChanged = Notification.Name("audioLevelChanged")
     static let modelLoaded = Notification.Name("modelLoaded")
     static let modelDownloadProgress = Notification.Name("modelDownloadProgress")
+    static let transcriptionEngineChanged = Notification.Name("transcriptionEngineChanged")
     static let appReady = Notification.Name("appReady")
 
     // Mode coordination notifications
@@ -797,4 +781,3 @@ extension Notification.Name {
     // Transcription engine management
     static let transcriptionEngineDisabled = Notification.Name("transcriptionEngineDisabled")
 }
-

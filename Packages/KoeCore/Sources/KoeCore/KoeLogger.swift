@@ -86,28 +86,28 @@ public struct KoeLogger: Sendable {
 
 // MARK: - Convenience Loggers
 
-public extension KoeLogger {
+extension KoeLogger {
     /// Audio logger
-    static let audio = KoeLogger(category: .audio)
+    public static let audio = KoeLogger(category: .audio)
 
     /// Transcription logger
-    static let transcription = KoeLogger(category: .transcription)
+    public static let transcription = KoeLogger(category: .transcription)
 
     /// Refinement logger
-    static let refinement = KoeLogger(category: .refinement)
+    public static let refinement = KoeLogger(category: .refinement)
 
     /// Hotkey logger
-    static let hotkey = KoeLogger(category: .hotkey)
+    public static let hotkey = KoeLogger(category: .hotkey)
 
     /// UI logger
-    static let ui = KoeLogger(category: .ui)
+    public static let ui = KoeLogger(category: .ui)
 
     /// Storage logger
-    static let storage = KoeLogger(category: .storage)
+    public static let storage = KoeLogger(category: .storage)
 
     /// Meeting logger
-    static let meeting = KoeLogger(category: .meeting)
+    public static let meeting = KoeLogger(category: .meeting)
 
     /// General logger
-    static let general = KoeLogger(category: .general)
+    public static let general = KoeLogger(category: .general)
 }

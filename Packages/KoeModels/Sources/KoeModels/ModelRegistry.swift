@@ -46,7 +46,7 @@ public enum ModelRegistry {
             repo: "FluidInference/speaker-diarization-coreml",
             files: [
                 "wespeaker_v2.mlmodelc",
-                "pyannote_segmentation.mlmodelc"
+                "pyannote_segmentation.mlmodelc",
             ]
         ),
         sizeBytes: 129_000_000,  // ~129 MB
@@ -76,7 +76,7 @@ public enum ModelRegistry {
         whisperLargeV3Turbo,
         whisperBase,
         fluidAudioDiarization,
-        llamaRefinement
+        llamaRefinement,
     ]
 
     /// Required models that must be downloaded

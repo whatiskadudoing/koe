@@ -30,7 +30,7 @@ public struct OllamaClient: Sendable {
             "stream": false,
             "options": [
                 "temperature": temperature
-            ]
+            ],
         ]
 
         if let system = system, !system.isEmpty {

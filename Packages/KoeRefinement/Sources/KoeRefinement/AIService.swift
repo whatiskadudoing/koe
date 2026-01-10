@@ -1,6 +1,6 @@
 import Foundation
-import KoeDomain
 import KoeCore
+import KoeDomain
 
 /// Manages AI providers and processing pipelines
 /// This is the main entry point for all AI text processing in Koe
@@ -30,7 +30,8 @@ public final class AIService: ObservableObject {
     private init() {
         // Load saved preferences
         if let savedTier = UserDefaults.standard.string(forKey: "ai_tier"),
-           let tier = AITier(rawValue: savedTier) {
+            let tier = AITier(rawValue: savedTier)
+        {
             currentTier = tier
         }
 
@@ -163,12 +164,14 @@ public final class AIService: ObservableObject {
     /// Delete a downloaded model
     public func deleteModel(for tier: AITier) throws {
         guard let modelInfo = AIModelRegistry.model(for: tier),
-              !modelInfo.isBundled else {
+            !modelInfo.isBundled
+        else {
             return  // Can't delete bundled models
         }
 
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let modelPath = appSupport
+        let modelPath =
+            appSupport
             .appendingPathComponent("Koe/Models", isDirectory: true)
             .appendingPathComponent(modelInfo.filename ?? "\(modelInfo.name).gguf")
 
@@ -210,7 +213,8 @@ public final class AIService: ObservableObject {
 
         // Check if best model is downloaded
         if let modelInfo = AIModelRegistry.model(for: .best),
-           let filename = modelInfo.filename {
+            let filename = modelInfo.filename
+        {
             let path = modelsDir.appendingPathComponent(filename)
             if FileManager.default.fileExists(atPath: path.path) {
                 downloadedModels.insert(.best)

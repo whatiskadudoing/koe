@@ -12,7 +12,7 @@ let package = Package(
     dependencies: [
         .package(path: "../KoeDomain"),
         .package(path: "../KoeCore"),
-        .package(path: "../KoeStorage")
+        .package(path: "../KoeStorage"),
     ],
     targets: [
         .target(

@@ -13,7 +13,7 @@ public enum MeetingAppRegistry {
         // Browsers (for Google Meet, Zoom web, etc.)
         "com.google.Chrome": "Chrome",
         "com.apple.Safari": "Safari",
-        "company.thebrowser.Browser": "Arc"
+        "company.thebrowser.Browser": "Arc",
     ]
 
     /// Check if a bundle ID is a known meeting app

@@ -54,30 +54,42 @@ public final class AVAudioEngineRecorder: AudioRecordingService, @unchecked Send
         // Setup audio engine
         audioEngine = AVAudioEngine()
         guard let audioEngine = audioEngine else {
-            throw AudioError.engineStartFailed(underlying: NSError(domain: "KoeAudio", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create AVAudioEngine"]))
+            throw AudioError.engineStartFailed(
+                underlying: NSError(
+                    domain: "KoeAudio", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create AVAudioEngine"]
+                ))
         }
 
         let inputNode = audioEngine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
 
         // Create output format for 16kHz mono
-        guard let outputFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: targetSampleRate,
-            channels: 1,
-            interleaved: false
-        ) else {
-            throw AudioError.engineStartFailed(underlying: NSError(domain: "KoeAudio", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create output format"]))
+        guard
+            let outputFormat = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: targetSampleRate,
+                channels: 1,
+                interleaved: false
+            )
+        else {
+            throw AudioError.engineStartFailed(
+                underlying: NSError(
+                    domain: "KoeAudio", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create output format"]
+                ))
         }
 
         // Create converter
         guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
-            throw AudioError.engineStartFailed(underlying: NSError(domain: "KoeAudio", code: 3, userInfo: [NSLocalizedDescriptionKey: "Failed to create audio converter"]))
+            throw AudioError.engineStartFailed(
+                underlying: NSError(
+                    domain: "KoeAudio", code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to create audio converter"]))
         }
 
         // Install tap to capture audio
         let buffer = audioBuffer
-        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: inputFormat) { [targetSampleRate] inputBuffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: inputFormat) {
+            [targetSampleRate] inputBuffer, _ in
             Self.processAudioBuffer(
                 buffer: inputBuffer,
                 converter: converter,
@@ -134,7 +146,7 @@ public final class AVAudioEngineRecorder: AudioRecordingService, @unchecked Send
 
     /// Update and return current audio level (call periodically for UI updates)
     public func updateAudioLevel() -> Float {
-        let recentSamples = audioBuffer.getRecentSamples(count: 1600) // ~0.1 seconds
+        let recentSamples = audioBuffer.getRecentSamples(count: 1600)  // ~0.1 seconds
         _audioLevel = levelMonitor.calculateLevel(from: recentSamples)
         return _audioLevel
     }
@@ -202,7 +214,7 @@ public final class AVAudioEngineRecorder: AudioRecordingService, @unchecked Send
         // fmt chunk
         header.append(contentsOf: "fmt ".utf8)
         header.append(contentsOf: withUnsafeBytes(of: UInt32(16).littleEndian) { Array($0) })
-        header.append(contentsOf: withUnsafeBytes(of: UInt16(3).littleEndian) { Array($0) }) // IEEE float
+        header.append(contentsOf: withUnsafeBytes(of: UInt16(3).littleEndian) { Array($0) })  // IEEE float
         header.append(contentsOf: withUnsafeBytes(of: channels.littleEndian) { Array($0) })
         header.append(contentsOf: withUnsafeBytes(of: sampleRate.littleEndian) { Array($0) })
         let byteRate = sampleRate * UInt32(channels) * UInt32(bytesPerSample)

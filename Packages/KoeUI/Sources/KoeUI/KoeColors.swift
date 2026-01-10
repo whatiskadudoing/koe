@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import KoeDomain
+import SwiftUI
 
 /// Koe design system colors - Japanese-inspired palette
 public enum KoeColors {

@@ -1,10 +1,10 @@
-import SwiftUI
 import AVFoundation
 import ApplicationServices
-import KoeDomain
 import CoreGraphics
-import KoePipeline
 import KoeCommands
+import KoeDomain
+import KoePipeline
+import SwiftUI
 import UserNotifications
 
 @Observable
@@ -74,36 +74,8 @@ public final class AppState {
     // Error handling
     public var errorMessage: String?
 
-    // Settings - stored in UserDefaults
-    @ObservationIgnored
-    private var _selectedModel: String {
-        get {
-            let stored = UserDefaults.standard.string(forKey: "selectedModel") ?? KoeModel.turbo.rawValue
-            return Self.migrateModelIfNeeded(stored)
-        }
-        set { UserDefaults.standard.set(newValue, forKey: "selectedModel") }
-    }
-
-    /// Migrate old model names to new turbo models
-    private static func migrateModelIfNeeded(_ modelName: String) -> String {
-        switch modelName {
-        case "tiny", "base", "small":
-            return KoeModel.turbo.rawValue
-        case "medium":
-            return KoeModel.turbo.rawValue
-        case "large-v3":
-            return KoeModel.large.rawValue
-        default:
-            // Already a new model name or unknown
-            return modelName
-        }
-    }
-
-    @ObservationIgnored
-    private var _selectedLanguage: String {
-        get { UserDefaults.standard.string(forKey: "selectedLanguage") ?? "auto" }
-        set { UserDefaults.standard.set(newValue, forKey: "selectedLanguage") }
-    }
+    // WhisperKit uses a single model (turbo) - no selection needed
+    // Language is always auto-detect
 
     // Refinement and AutoEnter use stored properties for proper @Observable tracking
     // Loaded from UserDefaults in init(), saved in didSet
@@ -134,18 +106,6 @@ public final class AppState {
 
     private var _hotkeyModifiers: Int = 2 {
         didSet { UserDefaults.standard.set(_hotkeyModifiers, forKey: "hotkeyModifiers") }
-    }
-
-
-    // Public accessors that trigger observation
-    public var selectedModel: String {
-        get { _selectedModel }
-        set { _selectedModel = newValue }
-    }
-
-    public var selectedLanguage: String {
-        get { _selectedLanguage }
-        set { _selectedLanguage = newValue }
     }
 
     // Stored properties for proper @Observable tracking
@@ -183,6 +143,40 @@ public final class AppState {
             // Notify for resource management when disabled
             if !isAppleSpeechEnabled {
                 NotificationCenter.default.post(name: .transcriptionEngineDisabled, object: "apple-speech")
+            }
+            // Handle mutual exclusivity
+            if isAppleSpeechEnabled {
+                isWhisperKitBalancedEnabled = false
+                isWhisperKitAccurateEnabled = false
+                isWhisperKitEnabled = false
+            }
+        }
+    }
+
+    /// Whether WhisperKit Balanced transcription is enabled
+    /// Default: false (requires ~632MB download)
+    public var isWhisperKitBalancedEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isWhisperKitBalancedEnabled, forKey: "transcribeWhisperKitBalancedEnabled")
+            // Update global WhisperKit flag
+            if isWhisperKitBalancedEnabled {
+                isWhisperKitEnabled = true
+                isAppleSpeechEnabled = false
+                isWhisperKitAccurateEnabled = false
+            }
+        }
+    }
+
+    /// Whether WhisperKit Accurate transcription is enabled
+    /// Default: false (requires ~947MB download)
+    public var isWhisperKitAccurateEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isWhisperKitAccurateEnabled, forKey: "transcribeWhisperKitAccurateEnabled")
+            // Update global WhisperKit flag
+            if isWhisperKitAccurateEnabled {
+                isWhisperKitEnabled = true
+                isAppleSpeechEnabled = false
+                isWhisperKitBalancedEnabled = false
             }
         }
     }
@@ -328,13 +322,14 @@ public final class AppState {
     /// Runtime state for Ollama connection (not persisted)
     public var isOllamaConnected: Bool = false
 
-    // Computed properties for typed access
+    // WhisperKit uses a single model (turbo)
     public var currentKoeModel: KoeModel {
-        KoeModel(rawValue: selectedModel) ?? .turbo
+        .balanced
     }
 
+    // Language is always auto-detect - node handles specific language settings
     public var currentLanguage: Language {
-        Language.all.first { $0.code == selectedLanguage } ?? .auto
+        .auto
     }
 
     public var currentAITier: AITier {
@@ -343,7 +338,8 @@ public final class AppState {
     }
 
     public var hasAllPermissions: Bool {
-        hasMicrophonePermission && hasAccessibilityPermission && hasScreenRecordingPermission && hasNotificationPermission
+        hasMicrophonePermission && hasAccessibilityPermission && hasScreenRecordingPermission
+            && hasNotificationPermission
     }
 
     private init() {
@@ -384,12 +380,18 @@ public final class AppState {
             isAutoEnterEnabled = UserDefaults.standard.bool(forKey: "isAutoEnterEnabled")
         }
 
-        // Load transcription engine states (default: WhisperKit enabled)
+        // Load transcription engine states (default: Apple Speech enabled)
         if UserDefaults.standard.object(forKey: "isWhisperKitEnabled") != nil {
             isWhisperKitEnabled = UserDefaults.standard.bool(forKey: "isWhisperKitEnabled")
         }
         if UserDefaults.standard.object(forKey: "isAppleSpeechEnabled") != nil {
             isAppleSpeechEnabled = UserDefaults.standard.bool(forKey: "isAppleSpeechEnabled")
+        }
+        if UserDefaults.standard.object(forKey: "transcribeWhisperKitBalancedEnabled") != nil {
+            isWhisperKitBalancedEnabled = UserDefaults.standard.bool(forKey: "transcribeWhisperKitBalancedEnabled")
+        }
+        if UserDefaults.standard.object(forKey: "transcribeWhisperKitAccurateEnabled") != nil {
+            isWhisperKitAccurateEnabled = UserDefaults.standard.bool(forKey: "transcribeWhisperKitAccurateEnabled")
         }
 
         // Load saved refinement options
@@ -418,10 +420,27 @@ public final class AppState {
     }
 
     public func checkAccessibilityPermission() {
-        // AXIsProcessTrusted() has caching issues, but the cache is refreshed when
-        // the "com.apple.accessibility.api" distributed notification fires
-        // (which happens when any app's accessibility permission changes)
-        hasAccessibilityPermission = AXIsProcessTrusted()
+        // AXIsProcessTrusted() has caching issues - it may return stale values even after
+        // the user grants permission. To work around this, we also try to actually use
+        // accessibility APIs and check if they work.
+
+        // First, check the fast path
+        if AXIsProcessTrusted() {
+            hasAccessibilityPermission = true
+            return
+        }
+
+        // AXIsProcessTrusted() returned false, but it might be cached.
+        // Try to actually use accessibility to verify.
+        // If we can get an attribute from the system-wide element, permission is granted.
+        let systemWide = AXUIElementCreateSystemWide()
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &value)
+
+        // If we get a valid result (even if nil), we have permission
+        // .cannotComplete means no focused app, but we still have access
+        // .apiDisabled or .notImplemented means no permission
+        hasAccessibilityPermission = (result == .success || result == .cannotComplete || result == .noValue)
     }
 
     public func checkScreenRecordingPermission() {
@@ -511,7 +530,10 @@ public final class AppState {
 
     // MARK: - History Management
 
-    public func addTranscription(_ text: String, duration: TimeInterval, wasRefined: Bool = false, originalText: String? = nil, refinementSettings: RefinementSettings? = nil, pipelineRunId: UUID? = nil) {
+    public func addTranscription(
+        _ text: String, duration: TimeInterval, wasRefined: Bool = false, originalText: String? = nil,
+        refinementSettings: RefinementSettings? = nil, pipelineRunId: UUID? = nil
+    ) {
         // Check if any experimental features were used
         let usedExperimental = isWhisperKitEnabled || isCommandListeningEnabled || isAutoEnterEnabled
 
@@ -556,7 +578,8 @@ public final class AppState {
 
     private func loadHistory() {
         if let data = UserDefaults.standard.data(forKey: "transcriptionHistory"),
-           let history = try? JSONDecoder().decode([Transcription].self, from: data) {
+            let history = try? JSONDecoder().decode([Transcription].self, from: data)
+        {
             // Filter out entries older than 7 days
             let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
             transcriptionHistory = history.filter { $0.timestamp > cutoff }
@@ -573,7 +596,8 @@ public final class AppState {
 
     private func loadProcessingHistory() {
         if let data = UserDefaults.standard.data(forKey: "processingHistory"),
-           let history = try? JSONDecoder().decode([ProcessingResult].self, from: data) {
+            let history = try? JSONDecoder().decode([ProcessingResult].self, from: data)
+        {
             // Filter out entries older than 7 days
             let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
             processingHistory = history.filter { $0.timestamp > cutoff }
@@ -626,7 +650,8 @@ public final class AppState {
 
     private func loadPipelineHistory() {
         if let data = UserDefaults.standard.data(forKey: "pipelineExecutionHistory"),
-           let history = try? JSONDecoder().decode([PipelineExecutionRecord].self, from: data) {
+            let history = try? JSONDecoder().decode([PipelineExecutionRecord].self, from: data)
+        {
             // Filter out entries older than 7 days
             let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
             pipelineExecutionHistory = history.filter { $0.timestamp > cutoff }

@@ -62,7 +62,8 @@ public final class ModeManager {
 
     @objc private func handleDictationStarted() {
         guard activeMode == .none else {
-            logger.info("ModeManager: Dictation start blocked - already in mode: \(String(describing: self.activeMode))")
+            logger.info(
+                "ModeManager: Dictation start blocked - already in mode: \(String(describing: self.activeMode))")
             return
         }
         activeMode = .dictation
@@ -85,7 +86,8 @@ public final class ModeManager {
 
     @objc private func handleMeetingDetected(_ notification: Notification) {
         guard activeMode == .none else {
-            logger.info("ModeManager: Meeting detection ignored - already in mode: \(String(describing: self.activeMode))")
+            logger.info(
+                "ModeManager: Meeting detection ignored - already in mode: \(String(describing: self.activeMode))")
             return
         }
         activeMode = .meeting

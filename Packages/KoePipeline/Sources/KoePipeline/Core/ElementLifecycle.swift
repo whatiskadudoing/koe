@@ -2,12 +2,12 @@ import Foundation
 
 /// Lifecycle state of a pipeline element
 public enum ElementState: String, Codable, Sendable {
-    case sleeping      // Not initialized, no resources
-    case waking        // Loading resources
-    case active        // Ready to process
-    case processing    // Currently processing
-    case idle          // Done, waiting (may auto-sleep)
-    case error         // Error state
+    case sleeping  // Not initialized, no resources
+    case waking  // Loading resources
+    case active  // Ready to process
+    case processing  // Currently processing
+    case idle  // Done, waiting (may auto-sleep)
+    case error  // Error state
     case shuttingDown  // Releasing resources
 }
 
@@ -75,8 +75,8 @@ public protocol SleepableElement: PipelineElement {
     var isAwake: Bool { get }
 }
 
-public extension SleepableElement {
-    var isAwake: Bool {
+extension SleepableElement {
+    public var isAwake: Bool {
         state == .active || state == .idle
     }
 }

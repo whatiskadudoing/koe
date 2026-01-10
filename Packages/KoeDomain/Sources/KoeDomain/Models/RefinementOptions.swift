@@ -28,23 +28,25 @@ public struct RefinementOptions: Sendable {
 
         // Cleanup instructions
         if cleanup {
-            instructions.append("""
-            CLEANUP:
-            - Fix grammar and punctuation
-            - Remove filler words (um, uh, like, you know, so, basically, I mean)
-            - Remove false starts and repetitions
-            """)
+            instructions.append(
+                """
+                CLEANUP:
+                - Fix grammar and punctuation
+                - Remove filler words (um, uh, like, you know, so, basically, I mean)
+                - Remove false starts and repetitions
+                """)
         }
 
         // Prompt improver takes priority over tone
         if promptImprover {
-            instructions.append("""
-            PROMPT OPTIMIZATION:
-            - Make it clear and specific for AI assistants
-            - Add structure if needed (bullet points, numbered steps)
-            - Remove ambiguity and vague language
-            - Keep the original intent and requirements
-            """)
+            instructions.append(
+                """
+                PROMPT OPTIMIZATION:
+                - Make it clear and specific for AI assistants
+                - Add structure if needed (bullet points, numbered steps)
+                - Remove ambiguity and vague language
+                - Keep the original intent and requirements
+                """)
         } else if let tonePrompt = tone.promptFragment {
             instructions.append("TONE: \(tonePrompt)")
         }
@@ -55,15 +57,16 @@ public struct RefinementOptions: Sendable {
         }
 
         // Output rules
-        instructions.append("""
+        instructions.append(
+            """
 
-        CRITICAL RULES:
-        - Output ONLY the processed text
-        - Do NOT add any introduction or commentary
-        - Do NOT say "Here is..." or "Sure!" or similar
-        - Do NOT wrap in quotes
-        - Keep the speaker's intent and meaning intact
-        """)
+            CRITICAL RULES:
+            - Output ONLY the processed text
+            - Do NOT add any introduction or commentary
+            - Do NOT say "Here is..." or "Sure!" or similar
+            - Do NOT wrap in quotes
+            - Keep the speaker's intent and meaning intact
+            """)
 
         return instructions.joined(separator: "\n\n")
     }

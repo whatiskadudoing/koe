@@ -11,7 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../KoeDomain"),
-        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0")
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.15.0"),
     ],
     targets: [
         .target(

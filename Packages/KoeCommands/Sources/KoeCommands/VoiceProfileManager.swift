@@ -75,7 +75,8 @@ public final class VoiceProfileManager: @unchecked Sendable {
             let data = try JSONEncoder().encode(profile)
             userDefaults.set(data, forKey: Self.profileKey)
             userDefaults.synchronize()  // Force immediate write
-            logger.notice("[VoiceProfileManager] Profile saved: \(profile.name) with \(profile.embedding.count) features")
+            logger.notice(
+                "[VoiceProfileManager] Profile saved: \(profile.name) with \(profile.embedding.count) features")
         } catch {
             logger.notice("[VoiceProfileManager] Failed to save profile: \(error)")
         }
@@ -90,7 +91,8 @@ public final class VoiceProfileManager: @unchecked Sendable {
 
         do {
             let profile = try JSONDecoder().decode(VoiceProfile.self, from: data)
-            logger.notice("[VoiceProfileManager] Loaded profile: \(profile.name) with \(profile.embedding.count) features")
+            logger.notice(
+                "[VoiceProfileManager] Loaded profile: \(profile.name) with \(profile.embedding.count) features")
             return profile
         } catch {
             logger.notice("[VoiceProfileManager] Failed to load profile: \(error)")

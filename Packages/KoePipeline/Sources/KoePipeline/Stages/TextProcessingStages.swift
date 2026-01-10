@@ -54,7 +54,9 @@ public struct LanguageImprovementConfig: Codable, Sendable, Equatable {
 
 /// Language Improvement stage - combines cleanup and tone adjustment
 /// Uses a single model load for efficiency
-public final class LanguageImprovementStage: SleepableElementBase, SleepableElement, PipelineStage, ResourceTrackingElement, @unchecked Sendable {
+public final class LanguageImprovementStage: SleepableElementBase, SleepableElement, PipelineStage,
+    ResourceTrackingElement, @unchecked Sendable
+{
     // MARK: - PipelineStage Protocol
 
     public let stageTypeId = "language-improvement"
@@ -82,7 +84,7 @@ public final class LanguageImprovementStage: SleepableElementBase, SleepableElem
             [
                 "cleanupEnabled": config.cleanupEnabled,
                 "tone": config.tone.rawValue,
-                "model": config.model
+                "model": config.model,
             ]
         }
         set {
@@ -90,7 +92,8 @@ public final class LanguageImprovementStage: SleepableElementBase, SleepableElem
                 config.cleanupEnabled = cleanup
             }
             if let toneRaw = newValue["tone"] as? String,
-               let tone = ToneOption(rawValue: toneRaw) {
+                let tone = ToneOption(rawValue: toneRaw)
+            {
                 config.tone = tone
             }
             if let model = newValue["model"] as? String {
@@ -207,7 +210,9 @@ public struct PromptOptimizerConfig: Codable, Sendable, Equatable {
 }
 
 /// Prompt Optimizer stage - optimizes text as an AI prompt
-public final class PromptOptimizerStage: SleepableElementBase, SleepableElement, PipelineStage, ResourceTrackingElement, @unchecked Sendable {
+public final class PromptOptimizerStage: SleepableElementBase, SleepableElement, PipelineStage, ResourceTrackingElement,
+    @unchecked Sendable
+{
     // MARK: - PipelineStage Protocol
 
     public let stageTypeId = "prompt-optimizer"
@@ -235,7 +240,7 @@ public final class PromptOptimizerStage: SleepableElementBase, SleepableElement,
                 "addStructure": config.addStructure,
                 "removeAmbiguity": config.removeAmbiguity,
                 "makeSpecific": config.makeSpecific,
-                "model": config.model
+                "model": config.model,
             ]
         }
         set {
@@ -362,7 +367,9 @@ public struct TextImproveConfig: Codable, Sendable, Equatable {
 }
 
 /// Combined Text Improve stage - cleanup, tone, and prompt mode in a single AI call
-public final class TextImproveStage: SleepableElementBase, SleepableElement, PipelineStage, ResourceTrackingElement, @unchecked Sendable {
+public final class TextImproveStage: SleepableElementBase, SleepableElement, PipelineStage, ResourceTrackingElement,
+    @unchecked Sendable
+{
     // MARK: - PipelineStage Protocol
 
     public let stageTypeId = "text-improve"
@@ -390,7 +397,7 @@ public final class TextImproveStage: SleepableElementBase, SleepableElement, Pip
                 "cleanupEnabled": config.cleanupEnabled,
                 "tone": config.tone,
                 "promptMode": config.promptMode,
-                "model": config.model
+                "model": config.model,
             ]
         }
         set {

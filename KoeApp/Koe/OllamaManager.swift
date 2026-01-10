@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 
 /// Status of the Ollama setup process
 public enum OllamaStatus: Equatable {
@@ -50,7 +50,7 @@ public final class OllamaManager: ObservableObject {
         // Check for Ollama.app (macOS app version)
         let appPaths = [
             "/Applications/Ollama.app",
-            NSHomeDirectory() + "/Applications/Ollama.app"
+            NSHomeDirectory() + "/Applications/Ollama.app",
         ]
 
         for appPath in appPaths {
@@ -66,7 +66,7 @@ public final class OllamaManager: ObservableObject {
             "/usr/local/bin/ollama",
             "/opt/homebrew/bin/ollama",
             "/usr/bin/ollama",
-            NSHomeDirectory() + "/.ollama/ollama"
+            NSHomeDirectory() + "/.ollama/ollama",
         ]
 
         for path in paths {
@@ -93,7 +93,8 @@ public final class OllamaManager: ObservableObject {
             if task.terminationStatus == 0 {
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-                   !path.isEmpty {
+                    !path.isEmpty
+                {
                     isInstalled = true
                     print("[OllamaManager] Found via which: \(path)")
                     return
@@ -135,7 +136,7 @@ public final class OllamaManager: ObservableObject {
             if launchOllamaApp() {
                 print("[OllamaManager] Launched Ollama.app")
                 // Wait for it to start
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                try? await Task.sleep(nanoseconds: 2_000_000_000)  // 2 seconds
             } else {
                 // Fall back to CLI
                 let ollamaPath = findOllamaBinary()
@@ -163,7 +164,7 @@ public final class OllamaManager: ObservableObject {
                 }
 
                 // Wait a moment for server to start
-                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+                try? await Task.sleep(nanoseconds: 1_500_000_000)  // 1.5 seconds
             }
 
             // Verify it's running
@@ -202,14 +203,14 @@ public final class OllamaManager: ObservableObject {
     private func launchOllamaApp() -> Bool {
         let appPaths = [
             "/Applications/Ollama.app",
-            NSHomeDirectory() + "/Applications/Ollama.app"
+            NSHomeDirectory() + "/Applications/Ollama.app",
         ]
 
         for appPath in appPaths {
             if FileManager.default.fileExists(atPath: appPath) {
                 let url = URL(fileURLWithPath: appPath)
                 let config = NSWorkspace.OpenConfiguration()
-                config.activates = false // Don't bring to front
+                config.activates = false  // Don't bring to front
                 NSWorkspace.shared.openApplication(at: url, configuration: config)
                 return true
             }
@@ -263,7 +264,8 @@ public final class OllamaManager: ObservableObject {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let models = json["models"] as? [[String: Any]] {
+                let models = json["models"] as? [[String: Any]]
+            {
                 let modelBase = modelName.split(separator: ":").first.map(String.init) ?? modelName
                 let available = models.contains { model in
                     if let name = model["name"] as? String {
@@ -274,7 +276,9 @@ public final class OllamaManager: ObservableObject {
                 isModelAvailable = available
 
                 if !available {
-                    print("[OllamaManager] Model '\(modelName)' not found. Available: \(models.compactMap { $0["name"] as? String })")
+                    print(
+                        "[OllamaManager] Model '\(modelName)' not found. Available: \(models.compactMap { $0["name"] as? String })"
+                    )
                 } else {
                     print("[OllamaManager] Model '\(modelName)' is available")
                 }
@@ -311,7 +315,8 @@ public final class OllamaManager: ObservableObject {
             // Stream the response to get progress
             for try await line in bytes.lines {
                 if let data = line.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                {
 
                     // Check for completion
                     if let status = json["status"] as? String, status == "success" {
@@ -322,8 +327,9 @@ public final class OllamaManager: ObservableObject {
 
                     // Update progress
                     if let completed = json["completed"] as? Int64,
-                       let total = json["total"] as? Int64,
-                       total > 0 {
+                        let total = json["total"] as? Int64,
+                        total > 0
+                    {
                         let percent = Int((Double(completed) / Double(total)) * 100)
                         let progressText = "downloading... \(percent)%"
                         self.status = .pullingModel(progress: progressText)
@@ -348,7 +354,8 @@ public final class OllamaManager: ObservableObject {
     public func showInstallDialog() {
         let alert = NSAlert()
         alert.messageText = "Ollama Required"
-        alert.informativeText = "AI refinement requires Ollama to be installed. Would you like to install it now?\n\nOllama is a free, local AI runtime that keeps your data private."
+        alert.informativeText =
+            "AI refinement requires Ollama to be installed. Would you like to install it now?\n\nOllama is a free, local AI runtime that keeps your data private."
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Install Ollama")
         alert.addButton(withTitle: "Cancel")
@@ -367,7 +374,7 @@ public final class OllamaManager: ObservableObject {
         let paths = [
             "/usr/local/bin/ollama",
             "/opt/homebrew/bin/ollama",
-            "/usr/bin/ollama"
+            "/usr/bin/ollama",
         ]
 
         for path in paths {

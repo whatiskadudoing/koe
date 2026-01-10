@@ -48,7 +48,7 @@ public struct KeyboardShortcut: Codable, Sendable, Equatable, Hashable {
         0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x",
         8: "c", 9: "v", 11: "b", 12: "q", 13: "w", 14: "e", 15: "r",
         16: "y", 17: "t", 31: "o", 32: "u", 34: "i", 35: "p", 37: "l",
-        38: "j", 40: "k", 45: "n", 46: "m"
+        38: "j", 40: "k", 45: "n", 46: "m",
     ]
 
     // MARK: - Presets
@@ -166,12 +166,13 @@ public final class HotkeyTrigger: PipelineAction, @unchecked Sendable {
                 "keyCode": config.shortcut.keyCode,
                 "modifiers": config.shortcut.modifiers.rawValue,
                 "triggerOnKeyDown": config.triggerOnKeyDown,
-                "triggerOnKeyUp": config.triggerOnKeyUp
+                "triggerOnKeyUp": config.triggerOnKeyUp,
             ]
         }
         set {
             if let keyCode = newValue["keyCode"] as? UInt32,
-               let modifiersRaw = newValue["modifiers"] as? Int {
+                let modifiersRaw = newValue["modifiers"] as? Int
+            {
                 config.shortcut = KeyboardShortcut(
                     keyCode: keyCode,
                     modifiers: KeyModifiers(rawValue: modifiersRaw)
@@ -214,17 +215,20 @@ public final class HotkeyTrigger: PipelineAction, @unchecked Sendable {
         // Register hotkey if handler provided
         guard let register = registerHandler else { return }
 
-        register(config.shortcut, { [weak self] in
-            guard let self = self, self.config.triggerOnKeyDown else { return }
-            Task {
-                await self.onKeyDown?()
-            }
-        }, { [weak self] in
-            guard let self = self, self.config.triggerOnKeyUp else { return }
-            Task {
-                await self.onKeyUp?()
-            }
-        })
+        register(
+            config.shortcut,
+            { [weak self] in
+                guard let self = self, self.config.triggerOnKeyDown else { return }
+                Task {
+                    await self.onKeyDown?()
+                }
+            },
+            { [weak self] in
+                guard let self = self, self.config.triggerOnKeyUp else { return }
+                Task {
+                    await self.onKeyUp?()
+                }
+            })
 
         isRegistered = true
     }
@@ -250,7 +254,7 @@ extension KeyboardShortcut {
         .optionSpace,
         .commandShiftSpace,
         .controlSpace,
-        .f5
+        .f5,
     ]
 
     /// Preset names for UI
@@ -258,6 +262,6 @@ extension KeyboardShortcut {
         .optionSpace: "Option + Space (Default)",
         .commandShiftSpace: "Command + Shift + Space",
         .controlSpace: "Control + Space",
-        .f5: "F5"
+        .f5: "F5",
     ]
 }

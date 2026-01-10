@@ -57,9 +57,9 @@ public protocol AIProvider: Sendable {
 }
 
 /// Default implementations
-public extension AIProvider {
+extension AIProvider {
     /// Convenience method without custom prompt
-    func refine(text: String, mode: RefinementMode) async throws -> String {
+    public func refine(text: String, mode: RefinementMode) async throws -> String {
         try await refine(text: text, mode: mode, customPrompt: nil)
     }
 }

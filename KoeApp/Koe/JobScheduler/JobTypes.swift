@@ -1,5 +1,23 @@
 import Foundation
 
+// MARK: - Node Type IDs
+
+/// Constants for node type identifiers used throughout the app
+public enum NodeTypeId {
+    // Transcription engines
+    public static let appleSpeech = "transcribe-apple"
+    public static let whisperKitBalanced = "transcribe-whisperkit-balanced"
+    public static let whisperKitAccurate = "transcribe-whisperkit-accurate"
+
+    // Pipeline stages
+    public static let hotkeyTrigger = "hotkey-trigger"
+    public static let voiceTrigger = "voice-trigger"
+    public static let recorder = "recorder"
+    public static let improve = "text-improve"
+    public static let autoType = "auto-type"
+    public static let autoEnter = "auto-enter"
+}
+
 // MARK: - Task Status
 
 public enum TaskStatus: String, Codable, Sendable {

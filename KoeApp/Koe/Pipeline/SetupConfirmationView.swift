@@ -1,5 +1,5 @@
-import SwiftUI
 import KoeUI
+import SwiftUI
 
 // MARK: - Setup Confirmation View
 
@@ -152,12 +152,12 @@ extension View {
 #Preview {
     SetupConfirmationView(
         nodeInfo: NodeInfo(
-            typeId: "transcribe-whisperkit",
-            displayName: "WhisperKit",
-            icon: "waveform.circle",
+            typeId: "transcribe-whisperkit-balanced",
+            displayName: "Balanced",
+            icon: "gauge.with.dots.needle.50percent",
             color: .blue,
             requiresSetup: true,
-            setupRequirements: .whisperKit
+            setupRequirements: .whisperKitBalanced
         ),
         onConfirm: {},
         onCancel: {}

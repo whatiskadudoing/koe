@@ -168,7 +168,8 @@ public final class ModelManager: ObservableObject {
         case .huggingFace(let repo, let files):
             // Match WhisperKit's path structure for compatibility
             if let firstFile = files.first {
-                return modelsDirectory
+                return
+                    modelsDirectory
                     .appendingPathComponent("models")
                     .appendingPathComponent(repo.replacingOccurrences(of: "/", with: "_"))
                     .appendingPathComponent(firstFile)
@@ -196,7 +197,8 @@ public final class ModelManager: ObservableObject {
                 throw ModelError.invalidURL(urlString)
             }
 
-            let destinationDir = modelsDirectory
+            let destinationDir =
+                modelsDirectory
                 .appendingPathComponent("models")
                 .appendingPathComponent(repo.replacingOccurrences(of: "/", with: "_"))
 
@@ -204,7 +206,8 @@ public final class ModelManager: ObservableObject {
             let destination = destinationDir.appendingPathComponent(file)
 
             // Download file
-            try await downloadFile(from: url, to: destination, model: model, fileIndex: completedFiles, totalFiles: totalFiles)
+            try await downloadFile(
+                from: url, to: destination, model: model, fileIndex: completedFiles, totalFiles: totalFiles)
             completedFiles += 1
         }
     }
@@ -215,7 +218,9 @@ public final class ModelManager: ObservableObject {
         try await downloadFile(from: url, to: destination, model: model, fileIndex: 0, totalFiles: 1)
     }
 
-    private func downloadFile(from url: URL, to destination: URL, model: ModelDefinition, fileIndex: Int, totalFiles: Int) async throws {
+    private func downloadFile(
+        from url: URL, to destination: URL, model: ModelDefinition, fileIndex: Int, totalFiles: Int
+    ) async throws {
         logger.notice("[ModelManager] Downloading file from \(url.lastPathComponent)")
 
         // Use bytes async sequence for progress tracking
@@ -273,7 +278,9 @@ public final class ModelManager: ObservableObject {
         }
         try fileManager.moveItem(at: tempURL, to: destination)
 
-        logger.notice("[ModelManager] Downloaded \(url.lastPathComponent) (\(ByteCountFormatter.string(fromByteCount: downloadedBytes, countStyle: .file)))")
+        logger.notice(
+            "[ModelManager] Downloaded \(url.lastPathComponent) (\(ByteCountFormatter.string(fromByteCount: downloadedBytes, countStyle: .file)))"
+        )
     }
 
     private func updateOverallProgress() {

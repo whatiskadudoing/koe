@@ -1,6 +1,6 @@
-import SwiftUI
-import KoeUI
 import KoeDomain
+import KoeUI
+import SwiftUI
 
 // MARK: - Node Settings Content (used inside modal)
 
@@ -19,12 +19,12 @@ struct NodeSettingsContent: View {
             VoiceTriggerSettings(appState: appState)
         case .recorder:
             RecorderSettings(appState: appState)
-        case .transcribe:
-            TranscribeSettings(appState: appState)
-        case .transcribeWhisperKit:
-            WhisperKitSettings(appState: appState)
         case .transcribeApple:
             AppleSpeechSettings(appState: appState)
+        case .transcribeWhisperKitBalanced:
+            WhisperKitBalancedSettings(appState: appState)
+        case .transcribeWhisperKitAccurate:
+            WhisperKitAccurateSettings(appState: appState)
         case .improve:
             ImproveSettings(appState: appState)
         case .autoType:
@@ -116,16 +116,20 @@ struct VoiceTriggerSettings: View {
                     HStack(spacing: 8) {
                         Image(systemName: "waveform")
                             .font(.system(size: 12))
-                            .foregroundColor(appState.isCommandListeningEnabled ? KoeColors.accent : KoeColors.textLight)
+                            .foregroundColor(
+                                appState.isCommandListeningEnabled ? KoeColors.accent : KoeColors.textLight)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Voice Activation")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(KoeColors.accent)
 
-                            Text(appState.voiceCommandSettings.useExtendedTrigger ? "Say \"hey koe\" to start" : "Say \"kon\" to start recording")
-                                .font(.system(size: 10))
-                                .foregroundColor(KoeColors.textLight)
+                            Text(
+                                appState.voiceCommandSettings.useExtendedTrigger
+                                    ? "Say \"hey koe\" to start" : "Say \"kon\" to start recording"
+                            )
+                            .font(.system(size: 10))
+                            .foregroundColor(KoeColors.textLight)
                         }
                     }
                 }
@@ -191,9 +195,12 @@ struct VoiceTriggerSettings: View {
                     Circle()
                         .fill(KoeColors.stateComplete)
                         .frame(width: 6, height: 6)
-                    Text(appState.voiceCommandSettings.useExtendedTrigger ? "Listening for \"hey koe\"..." : "Listening for \"kon\"...")
-                        .font(.system(size: 11))
-                        .foregroundColor(KoeColors.textTertiary)
+                    Text(
+                        appState.voiceCommandSettings.useExtendedTrigger
+                            ? "Listening for \"hey koe\"..." : "Listening for \"kon\"..."
+                    )
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textTertiary)
                 }
             }
 
@@ -626,7 +633,7 @@ struct TranscribeSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Language selector
+            // Language (always auto-detect)
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Language")
@@ -640,19 +647,14 @@ struct TranscribeSettings: View {
 
                 Spacer()
 
-                Picker("", selection: $appState.selectedLanguage) {
-                    ForEach(Language.all, id: \.code) { lang in
-                        Text("\(lang.flag) \(lang.name)").tag(lang.code)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 130)
+                Text("🌐 Auto-detect")
+                    .font(.system(size: 12))
+                    .foregroundColor(KoeColors.textLight)
             }
 
             Divider()
 
-            // Model info (uses global setting)
+            // Model info
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Model")
@@ -688,7 +690,145 @@ struct TranscribeSettings: View {
     }
 }
 
-// MARK: - WhisperKit Settings
+// MARK: - WhisperKit Balanced Settings
+
+struct WhisperKitBalancedSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Engine description
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "gauge.with.dots.needle.50percent")
+                        .font(.system(size: 14))
+                        .foregroundColor(KoeColors.stateTranscribing)
+                    Text("Balanced Engine")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(KoeColors.accent)
+                }
+
+                Text("Best speed/accuracy balance using WhisperKit turbo model optimized for Apple Silicon.")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            // Model info
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Model Size")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(KoeColors.textTertiary)
+                    Text("632 MB")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(KoeColors.stateComplete)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Performance")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(KoeColors.textTertiary)
+                    Text("Excellent")
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.stateComplete)
+                }
+            }
+
+            Divider()
+
+            // Language
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Language")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+                }
+
+                Spacer()
+
+                Text("Auto-detect")
+                    .font(.system(size: 12))
+                    .foregroundColor(KoeColors.textLight)
+            }
+        }
+    }
+}
+
+// MARK: - WhisperKit Accurate Settings
+
+struct WhisperKitAccurateSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Engine description
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "target")
+                        .font(.system(size: 14))
+                        .foregroundColor(KoeColors.stateTranscribing)
+                    Text("Accurate Engine")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(KoeColors.accent)
+                }
+
+                Text("Highest accuracy using WhisperKit large-v3 model. Best for critical transcriptions.")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            // Model info
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Model Size")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(KoeColors.textTertiary)
+                    Text("947 MB")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(KoeColors.accent)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Accuracy")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(KoeColors.textTertiary)
+                    Text("Best")
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.stateComplete)
+                }
+            }
+
+            Divider()
+
+            // Language
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Language")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+                }
+
+                Spacer()
+
+                Text("Auto-detect")
+                    .font(.system(size: 12))
+                    .foregroundColor(KoeColors.textLight)
+            }
+        }
+    }
+}
+
+// MARK: - WhisperKit Settings (Legacy)
 
 struct WhisperKitSettings: View {
     @Bindable var appState: AppState
@@ -765,7 +905,7 @@ struct WhisperKitSettings: View {
 
             Divider()
 
-            // Language selector
+            // Language (always auto-detect)
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Language")
@@ -775,14 +915,9 @@ struct WhisperKitSettings: View {
 
                 Spacer()
 
-                Picker("", selection: $appState.selectedLanguage) {
-                    ForEach(Language.all, id: \.code) { lang in
-                        Text("\(lang.flag) \(lang.name)").tag(lang.code)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 130)
+                Text("🌐 Auto-detect")
+                    .font(.system(size: 12))
+                    .foregroundColor(KoeColors.textLight)
             }
         }
     }
@@ -865,7 +1000,7 @@ struct AppleSpeechSettings: View {
 
             Divider()
 
-            // Language selector
+            // Language (always auto-detect)
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Language")
@@ -875,14 +1010,9 @@ struct AppleSpeechSettings: View {
 
                 Spacer()
 
-                Picker("", selection: $appState.selectedLanguage) {
-                    ForEach(Language.all, id: \.code) { lang in
-                        Text("\(lang.flag) \(lang.name)").tag(lang.code)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 130)
+                Text("🌐 Auto-detect")
+                    .font(.system(size: 12))
+                    .foregroundColor(KoeColors.textLight)
             }
 
             Divider()
@@ -913,7 +1043,8 @@ struct ImproveSettings: View {
                     HStack(spacing: 8) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 12))
-                            .foregroundColor(appState.isRefinementEnabled ? KoeColors.stateRefining : KoeColors.textLight)
+                            .foregroundColor(
+                                appState.isRefinementEnabled ? KoeColors.stateRefining : KoeColors.textLight)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("AI Refinement")
@@ -939,7 +1070,8 @@ struct ImproveSettings: View {
                         HStack(spacing: 8) {
                             Image(systemName: "text.badge.checkmark")
                                 .font(.system(size: 12))
-                                .foregroundColor(appState.isCleanupEnabled ? KoeColors.stateRefining : KoeColors.textLight)
+                                .foregroundColor(
+                                    appState.isCleanupEnabled ? KoeColors.stateRefining : KoeColors.textLight)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Clean Up")
@@ -985,7 +1117,8 @@ struct ImproveSettings: View {
                         HStack(spacing: 8) {
                             Image(systemName: "wand.and.stars")
                                 .font(.system(size: 12))
-                                .foregroundColor(appState.isPromptImproverEnabled ? KoeColors.stateRefining : KoeColors.textLight)
+                                .foregroundColor(
+                                    appState.isPromptImproverEnabled ? KoeColors.stateRefining : KoeColors.textLight)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Prompt Mode")

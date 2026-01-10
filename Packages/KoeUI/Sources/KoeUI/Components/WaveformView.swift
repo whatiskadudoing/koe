@@ -1,5 +1,5 @@
-import SwiftUI
 import KoeDomain
+import SwiftUI
 
 // MARK: - Animated Ring (Main Component)
 
@@ -61,7 +61,7 @@ struct WaveRingAnimation: View {
                     )
                 }
             }
-            .drawingGroup() // GPU acceleration for smoother rendering
+            .drawingGroup()  // GPU acceleration for smoother rendering
         }
     }
 
@@ -79,7 +79,7 @@ struct WaveRingAnimation: View {
         var path = Path()
         let phase = -time * 2.5 + layerOffset * .pi
         let normalizedAudio = CGFloat(min(audioLevel * 2.5, 1.0))
-        let segmentCount = 120 // More segments for smoother curves
+        let segmentCount = 120  // More segments for smoother curves
 
         for i in 0...segmentCount {
             let t = Double(i) / Double(segmentCount)
@@ -95,7 +95,7 @@ struct WaveRingAnimation: View {
             var amplitude: CGFloat
             if audioLevel > 0.005 {
                 // Smooth audio response
-                let smoothAudio = pow(normalizedAudio, 0.7) // Softer response curve
+                let smoothAudio = pow(normalizedAudio, 0.7)  // Softer response curve
                 let baseAmp = 0.3 + smoothAudio * 0.7
                 amplitude = CGFloat(waveValue) * baseAmp * maxAmplitude * layerScale
 
@@ -152,7 +152,7 @@ struct BlobRingAnimation: View {
                 let time = timeline.date.timeIntervalSinceReferenceDate
 
                 let normalizedAudio = CGFloat(min(audioLevel * 2.2, 1.0))
-                let segmentCount = 150 // More segments for ultra-smooth blob
+                let segmentCount = 150  // More segments for ultra-smooth blob
 
                 // Draw multiple blob layers
                 for layer in (0..<2).reversed() {
@@ -190,7 +190,8 @@ struct BlobRingAnimation: View {
                     }
                     path.closeSubpath()
 
-                    let baseOpacity = audioLevel > 0.005 ? (0.65 + Double(normalizedAudio) * 0.35) : (isActive ? 0.55 : 0.35)
+                    let baseOpacity =
+                        audioLevel > 0.005 ? (0.65 + Double(normalizedAudio) * 0.35) : (isActive ? 0.55 : 0.35)
                     let layerOpacity = baseOpacity * (1.0 - Double(layer) * 0.3)
                     let lineWidth: CGFloat = layer == 0 ? 2.5 : 1.5
 

@@ -1,6 +1,6 @@
-import SwiftUI
 import KoeDomain
 import KoeUI
+import SwiftUI
 
 /// Simple loading view that shows during app startup
 /// No longer loads models - that's handled on-demand via the setup queue

@@ -10,12 +10,12 @@ let package = Package(
         .iOS(.v14),
         .visionOS(.v1),
         .watchOS(.v4),
-        .tvOS(.v14)
+        .tvOS(.v14),
     ],
     products: [
         .library(
             name: "LLM",
-            targets: ["LLM"]),
+            targets: ["LLM"])
     ],
     targets: [
         .binaryTarget(

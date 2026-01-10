@@ -63,7 +63,8 @@ public struct VoiceCommandSettings: Codable, Sendable, Equatable {
 
     public static func load() -> VoiceCommandSettings {
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-              let settings = try? JSONDecoder().decode(VoiceCommandSettings.self, from: data) else {
+            let settings = try? JSONDecoder().decode(VoiceCommandSettings.self, from: data)
+        else {
             return .default
         }
         return settings

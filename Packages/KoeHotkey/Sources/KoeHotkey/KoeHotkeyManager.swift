@@ -1,5 +1,5 @@
-import HotKey
 import AppKit
+import HotKey
 import KoeDomain
 
 /// Global hotkey manager for Koe
@@ -41,8 +41,7 @@ public final class KoeHotkeyManager: HotkeyService {
     private func isModifierOnlyKey(_ code: UInt32) -> Bool {
         // 61 = Right Option, 58 = Right Command, 60 = Right Shift, 62 = Right Control
         // 55 = Left Command, 56 = Left Shift, 58 = Left Option, 59 = Left Control
-        return code == 61 || code == 58 || code == 60 || code == 62 ||
-               code == 55 || code == 56 || code == 59
+        return code == 61 || code == 58 || code == 60 || code == 62 || code == 55 || code == 56 || code == 59
     }
 
     /// Register hotkey handlers
@@ -152,7 +151,8 @@ public final class KoeHotkeyManager: HotkeyService {
 
                 // Only trigger key up if we had triggered key down (held long enough)
                 if let pressTime = modifierPressTime,
-                   Date().timeIntervalSince(pressTime) >= holdThreshold {
+                    Date().timeIntervalSince(pressTime) >= holdThreshold
+                {
                     DispatchQueue.main.async { [weak self] in
                         self?.onKeyUp?()
                     }

@@ -35,8 +35,8 @@ public enum AITier: String, Codable, Sendable, CaseIterable {
     /// Approximate model size in bytes
     public var approximateSize: Int64 {
         switch self {
-        case .best: return 2_000_000_000     // ~2GB
-        case .custom: return 0               // Varies
+        case .best: return 2_000_000_000  // ~2GB
+        case .custom: return 0  // Varies
         }
     }
 
@@ -59,8 +59,8 @@ public enum AITier: String, Codable, Sendable, CaseIterable {
     /// Whether this tier works offline
     public var worksOffline: Bool {
         switch self {
-        case .best: return true   // After download
-        case .custom: return true // Ollama is local
+        case .best: return true  // After download
+        case .custom: return true  // Ollama is local
         }
     }
 

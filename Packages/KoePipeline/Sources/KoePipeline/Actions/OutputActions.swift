@@ -2,10 +2,10 @@ import Foundation
 
 /// Typing speed presets
 public enum TypingSpeed: String, Codable, Sendable, CaseIterable {
-    case instant = "instant"     // All at once
-    case fast = "fast"           // Very quick typing
-    case natural = "natural"     // Human-like speed
-    case slow = "slow"           // Deliberate, visible typing
+    case instant = "instant"  // All at once
+    case fast = "fast"  // Very quick typing
+    case natural = "natural"  // Human-like speed
+    case slow = "slow"  // Deliberate, visible typing
 
     public var displayName: String {
         switch self {
@@ -88,12 +88,13 @@ public final class AutoTypeAction: PipelineAction, @unchecked Sendable {
                 "speed": config.speed.rawValue,
                 "delayBefore": config.delayBefore,
                 "addTrailingNewline": config.addTrailingNewline,
-                "clearSelection": config.clearSelection
+                "clearSelection": config.clearSelection,
             ]
         }
         set {
             if let speedRaw = newValue["speed"] as? String,
-               let speed = TypingSpeed(rawValue: speedRaw) {
+                let speed = TypingSpeed(rawValue: speedRaw)
+            {
                 config.speed = speed
             }
             if let v = newValue["delayBefore"] as? TimeInterval { config.delayBefore = v }
@@ -198,7 +199,7 @@ public final class AutoEnterAction: PipelineAction, @unchecked Sendable {
         get {
             [
                 "delayAfterType": config.delayAfterType,
-                "enterCount": config.enterCount
+                "enterCount": config.enterCount,
             ]
         }
         set {
@@ -312,7 +313,7 @@ public final class NotificationAction: PipelineAction, @unchecked Sendable {
 
     public var configuration: [String: Any] = [
         "showPreview": true,
-        "sound": true
+        "sound": true,
     ]
 
     public var notificationHandler: ((String, String) async throws -> Void)?

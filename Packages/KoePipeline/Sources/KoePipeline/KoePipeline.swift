@@ -73,7 +73,7 @@ extension PipelineTemplates {
             PipelineElementInstance(typeId: "audio-input"),
             PipelineElementInstance(typeId: "transcription"),
             PipelineElementInstance(typeId: "language-improvement"),
-            PipelineElementInstance(typeId: "auto-type")
+            PipelineElementInstance(typeId: "auto-type"),
         ]
     )
 
@@ -88,10 +88,10 @@ extension PipelineTemplates {
                 typeId: "language-improvement",
                 configuration: [
                     "cleanupEnabled": AnyCodable(true),
-                    "tone": AnyCodable("formal")
+                    "tone": AnyCodable("formal"),
                 ]
             ),
-            PipelineElementInstance(typeId: "auto-type")
+            PipelineElementInstance(typeId: "auto-type"),
         ]
     )
 
@@ -104,7 +104,7 @@ extension PipelineTemplates {
             PipelineElementInstance(typeId: "transcription"),
             PipelineElementInstance(typeId: "language-improvement"),
             PipelineElementInstance(typeId: "prompt-optimizer"),
-            PipelineElementInstance(typeId: "auto-type")
+            PipelineElementInstance(typeId: "auto-type"),
         ]
     )
 
@@ -118,7 +118,7 @@ extension PipelineTemplates {
             PipelineElementInstance(typeId: "language-improvement"),
             PipelineElementInstance(typeId: "prompt-optimizer", isEnabled: false),
             PipelineElementInstance(typeId: "auto-type"),
-            PipelineElementInstance(typeId: "auto-enter")
+            PipelineElementInstance(typeId: "auto-enter"),
         ]
     )
 }
@@ -161,18 +161,19 @@ public func createVoiceToTextPipeline(
 ) -> Pipeline {
     var elements: [PipelineElementInstance] = [
         PipelineElementInstance(typeId: "audio-input"),
-        PipelineElementInstance(typeId: "transcription")
+        PipelineElementInstance(typeId: "transcription"),
     ]
 
     // Language improvement
     if cleanup || tone != .none {
-        elements.append(PipelineElementInstance(
-            typeId: "language-improvement",
-            configuration: [
-                "cleanupEnabled": AnyCodable(cleanup),
-                "tone": AnyCodable(tone.rawValue)
-            ]
-        ))
+        elements.append(
+            PipelineElementInstance(
+                typeId: "language-improvement",
+                configuration: [
+                    "cleanupEnabled": AnyCodable(cleanup),
+                    "tone": AnyCodable(tone.rawValue),
+                ]
+            ))
     }
 
     // Prompt optimizer

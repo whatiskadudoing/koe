@@ -1,6 +1,6 @@
-import Foundation
-import ApplicationServices
 import AppKit
+import ApplicationServices
+import Foundation
 
 /// Captures and restores focus to a specific text field across application switches.
 /// Uses macOS Accessibility APIs to lock onto a target input field.
@@ -93,7 +93,9 @@ public final class TargetLockService: @unchecked Sendable {
         lockedApp = frontApp
         lockedAppElement = appElement
 
-        NSLog("[TargetLock] Locked target: app=\(frontApp.bundleIdentifier ?? "unknown"), role=\(role), valueSettable=\(isValueSettable)")
+        NSLog(
+            "[TargetLock] Locked target: app=\(frontApp.bundleIdentifier ?? "unknown"), role=\(role), valueSettable=\(isValueSettable)"
+        )
 
         return true
     }
@@ -113,7 +115,8 @@ public final class TargetLockService: @unchecked Sendable {
     /// - Returns: True if target is valid and focus can be restored
     public func canRestoreTarget() -> Bool {
         guard let element = lockedElement,
-              let app = lockedApp else {
+            let app = lockedApp
+        else {
             NSLog("[TargetLock] No locked target")
             return false
         }
@@ -145,8 +148,9 @@ public final class TargetLockService: @unchecked Sendable {
     /// - Returns: True if focus was successfully restored
     public func restoreFocus() -> Bool {
         guard let element = lockedElement,
-              let app = lockedApp,
-              let appElement = lockedAppElement else {
+            let app = lockedApp,
+            let appElement = lockedAppElement
+        else {
             return false
         }
 
@@ -184,7 +188,9 @@ public final class TargetLockService: @unchecked Sendable {
             return true
         }
 
-        NSLog("[TargetLock] Could not restore focus: setFocusedUIElement=\(setFocusResult.rawValue), setFocused=\(setFocusedResult.rawValue)")
+        NSLog(
+            "[TargetLock] Could not restore focus: setFocusedUIElement=\(setFocusResult.rawValue), setFocused=\(setFocusedResult.rawValue)"
+        )
         return false
     }
 
@@ -242,7 +248,8 @@ public final class TargetLockService: @unchecked Sendable {
 
         // Check if we're still in the same app
         if let currentApp = NSWorkspace.shared.frontmostApplication,
-           currentApp.processIdentifier == lockedApp.processIdentifier {
+            currentApp.processIdentifier == lockedApp.processIdentifier
+        {
             // Same app - check if element is still valid
             if canRestoreTarget() {
                 return .alreadyFocused

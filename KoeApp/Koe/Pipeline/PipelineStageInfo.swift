@@ -1,23 +1,23 @@
-import SwiftUI
 import KoeUI
+import SwiftUI
 
 /// Represents a stage in the visual pipeline editor
 enum PipelineStageInfo: String, CaseIterable, Identifiable {
     // Parallel triggers (only one can be active at a time)
-    case hotkeyTrigger   // Keyboard shortcut trigger
-    case voiceTrigger    // Voice command trigger ("koe")
+    case hotkeyTrigger  // Keyboard shortcut trigger
+    case voiceTrigger  // Voice command trigger ("koe")
 
     // Sequential pipeline stages
-    case recorder        // Records audio (behavior depends on trigger type)
-    case transcribe      // Converts audio to text (legacy - for backwards compatibility)
+    case recorder  // Records audio (behavior depends on trigger type)
 
     // Parallel transcription engines (mutually exclusive - only one can be active)
-    case transcribeWhisperKit  // WhisperKit transcription (~7.75% WER, needs download)
-    case transcribeApple       // Apple Speech transcription (~14% WER, instant)
+    case transcribeApple  // Apple Speech - instant, no download
+    case transcribeWhisperKitBalanced  // WhisperKit Balanced - 632 MB, good speed/accuracy
+    case transcribeWhisperKitAccurate  // WhisperKit Accurate - 947 MB, best accuracy
 
-    case improve         // AI text improvement (cleanup, tone, prompt)
-    case autoType        // Types the text
-    case autoEnter       // Presses enter
+    case improve  // AI text improvement (cleanup, tone, prompt)
+    case autoType  // Types the text
+    case autoEnter  // Presses enter
 
     var id: String { rawValue }
 
@@ -26,65 +26,33 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .hotkeyTrigger: return "On Press"
         case .voiceTrigger: return "On Voice"
         case .recorder: return "Record"
-        case .transcribe: return "Transcribe"
-        case .transcribeWhisperKit: return "WhisperKit"
         case .transcribeApple: return "Apple Speech"
+        case .transcribeWhisperKitBalanced: return "Balanced"
+        case .transcribeWhisperKitAccurate: return "Accurate"
         case .improve: return "Improve"
         case .autoType: return "Type"
         case .autoEnter: return "Enter"
         }
     }
 
+    /// Icon from NodeRegistry (single source of truth)
     var icon: String {
-        switch self {
-        case .hotkeyTrigger: return "command"
-        case .voiceTrigger: return "waveform"
-        case .recorder: return "mic"
-        case .transcribe: return "text.bubble"
-        case .transcribeWhisperKit: return "waveform.circle"
-        case .transcribeApple: return "apple.logo"
-        case .improve: return "sparkles"
-        case .autoType: return "keyboard"
-        case .autoEnter: return "return"
-        }
+        nodeInfo.icon
     }
 
+    /// Color from NodeRegistry (single source of truth)
     var color: Color {
-        switch self {
-        case .hotkeyTrigger: return KoeColors.accent
-        case .voiceTrigger: return KoeColors.accent
-        case .recorder: return KoeColors.stateRecording
-        case .transcribe: return KoeColors.stateTranscribing
-        case .transcribeWhisperKit: return KoeColors.stateTranscribing
-        case .transcribeApple: return KoeColors.stateTranscribing
-        case .improve: return KoeColors.stateRefining
-        case .autoType: return KoeColors.accent
-        case .autoEnter: return KoeColors.accent
-        }
+        nodeInfo.color
     }
 
-    /// Whether this stage can be toggled on/off by the user
+    /// Whether this stage can be toggled on/off by the user (from NodeRegistry)
     var isToggleable: Bool {
-        switch self {
-        case .hotkeyTrigger, .voiceTrigger, .improve, .autoEnter: return true
-        case .transcribeWhisperKit, .transcribeApple: return true
-        default: return false
-        }
+        nodeInfo.isUserToggleable
     }
 
-    /// Whether this stage is implicit (shown but not interactive)
-    var isImplicit: Bool {
-        // Hide legacy transcribe stage - use the specific engine nodes instead
-        return self == .transcribe
-    }
-
-    /// Whether this stage has settings that can be configured
+    /// Whether this stage has settings that can be configured (from NodeRegistry)
     var hasSettings: Bool {
-        switch self {
-        case .hotkeyTrigger, .voiceTrigger, .recorder, .transcribe, .improve: return true
-        case .transcribeWhisperKit, .transcribeApple: return true
-        default: return false
-        }
+        nodeInfo.hasSettings
     }
 
     /// Whether this is a trigger stage (part of parallel trigger group)
@@ -98,7 +66,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this is a transcription engine stage (part of parallel transcription group)
     var isTranscriptionEngine: Bool {
         switch self {
-        case .transcribeWhisperKit, .transcribeApple: return true
+        case .transcribeApple, .transcribeWhisperKitBalanced, .transcribeWhisperKitAccurate: return true
         default: return false
         }
     }
@@ -110,9 +78,9 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .hotkeyTrigger: return nil
         case .voiceTrigger: return nil
         case .recorder: return nil
-        case .transcribe: return nil
-        case .transcribeWhisperKit: return "transcribe-whisperkit"
         case .transcribeApple: return "transcribe-apple"
+        case .transcribeWhisperKitBalanced: return "transcribe-whisperkit-balanced"
+        case .transcribeWhisperKitAccurate: return "transcribe-whisperkit-accurate"
         case .improve: return "text-improve"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
@@ -126,7 +94,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
 
     /// Transcription engine stages shown in parallel
     static var transcriptionStages: [PipelineStageInfo] {
-        [.transcribeWhisperKit, .transcribeApple]
+        [.transcribeApple, .transcribeWhisperKitBalanced, .transcribeWhisperKitAccurate]
     }
 
     /// Sequential stages after triggers (before transcription split)
@@ -139,13 +107,11 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         [.improve, .autoType, .autoEnter]
     }
 
-    /// Sequential stages after triggers (legacy - includes all)
+    /// Sequential stages after triggers (includes all)
     static var sequentialStages: [PipelineStageInfo] {
-        [.recorder, .transcribeWhisperKit, .transcribeApple, .improve, .autoType, .autoEnter]
-    }
-
-    /// Stages to show in the pipeline strip (excludes implicit ones)
-    static var visibleStages: [PipelineStageInfo] {
-        allCases.filter { !$0.isImplicit }
+        [
+            .recorder, .transcribeApple, .transcribeWhisperKitBalanced, .transcribeWhisperKitAccurate, .improve,
+            .autoType, .autoEnter,
+        ]
     }
 }

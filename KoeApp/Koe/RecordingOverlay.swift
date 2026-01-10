@@ -1,7 +1,7 @@
-import SwiftUI
 import AppKit
 import KoeDomain
 import KoeUI
+import SwiftUI
 
 // MARK: - Overlay Window Controller
 
@@ -145,9 +145,22 @@ struct OverlayContentView: View {
         case .recording:
             return .recorder
         case .transcribing:
-            return .transcribe
+            // Show the icon of the active transcription engine
+            return activeTranscriptionStage
         case .refining:
             return .improve
+        }
+    }
+
+    /// Get the active transcription engine stage
+    private var activeTranscriptionStage: PipelineStageInfo {
+        let appState = AppState.shared
+        if appState.isWhisperKitBalancedEnabled {
+            return .transcribeWhisperKitBalanced
+        } else if appState.isWhisperKitAccurateEnabled {
+            return .transcribeWhisperKitAccurate
+        } else {
+            return .transcribeApple
         }
     }
 

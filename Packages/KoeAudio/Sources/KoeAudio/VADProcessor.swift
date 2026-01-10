@@ -72,7 +72,8 @@ public struct VADProcessor: Sendable {
                 let silenceStart = silenceStartTime ?? Date()
 
                 if let startTime = silenceStartTime,
-                   Date().timeIntervalSince(startTime) >= silenceDuration {
+                    Date().timeIntervalSince(startTime) >= silenceDuration
+                {
                     // Silence has been long enough - check speech duration
                     let speechSamples = totalSamples - speechStartIndex
                     let speechDuration = Double(speechSamples) / sampleRate

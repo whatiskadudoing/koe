@@ -11,7 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../KoeDomain"),
-        .package(url: "https://github.com/soffes/HotKey.git", from: "0.2.1")
+        .package(url: "https://github.com/soffes/HotKey.git", from: "0.2.1"),
     ],
     targets: [
         .target(

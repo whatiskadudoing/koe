@@ -1,5 +1,5 @@
-import Accelerate
 import AVFoundation
+import Accelerate
 import KoeCommands
 import KoeUI
 import SwiftUI
@@ -164,7 +164,10 @@ struct VoiceTrainingView: View {
             HStack(spacing: 8) {
                 ForEach(0..<totalSamples, id: \.self) { index in
                     Circle()
-                        .fill(index < currentSample ? Color.green : (index == currentSample ? recordingColor : lightGray.opacity(0.3)))
+                        .fill(
+                            index < currentSample
+                                ? Color.green : (index == currentSample ? recordingColor : lightGray.opacity(0.3))
+                        )
                         .frame(width: 12, height: 12)
                 }
             }

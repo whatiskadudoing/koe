@@ -51,11 +51,13 @@ public struct NodeToggle: View {
             .scaleEffect(isPressed ? 0.9 : 1.0)
         }
         .buttonStyle(.plain)
-        .onLongPressGesture(minimumDuration: 0, pressing: { pressing in
-            withAnimation(.easeOut(duration: 0.1)) {
-                isPressed = pressing
-            }
-        }, perform: {})
+        .onLongPressGesture(
+            minimumDuration: 0,
+            pressing: { pressing in
+                withAnimation(.easeOut(duration: 0.1)) {
+                    isPressed = pressing
+                }
+            }, perform: {})
     }
 }
 
@@ -109,11 +111,14 @@ public struct NodeToggleIndicator: View {
                 isHovered = hovering
             }
         }
-        .onLongPressGesture(minimumDuration: 0, pressing: { pressing in
-            withAnimation(.easeOut(duration: 0.1)) {
-                isPressed = pressing
-            }
-        }, perform: {})
+        .onLongPressGesture(
+            minimumDuration: 0,
+            pressing: { pressing in
+                withAnimation(.easeOut(duration: 0.1)) {
+                    isPressed = pressing
+                }
+            }, perform: {}
+        )
         .help(isOn ? "Click to disable" : "Click to enable")
     }
 }

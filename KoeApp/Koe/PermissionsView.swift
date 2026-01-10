@@ -1,9 +1,9 @@
-import SwiftUI
 import AVFoundation
-import ApplicationServices
 import AppKit
-import KoeTextInsertion
+import ApplicationServices
 import Combine
+import KoeTextInsertion
+import SwiftUI
 import UserNotifications
 
 enum PermissionStep {
@@ -50,16 +50,32 @@ struct PermissionsView: View {
                         // Step indicator
                         HStack(spacing: 8) {
                             Circle()
-                                .fill(currentStep == .microphone ? accentColor : (appState.hasMicrophonePermission ? Color.green : lightGray.opacity(0.3)))
+                                .fill(
+                                    currentStep == .microphone
+                                        ? accentColor
+                                        : (appState.hasMicrophonePermission ? Color.green : lightGray.opacity(0.3))
+                                )
                                 .frame(width: 8, height: 8)
                             Circle()
-                                .fill(currentStep == .screenRecording ? accentColor : (appState.hasScreenRecordingPermission ? Color.green : lightGray.opacity(0.3)))
+                                .fill(
+                                    currentStep == .screenRecording
+                                        ? accentColor
+                                        : (appState.hasScreenRecordingPermission ? Color.green : lightGray.opacity(0.3))
+                                )
                                 .frame(width: 8, height: 8)
                             Circle()
-                                .fill(currentStep == .accessibility ? accentColor : (appState.hasAccessibilityPermission ? Color.green : lightGray.opacity(0.3)))
+                                .fill(
+                                    currentStep == .accessibility
+                                        ? accentColor
+                                        : (appState.hasAccessibilityPermission ? Color.green : lightGray.opacity(0.3))
+                                )
                                 .frame(width: 8, height: 8)
                             Circle()
-                                .fill(currentStep == .notification ? accentColor : (appState.hasNotificationPermission ? Color.green : lightGray.opacity(0.3)))
+                                .fill(
+                                    currentStep == .notification
+                                        ? accentColor
+                                        : (appState.hasNotificationPermission ? Color.green : lightGray.opacity(0.3))
+                                )
                                 .frame(width: 8, height: 8)
                         }
                         .padding(.top, 4)
@@ -79,25 +95,28 @@ struct PermissionsView: View {
                                 buttonTitle: "Allow Microphone",
                                 onRequest: requestMicrophonePermission
                             )
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                ))
 
                         case .screenRecording:
                             PermissionCard(
                                 icon: "rectangle.dashed.badge.record",
                                 title: "Screen Recording",
-                                description: "Koe needs screen recording access to detect meeting apps and capture meeting audio.",
+                                description:
+                                    "Koe needs screen recording access to detect meeting apps and capture meeting audio.",
                                 isGranted: appState.hasScreenRecordingPermission,
                                 isRequesting: isRequestingPermission,
                                 buttonTitle: "Open Settings",
                                 onRequest: requestScreenRecordingPermission
                             )
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                ))
 
                         case .accessibility:
                             PermissionCard(
@@ -109,25 +128,28 @@ struct PermissionsView: View {
                                 buttonTitle: "Open Settings",
                                 onRequest: requestAccessibilityPermission
                             )
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                ))
 
                         case .notification:
                             PermissionCard(
                                 icon: "bell.fill",
                                 title: "Notifications",
-                                description: "Koe needs notification permission to alert you when voice commands are triggered.",
+                                description:
+                                    "Koe needs notification permission to alert you when voice commands are triggered.",
                                 isGranted: appState.hasNotificationPermission,
                                 isRequesting: isRequestingPermission,
                                 buttonTitle: "Allow Notifications",
                                 onRequest: requestNotificationPermission
                             )
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                ))
 
                         case .complete:
                             EmptyView()
@@ -182,7 +204,7 @@ struct PermissionsView: View {
                 // relaunch the app to ensure the new permission takes effect
                 if wasWaitingForAccessibility && !hadAccessibilityBefore {
                     // Give a moment for the system to update, then relaunch
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5 seconds
                     appState.checkAllPermissions()
 
                     if appState.hasAccessibilityPermission {

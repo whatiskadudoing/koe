@@ -96,7 +96,8 @@ final class NodeStateController<Node: Hashable & Sendable> {
         var requirementsMet = true
         for requiredTypeId in nodeInfo.requiredNodes {
             if let requiredInfo = registry.node(for: requiredTypeId),
-               !requiredInfo.isAlwaysEnabled {
+                !requiredInfo.isAlwaysEnabled
+            {
                 // Would need to check if required node is enabled
                 // For now, assume met if can't verify
             }
@@ -110,8 +111,9 @@ final class NodeStateController<Node: Hashable & Sendable> {
         // Check if temporarily dimmed by a running node
         var isTemporarilyDimmed = false
         if let runningTypeId = runningNodeTypeId,
-           runningTypeId != nodeToTypeId(node),
-           let runningInfo = registry.node(for: runningTypeId) {
+            runningTypeId != nodeToTypeId(node),
+            let runningInfo = registry.node(for: runningTypeId)
+        {
             if runningInfo.dimsWhenRunning.contains(nodeToTypeId(node)) {
                 isTemporarilyDimmed = true
             }
@@ -153,21 +155,46 @@ final class NodeStateController<Node: Hashable & Sendable> {
     }
 
     /// Toggle a node with mutual exclusivity - disables other nodes in the same group
+    /// Also manages resource lifecycle (loading/unloading models, etc.)
     func toggleExclusive(_ node: Node, in group: [Node]) {
         let nodeInfo = info(for: node)
         guard nodeInfo.isUserToggleable else { return }
 
         let current = getPersistedState(node)
         let newState = !current
+        let nodeTypeId = nodeToTypeId(node)
 
         if newState {
             // Enabling this node - disable all others in the group
             for otherNode in group where otherNode != node {
                 setPersistedState(otherNode, false)
             }
-        }
 
-        setPersistedState(node, newState)
+            // Update persisted state immediately for responsive UI
+            setPersistedState(node, newState)
+
+            // Manage resources via lifecycle system (async)
+            // This will unload exclusive nodes and load the new one
+            Task { @MainActor in
+                do {
+                    try await NodeLifecycleRegistry.shared.activate(
+                        nodeTypeId,
+                        exclusiveGroup: nodeInfo.exclusiveGroup
+                    )
+                } catch {
+                    // Log error but don't revert state - user can retry
+                    print("Failed to activate node \(nodeTypeId): \(error)")
+                }
+            }
+        } else {
+            // Disabling this node
+            setPersistedState(node, newState)
+
+            // Unload resources
+            Task { @MainActor in
+                NodeLifecycleRegistry.shared.deactivate(nodeTypeId)
+            }
+        }
     }
 
     /// Mark a node as running (dims mutually exclusive nodes)
@@ -224,9 +251,9 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .hotkeyTrigger: return "hotkey-trigger"
                 case .voiceTrigger: return "voice-trigger"
                 case .recorder: return "recorder"
-                case .transcribe: return "transcribe"
-                case .transcribeWhisperKit: return "transcribe-whisperkit"
                 case .transcribeApple: return "transcribe-apple"
+                case .transcribeWhisperKitBalanced: return "transcribe-whisperkit-balanced"
+                case .transcribeWhisperKitAccurate: return "transcribe-whisperkit-accurate"
                 case .improve: return "text-improve"
                 case .autoType: return "auto-type"
                 case .autoEnter: return "auto-enter"
@@ -236,8 +263,9 @@ extension NodeStateController where Node == PipelineStageInfo {
                 switch node {
                 case .hotkeyTrigger: return true
                 case .voiceTrigger: return appState.isCommandListeningEnabled
-                case .transcribeWhisperKit: return appState.isWhisperKitEnabled
                 case .transcribeApple: return appState.isAppleSpeechEnabled
+                case .transcribeWhisperKitBalanced: return appState.isWhisperKitBalancedEnabled
+                case .transcribeWhisperKitAccurate: return appState.isWhisperKitAccurateEnabled
                 case .improve: return appState.isRefinementEnabled
                 case .autoEnter: return appState.isAutoEnterEnabled
                 default: return true
@@ -246,8 +274,9 @@ extension NodeStateController where Node == PipelineStageInfo {
             setPersistedState: { node, enabled in
                 switch node {
                 case .voiceTrigger: appState.isCommandListeningEnabled = enabled
-                case .transcribeWhisperKit: appState.isWhisperKitEnabled = enabled
                 case .transcribeApple: appState.isAppleSpeechEnabled = enabled
+                case .transcribeWhisperKitBalanced: appState.isWhisperKitBalancedEnabled = enabled
+                case .transcribeWhisperKitAccurate: appState.isWhisperKitAccurateEnabled = enabled
                 case .improve: appState.isRefinementEnabled = enabled
                 case .autoEnter: appState.isAutoEnterEnabled = enabled
                 default: break

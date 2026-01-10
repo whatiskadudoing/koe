@@ -32,11 +32,11 @@ public struct ElementConstraints: OptionSet, Sendable, Codable {
 
 /// Defines what data types an element can accept and produce
 public enum DataType: String, Codable, Sendable, CaseIterable {
-    case audio          // Raw audio data/samples
-    case audioFile      // Path to audio file
-    case text           // Plain text
-    case richText       // Text with metadata (language, confidence, etc.)
-    case any            // Accepts any type
+    case audio  // Raw audio data/samples
+    case audioFile  // Path to audio file
+    case text  // Plain text
+    case richText  // Text with metadata (language, confidence, etc.)
+    case any  // Accepts any type
 }
 
 /// Configuration for element connections

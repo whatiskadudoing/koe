@@ -12,7 +12,7 @@ let package = Package(
     dependencies: [
         .package(path: "../KoeDomain"),
         .package(path: "../KoeAudio"),
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.7.9")
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.7.9"),
     ],
     targets: [
         .target(
@@ -20,7 +20,7 @@ let package = Package(
             dependencies: [
                 "KoeDomain",
                 "KoeAudio",
-                .product(name: "FluidAudio", package: "FluidAudio")
+                .product(name: "FluidAudio", package: "FluidAudio"),
             ]
         )
     ]

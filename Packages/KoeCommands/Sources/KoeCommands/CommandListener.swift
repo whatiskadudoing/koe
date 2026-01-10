@@ -1,8 +1,8 @@
 import AVFoundation
 import CoreAudio
 import Foundation
-import os.log
 import Speech
+import os.log
 
 private let logger = Logger(subsystem: "com.koe.voice", category: "CommandListener")
 
@@ -118,7 +118,8 @@ public final class CommandListener: NSObject, @unchecked Sendable {
         }
 
         logger.notice("[CommandListener] Speech recognizer locale: \(speechRecognizer.locale.identifier)")
-        logger.notice("[CommandListener] On-device recognition supported: \(speechRecognizer.supportsOnDeviceRecognition)")
+        logger.notice(
+            "[CommandListener] On-device recognition supported: \(speechRecognizer.supportsOnDeviceRecognition)")
 
         guard speechRecognizer.isAvailable else {
             logger.notice("[CommandListener] ERROR: Speech recognizer not available")
@@ -204,13 +205,15 @@ public final class CommandListener: NSObject, @unchecked Sendable {
         // Add context hints for better recognition of "kon" and "koe"
         recognitionRequest.contextualStrings = [
             "kon", "Kon", "KON", "kong", "Kong", "con", "Con",
-            "koe", "Koe", "KOE", "koi", "Koi", "coy", "Coy"
+            "koe", "Koe", "KOE", "koi", "Koi", "coy", "Coy",
         ]
 
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
 
-        logger.notice("[CommandListener] Audio format: \(recordingFormat.sampleRate, privacy: .public) Hz, \(recordingFormat.channelCount, privacy: .public) channels")
+        logger.notice(
+            "[CommandListener] Audio format: \(recordingFormat.sampleRate, privacy: .public) Hz, \(recordingFormat.channelCount, privacy: .public) channels"
+        )
 
         // Install tap on audio input
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) {
@@ -321,18 +324,18 @@ public final class CommandListener: NSObject, @unchecked Sendable {
     public func isOtherAppUsingMicrophone() -> Bool {
         // List of bundle identifiers for apps that commonly use microphone
         let meetingAppBundleIds = [
-            "us.zoom.xos",           // Zoom
-            "com.microsoft.teams",   // Microsoft Teams
+            "us.zoom.xos",  // Zoom
+            "com.microsoft.teams",  // Microsoft Teams
             "com.microsoft.teams2",  // Microsoft Teams (new)
-            "com.apple.FaceTime",    // FaceTime
-            "com.skype.skype",       // Skype
-            "com.google.Chrome",     // Chrome (for web meetings)
-            "com.apple.Safari",      // Safari (for web meetings)
-            "com.discord.Discord",   // Discord
-            "com.slack.Slack",       // Slack
-            "com.webex.meetingmanager", // Webex
+            "com.apple.FaceTime",  // FaceTime
+            "com.skype.skype",  // Skype
+            "com.google.Chrome",  // Chrome (for web meetings)
+            "com.apple.Safari",  // Safari (for web meetings)
+            "com.discord.Discord",  // Discord
+            "com.slack.Slack",  // Slack
+            "com.webex.meetingmanager",  // Webex
             "com.cisco.webexmeetings",  // Webex
-            "com.gotomeeting.GoToMeeting", // GoToMeeting
+            "com.gotomeeting.GoToMeeting",  // GoToMeeting
         ]
 
         // Check if any of these apps are actively using audio input

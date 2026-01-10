@@ -138,9 +138,9 @@ public struct SettingsModalModifier<ModalContent: View>: ViewModifier {
     }
 }
 
-public extension View {
+extension View {
     /// Present a settings modal overlay
-    func settingsModal<Content: View>(
+    public func settingsModal<Content: View>(
         isPresented: Binding<Bool>,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {

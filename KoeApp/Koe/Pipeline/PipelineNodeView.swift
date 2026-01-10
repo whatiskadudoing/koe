@@ -1,6 +1,6 @@
-import SwiftUI
-import KoeUI
 import KoePipeline
+import KoeUI
+import SwiftUI
 
 /// Individual node in the pipeline visualization
 /// Uses NodeUIProvider for rendering - each node type controls its own appearance
@@ -17,6 +17,9 @@ struct PipelineNodeView: View {
     let onToggle: () -> Void
     let onOpenSettings: () -> Void
     var onSetupRequired: ((NodeInfo) -> Void)?
+
+    /// Observe JobScheduler for reactive UI updates during setup
+    @ObservedObject private var scheduler = JobScheduler.shared
 
     @State private var isHovered = false
     @State private var lastTapTime: Date = .distantPast
@@ -58,6 +61,18 @@ struct PipelineNodeView: View {
     private var needsSetup: Bool {
         if case .setupRequired = nodeSetupState { return true }
         return false
+    }
+
+    /// Whether setup failed
+    private var setupFailed: Bool {
+        if case .failed = nodeSetupState { return true }
+        return false
+    }
+
+    /// Get setup failure message
+    private var setupErrorMessage: String? {
+        if case .failed(let message) = nodeSetupState { return message }
+        return nil
     }
 
     /// Get the UI provider for this node
@@ -117,8 +132,8 @@ struct PipelineNodeView: View {
                 return
             }
 
-            // If setup is required, show setup confirmation
-            if needsSetup {
+            // If setup is required or failed, show setup confirmation
+            if needsSetup || setupFailed {
                 onSetupRequired?(stage.nodeInfo)
                 return
             }
@@ -173,7 +188,7 @@ struct PipelineNodeView: View {
                 }
 
                 // Setup required badge (download icon in bottom-right)
-                if needsSetup {
+                if needsSetup && !setupFailed {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.orange)
@@ -181,22 +196,28 @@ struct PipelineNodeView: View {
                         .offset(x: -4, y: -4)
                 }
 
-                // Setting up indicator - iOS-style circular progress
-                if isSettingUp {
-                    ZStack {
-                        // Background track
-                        Circle()
-                            .stroke(Color.orange.opacity(0.2), lineWidth: 3)
-                            .frame(width: nodeSize + 6, height: nodeSize + 6)
+                // Setup failed badge (warning icon in bottom-right)
+                if setupFailed {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.red)
+                        .frame(width: nodeSize, height: nodeSize, alignment: .bottomTrailing)
+                        .offset(x: -4, y: -4)
+                }
 
-                        // Progress ring
-                        Circle()
-                            .trim(from: 0, to: setupProgress)
-                            .stroke(Color.orange, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                            .frame(width: nodeSize + 6, height: nodeSize + 6)
-                            .rotationEffect(.degrees(-90))
-                            .animation(.easeInOut(duration: 0.3), value: setupProgress)
-                    }
+                // Setting up indicator - percentage badge only
+                if isSettingUp {
+                    Text("\(Int(setupProgress * 100))%")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(Color.orange)
+                        )
+                        .frame(width: nodeSize, height: nodeSize, alignment: .topTrailing)
+                        .offset(x: 6, y: -6)
                 }
             }
             .overlay(
@@ -205,7 +226,7 @@ struct PipelineNodeView: View {
             )
 
             // Name label
-            Text(stage.displayName)
+            Text(displayName)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(labelColor)
                 .fixedSize()
@@ -213,30 +234,39 @@ struct PipelineNodeView: View {
         }
         .opacity(effectiveOpacity)
         .scaleEffect(isHovered ? 1.05 : 1.0)
+        .help(setupErrorMessage ?? stage.nodeInfo.displayName)
     }
 
     private var borderColor: Color {
+        if setupFailed { return .red }
         if isRunning { return stage.color }
         if isSelected { return KoeColors.accent }
         return .clear
     }
 
     private var labelColor: Color {
+        if setupFailed { return .red }
         if isRunning { return stage.color }
         if isEnabled { return KoeColors.textSecondary }
         return KoeColors.textLight
     }
 
     private var effectiveOpacity: Double {
+        if setupFailed { return 0.6 }
         if !stage.isToggleable { return 1.0 }
         return isEnabled ? 1.0 : 0.5
+    }
+
+    /// Display name - always show stage name
+    private var displayName: String {
+        stage.displayName
     }
 }
 
 #Preview {
     HStack(spacing: 20) {
         PipelineNodeView(
-            stage: .transcribe,
+            stage: .transcribeApple,
             isEnabled: .constant(true),
             isSelected: false,
             isRunning: true,

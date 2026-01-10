@@ -9,19 +9,23 @@ public enum AudioUtilities {
     ///   - url: Destination URL
     ///   - sampleRate: Sample rate (default 16000Hz for Whisper)
     public static func writeWAVFile(samples: [Float], to url: URL, sampleRate: Double = 16000) throws {
-        guard let audioFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: sampleRate,
-            channels: 1,
-            interleaved: false
-        ) else {
+        guard
+            let audioFormat = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: sampleRate,
+                channels: 1,
+                interleaved: false
+            )
+        else {
             throw AudioUtilitiesError.invalidFormat
         }
 
-        guard let buffer = AVAudioPCMBuffer(
-            pcmFormat: audioFormat,
-            frameCapacity: AVAudioFrameCount(samples.count)
-        ) else {
+        guard
+            let buffer = AVAudioPCMBuffer(
+                pcmFormat: audioFormat,
+                frameCapacity: AVAudioFrameCount(samples.count)
+            )
+        else {
             throw AudioUtilitiesError.bufferCreationFailed
         }
 

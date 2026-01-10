@@ -1,6 +1,6 @@
-import SwiftUI
-import KoeUI
 import KoePipeline
+import KoeUI
+import SwiftUI
 
 // MARK: - Node UI State
 
@@ -152,7 +152,8 @@ open class DefaultNodeUIProvider: NodeUIProvider {
     }
 
     open func pipelineBackground(context: NodeUIContext) -> AnyView {
-        let fillColor: Color = context.state == .running
+        let fillColor: Color =
+            context.state == .running
             ? context.nodeInfo.color.opacity(0.15)
             : .white
 
@@ -276,7 +277,8 @@ open class DefaultNodeUIProvider: NodeUIProvider {
 
         // Text output nodes show the text
         if case .text = context.nodeInfo.outputType,
-           let record = context.executionRecord {
+            let record = context.executionRecord
+        {
             return AnyView(
                 Text(record.outputText)
                     .font(.system(size: 12))
@@ -369,7 +371,8 @@ public final class NodeUIRegistry: @unchecked Sendable {
         register(TranscribeNodeUI())
         register(TriggerNodeUI(typeId: "hotkey-trigger"))
         register(TriggerNodeUI(typeId: "voice-trigger"))
-        register(WhisperKitNodeUI())
+        register(WhisperKitBalancedNodeUI())
+        register(WhisperKitAccurateNodeUI())
     }
 }
 
@@ -596,10 +599,23 @@ public class TriggerNodeUI: DefaultNodeUIProvider {
     }
 }
 
-/// UI for WhisperKit transcription node (requires setup)
-public class WhisperKitNodeUI: DefaultNodeUIProvider {
+/// UI for WhisperKit Balanced transcription node (requires setup)
+public class WhisperKitBalancedNodeUI: DefaultNodeUIProvider {
     public init() {
-        super.init(typeId: "transcribe-whisperkit")
+        super.init(typeId: "transcribe-whisperkit-balanced")
+    }
+
+    public override var requiresSetup: Bool {
+        // WhisperKit requires model download/compilation
+        // Actual readiness is checked by JobScheduler
+        true
+    }
+}
+
+/// UI for WhisperKit Accurate transcription node (requires setup)
+public class WhisperKitAccurateNodeUI: DefaultNodeUIProvider {
+    public init() {
+        super.init(typeId: "transcribe-whisperkit-accurate")
     }
 
     public override var requiresSetup: Bool {

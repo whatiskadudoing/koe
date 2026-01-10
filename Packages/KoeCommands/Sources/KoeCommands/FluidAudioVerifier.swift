@@ -57,7 +57,9 @@ public final class FluidAudioVerifier: @unchecked Sendable {
             embeddingModel = models.embeddingModel
             isModelLoaded = true
             lock.unlock()
-            logger.notice("[FluidAudioVerifier] Model loaded successfully (compilation: \(models.compilationDuration, privacy: .public)s)")
+            logger.notice(
+                "[FluidAudioVerifier] Model loaded successfully (compilation: \(models.compilationDuration, privacy: .public)s)"
+            )
         } catch {
             logger.error("[FluidAudioVerifier] Failed to load model: \(error)")
             lock.lock()
@@ -138,7 +140,9 @@ public final class FluidAudioVerifier: @unchecked Sendable {
         let similarity = cosineSimilarity(userEmb, testEmbedding)
         let isMatch = similarity >= threshold
 
-        logger.notice("[FluidAudioVerifier] Verification: similarity=\(similarity), threshold=\(self.threshold), match=\(isMatch)")
+        logger.notice(
+            "[FluidAudioVerifier] Verification: similarity=\(similarity), threshold=\(self.threshold), match=\(isMatch)"
+        )
 
         return (isMatch, similarity)
     }
@@ -177,7 +181,7 @@ public final class FluidAudioVerifier: @unchecked Sendable {
             // Create feature provider
             let features: [String: MLFeatureValue] = [
                 "waveform": MLFeatureValue(multiArray: waveformArray),
-                "mask": MLFeatureValue(multiArray: maskArray)
+                "mask": MLFeatureValue(multiArray: maskArray),
             ]
             let provider = try MLDictionaryFeatureProvider(dictionary: features)
 
@@ -186,7 +190,8 @@ public final class FluidAudioVerifier: @unchecked Sendable {
 
             // Extract embedding
             guard let embeddingValue = output.featureValue(for: "embedding"),
-                  let embeddingArray = embeddingValue.multiArrayValue else {
+                let embeddingArray = embeddingValue.multiArrayValue
+            else {
                 logger.error("[FluidAudioVerifier] No embedding output from model")
                 return nil
             }

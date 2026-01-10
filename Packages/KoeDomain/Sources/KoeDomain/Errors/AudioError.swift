@@ -18,7 +18,8 @@ public enum AudioError: KoeError {
         case .noAudioData:
             return "No audio data recorded"
         case .audioTooShort(let duration, let minimum):
-            return "Audio too short (\(String(format: "%.1f", duration))s). Minimum: \(String(format: "%.1f", minimum))s"
+            return
+                "Audio too short (\(String(format: "%.1f", duration))s). Minimum: \(String(format: "%.1f", minimum))s"
         }
     }
 }

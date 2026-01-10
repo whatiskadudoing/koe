@@ -484,8 +484,7 @@ public final class VoiceVerifier: @unchecked Sendable {
 
         var crossings = 0
         for i in 1..<samples.count {
-            if (samples[i] >= 0 && samples[i - 1] < 0) ||
-                (samples[i] < 0 && samples[i - 1] >= 0) {
+            if (samples[i] >= 0 && samples[i - 1] < 0) || (samples[i] < 0 && samples[i - 1] >= 0) {
                 crossings += 1
             }
         }
@@ -588,7 +587,8 @@ public final class VoiceVerifier: @unchecked Sendable {
         for i in 1..<energyEnvelope.count - 1 {
             if energyEnvelope[i] > threshold
                 && energyEnvelope[i] > energyEnvelope[i - 1]
-                && energyEnvelope[i] > energyEnvelope[i + 1] {
+                && energyEnvelope[i] > energyEnvelope[i + 1]
+            {
                 peaks += 1
             }
         }

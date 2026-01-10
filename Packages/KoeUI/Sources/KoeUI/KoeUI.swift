@@ -5,6 +5,5 @@
 // - KeyCap: Keyboard shortcut display component
 // - KoeColors: Design system colors
 
-import SwiftUI
-
 @_exported import KoeDomain
+import SwiftUI

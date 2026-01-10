@@ -42,22 +42,22 @@ public protocol PipelineElement: AnyObject, Sendable, Identifiable {
 }
 
 /// Default implementations
-public extension PipelineElement {
-    var id: String { typeId }
-    var constraints: ElementConstraints { .none }
-    var connectionRules: ConnectionRules {
+extension PipelineElement {
+    public var id: String { typeId }
+    public var constraints: ElementConstraints { .none }
+    public var connectionRules: ConnectionRules {
         ConnectionRules(acceptsInput: [.any], producesOutput: .any)
     }
-    var isEnabled: Bool {
+    public var isEnabled: Bool {
         get { true }
-        set { }
+        set {}
     }
-    var configuration: [String: Any] {
+    public var configuration: [String: Any] {
         get { [:] }
-        set { }
+        set {}
     }
-    func prepare() async throws { }
-    func cleanup() async { }
+    public func prepare() async throws {}
+    public func cleanup() async {}
 }
 
 // MARK: - Stage Protocol (Data Transformation)
@@ -69,8 +69,8 @@ public protocol PipelineStage: PipelineElement {
     var stageTypeId: String { get }
 }
 
-public extension PipelineStage {
-    var typeId: String { stageTypeId }
+extension PipelineStage {
+    public var typeId: String { stageTypeId }
 }
 
 // MARK: - Action Protocol (Performs Actions)
@@ -82,8 +82,8 @@ public protocol PipelineAction: PipelineElement {
     var actionTypeId: String { get }
 }
 
-public extension PipelineAction {
-    var typeId: String { actionTypeId }
+extension PipelineAction {
+    public var typeId: String { actionTypeId }
 }
 
 // MARK: - Configured Instance

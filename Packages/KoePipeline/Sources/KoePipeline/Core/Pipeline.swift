@@ -74,7 +74,7 @@ public struct PipelineTemplates {
             PipelineElementInstance(typeId: "audio-input"),
             PipelineElementInstance(typeId: "transcription"),
             PipelineElementInstance(typeId: "cleanup"),
-            PipelineElementInstance(typeId: "auto-type")
+            PipelineElementInstance(typeId: "auto-type"),
         ]
     )
 
@@ -86,7 +86,7 @@ public struct PipelineTemplates {
             PipelineElementInstance(typeId: "audio-input"),
             PipelineElementInstance(typeId: "transcription"),
             PipelineElementInstance(typeId: "language-improvement"),
-            PipelineElementInstance(typeId: "auto-type")
+            PipelineElementInstance(typeId: "auto-type"),
         ]
     )
 
@@ -99,7 +99,7 @@ public struct PipelineTemplates {
             PipelineElementInstance(typeId: "transcription"),
             PipelineElementInstance(typeId: "language-improvement"),
             PipelineElementInstance(typeId: "prompt-optimizer"),
-            PipelineElementInstance(typeId: "auto-type")
+            PipelineElementInstance(typeId: "auto-type"),
         ]
     )
 
@@ -113,7 +113,7 @@ public struct PipelineTemplates {
             PipelineElementInstance(typeId: "language-improvement"),
             PipelineElementInstance(typeId: "prompt-optimizer", isEnabled: false),
             PipelineElementInstance(typeId: "auto-type"),
-            PipelineElementInstance(typeId: "auto-enter", isEnabled: false)
+            PipelineElementInstance(typeId: "auto-enter", isEnabled: false),
         ]
     )
 
@@ -122,6 +122,6 @@ public struct PipelineTemplates {
         simpleTranscription,
         formalWriting,
         promptOptimization,
-        fullPipeline
+        fullPipeline,
     ]
 }

@@ -22,7 +22,7 @@ public struct Language: Codable, Sendable, Equatable, Hashable {
 
     public static let all: [Language] = [
         .auto, .english, .spanish, .portuguese, .french,
-        .german, .italian, .japanese, .korean, .chinese
+        .german, .italian, .japanese, .korean, .chinese,
     ]
 
     public var isAuto: Bool { code == "auto" }

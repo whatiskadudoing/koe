@@ -1,9 +1,9 @@
-import Foundation
+import AppKit
 import CoreAudio
 import CoreGraphics
-import AppKit
-import KoeDomain
+import Foundation
 import KoeCore
+import KoeDomain
 
 /// Event emitted when meeting status changes
 public enum MeetingEvent: Sendable {
@@ -13,9 +13,9 @@ public enum MeetingEvent: Sendable {
 
 /// Detection mode used by the detector
 public enum DetectionMode: Sendable {
-    case microphoneUsage   // Primary: CoreAudio process monitoring (like Krisp)
-    case windowTitle       // Fallback: window title detection (requires Screen Recording)
-    case processMonitoring // Last resort: just check if meeting apps are running
+    case microphoneUsage  // Primary: CoreAudio process monitoring (like Krisp)
+    case windowTitle  // Fallback: window title detection (requires Screen Recording)
+    case processMonitoring  // Last resort: just check if meeting apps are running
 }
 
 /// Window title patterns that indicate an active meeting
@@ -78,23 +78,34 @@ public final class MeetingDetector: @unchecked Sendable {
         "com.apple.WebKit.WebContent": "Safari",
         "org.mozilla.firefox.helper": "Firefox",
         "com.microsoft.edgemac.helper": "Edge",
-        "com.brave.Browser.helper": "Brave"
+        "com.brave.Browser.helper": "Brave",
     ]
 
     /// Window patterns for title-based detection (fallback)
     private let meetingPatterns: [MeetingWindowPattern] = [
         // Browsers - Google Meet shows "Title - Google Meet" or contains "meet.google.com"
-        MeetingWindowPattern(appName: "Arc", bundleId: "company.thebrowser.Browser", patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
-        MeetingWindowPattern(appName: "Google Chrome", bundleId: "com.google.Chrome", patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
-        MeetingWindowPattern(appName: "Safari", bundleId: "com.apple.Safari", patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
-        MeetingWindowPattern(appName: "Firefox", bundleId: "org.mozilla.firefox", patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
-        MeetingWindowPattern(appName: "Microsoft Edge", bundleId: "com.microsoft.edgemac", patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
+        MeetingWindowPattern(
+            appName: "Arc", bundleId: "company.thebrowser.Browser",
+            patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
+        MeetingWindowPattern(
+            appName: "Google Chrome", bundleId: "com.google.Chrome",
+            patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
+        MeetingWindowPattern(
+            appName: "Safari", bundleId: "com.apple.Safari",
+            patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
+        MeetingWindowPattern(
+            appName: "Firefox", bundleId: "org.mozilla.firefox",
+            patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
+        MeetingWindowPattern(
+            appName: "Microsoft Edge", bundleId: "com.microsoft.edgemac",
+            patterns: ["Google Meet", "meet.google.com", "Zoom", "teams.microsoft.com"]),
         // Native apps
         MeetingWindowPattern(appName: "zoom.us", bundleId: "us.zoom.xos", patterns: ["Zoom Meeting", "Zoom Webinar"]),
-        MeetingWindowPattern(appName: "Microsoft Teams", bundleId: "com.microsoft.teams2", patterns: ["(Meeting)", "Call with"]),
+        MeetingWindowPattern(
+            appName: "Microsoft Teams", bundleId: "com.microsoft.teams2", patterns: ["(Meeting)", "Call with"]),
         MeetingWindowPattern(appName: "Slack", bundleId: "com.slack.Slack", patterns: ["Huddle"]),
         MeetingWindowPattern(appName: "Webex", bundleId: "com.cisco.webexmeetingsapp", patterns: ["Meeting"]),
-        MeetingWindowPattern(appName: "Discord", bundleId: "com.hnc.Discord", patterns: ["Voice Connected"])
+        MeetingWindowPattern(appName: "Discord", bundleId: "com.hnc.Discord", patterns: ["Voice Connected"]),
     ]
 
     public init() {}

@@ -1,8 +1,8 @@
-import SwiftUI
 import AVFoundation
 import KoeDomain
 import KoeMeeting
 import KoeTranscription
+import SwiftUI
 
 struct MeetingDetailView: View {
     let meeting: Meeting
@@ -135,7 +135,9 @@ struct MeetingDetailView: View {
 
             // Stats row
             HStack(spacing: 0) {
-                StatCard(icon: "clock.fill", value: formatDuration(meeting.duration ?? 0), label: "Duration", color: accentColor)
+                StatCard(
+                    icon: "clock.fill", value: formatDuration(meeting.duration ?? 0), label: "Duration",
+                    color: accentColor)
 
                 Divider()
                     .frame(height: 40)
@@ -180,7 +182,8 @@ struct MeetingDetailView: View {
 
                 if let url = coordinator.audioFileURL(for: meeting) {
                     Button(action: {
-                        NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+                        NSWorkspace.shared.selectFile(
+                            url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "folder")
@@ -400,7 +403,8 @@ struct MeetingDetailView: View {
 
     private func formatFileSize(_ url: URL) -> String {
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let size = attrs[.size] as? Int64 else {
+            let size = attrs[.size] as? Int64
+        else {
             return "Unknown size"
         }
 
@@ -447,7 +451,7 @@ struct MeetingDetailView: View {
 
                 // Load the fast model for meeting transcription
                 transcriptionProgress = "Loading whisper model..."
-                try await transcriber.loadModel(.turbo)
+                try await transcriber.loadModel(.balanced)
 
                 transcriptionProgress = "Transcribing audio..."
                 let transcript = try await transcriber.transcribeFile(url: audioURL, language: nil)

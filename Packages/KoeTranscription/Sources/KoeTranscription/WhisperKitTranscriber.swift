@@ -1,7 +1,7 @@
-import Foundation
 import AVFoundation
-import WhisperKit
+import Foundation
 import KoeDomain
+import WhisperKit
 
 /// WhisperKit-based transcription service
 /// Implements TranscriptionService protocol for local on-device transcription
@@ -116,25 +116,17 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
             let aneMarkerPath = modelFolder.appendingPathComponent(".ane-compiled-\(name)")
             let isANECompiled = FileManager.default.fileExists(atPath: aneMarkerPath.path)
 
-            // Use ANE if already compiled, otherwise CPU+GPU for fast initial load
-            let computeOptions: ModelComputeOptions
-            if isANECompiled {
-                computeOptions = ModelComputeOptions(
-                    audioEncoderCompute: .cpuAndNeuralEngine,
-                    textDecoderCompute: .cpuAndNeuralEngine
-                )
-                print("[WhisperKit] Using ANE (pre-compiled)")
-            } else {
-                computeOptions = ModelComputeOptions(
-                    audioEncoderCompute: .cpuAndGPU,
-                    textDecoderCompute: .cpuAndGPU
-                )
-                print("[WhisperKit] Using CPU+GPU (fast initial load)")
-            }
+            // Use GPU+ANE for maximum performance
+            // This gives the best speed (~72x real-time on high-end Macs)
+            let computeOptions = ModelComputeOptions(
+                audioEncoderCompute: .cpuAndGPU,
+                textDecoderCompute: .cpuAndNeuralEngine
+            )
+            print("[WhisperKit] Using GPU+ANE (maximum performance)")
 
             // Check for bundled model first
             if let bundledPath = getBundledModelPath(for: name) {
-                notifyProgress(-1) // Animated loading
+                notifyProgress(-1)  // Animated loading
 
                 let kit = try await WhisperKit(
                     modelFolder: bundledPath,
@@ -160,11 +152,12 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
             }
 
             // Check if model exists in cache
-            let cachedModelPath = modelFolder.appendingPathComponent("models/argmaxinc/whisperkit-coreml/openai_whisper-\(name)")
+            let cachedModelPath = modelFolder.appendingPathComponent(
+                "models/argmaxinc/whisperkit-coreml/openai_whisper-\(name)")
             let modelExists = FileManager.default.fileExists(atPath: cachedModelPath.path)
 
             if modelExists {
-                notifyProgress(-1) // Animated loading
+                notifyProgress(-1)  // Animated loading
 
                 let kit = try await WhisperKit(
                     modelFolder: cachedModelPath.path,
@@ -232,7 +225,7 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
             lock.lock()
             _loadingProgress = 0.95
             lock.unlock()
-            notifyProgress(-1) // Animated loading
+            notifyProgress(-1)  // Animated loading
 
             let kit = try await WhisperKit(
                 modelFolder: downloadedFolder.path,
@@ -458,20 +451,30 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("koe_\(UUID().uuidString).wav")
 
-        guard let audioFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: sampleRate,
-            channels: 1,
-            interleaved: false
-        ) else {
-            throw TranscriptionError.transcriptionFailed(underlying: NSError(domain: "KoeTranscription", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to create audio format"]))
+        guard
+            let audioFormat = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: sampleRate,
+                channels: 1,
+                interleaved: false
+            )
+        else {
+            throw TranscriptionError.transcriptionFailed(
+                underlying: NSError(
+                    domain: "KoeTranscription", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to create audio format"]))
         }
 
-        guard let buffer = AVAudioPCMBuffer(
-            pcmFormat: audioFormat,
-            frameCapacity: AVAudioFrameCount(samples.count)
-        ) else {
-            throw TranscriptionError.transcriptionFailed(underlying: NSError(domain: "KoeTranscription", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create buffer"]))
+        guard
+            let buffer = AVAudioPCMBuffer(
+                pcmFormat: audioFormat,
+                frameCapacity: AVAudioFrameCount(samples.count)
+            )
+        else {
+            throw TranscriptionError.transcriptionFailed(
+                underlying: NSError(
+                    domain: "KoeTranscription", code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to create buffer"]))
         }
 
         buffer.frameLength = AVAudioFrameCount(samples.count)

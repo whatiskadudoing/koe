@@ -13,7 +13,7 @@ let package = Package(
         .package(path: "../KoeDomain"),
         .package(path: "../KoeCore"),
         // LLM.swift - Local fork with Metal GPU acceleration enabled
-        .package(path: "../LLM")
+        .package(path: "../LLM"),
     ],
     targets: [
         .target(
@@ -21,7 +21,7 @@ let package = Package(
             dependencies: [
                 "KoeDomain",
                 "KoeCore",
-                .product(name: "LLM", package: "LLM")
+                .product(name: "LLM", package: "LLM"),
             ]
         )
     ]

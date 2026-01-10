@@ -35,24 +35,16 @@ struct QueueView: View {
                 // Show jobs
                 if !scheduler.jobs.isEmpty {
                     ForEach(scheduler.jobs) { job in
-                        JobRowView(job: job, onRetry: {
-                            scheduler.retry(jobId: job.id)
-                        })
-                    }
-                } else {
-                    // Empty state - check if WhisperKit needs setup
-                    if needsWhisperKitSetup {
-                        NeedsSetupView(
-                            nodeName: "WhisperKit",
-                            nodeIcon: "waveform.circle",
-                            onSetup: {
-                                let job = JobScheduler.createWhisperKitSetupJob()
-                                scheduler.submit(job)
+                        JobRowView(
+                            job: job,
+                            onRetry: {
+                                scheduler.retry(jobId: job.id)
                             }
                         )
-                    } else {
-                        AllSetView()
                     }
+                } else {
+                    // Empty state - show all set message
+                    AllSetView()
                 }
 
                 Spacer(minLength: 20)
@@ -61,12 +53,6 @@ struct QueueView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var needsWhisperKitSetup: Bool {
-        if case .setupRequired = scheduler.setupState(for: "transcribe-whisperkit") {
-            return true
-        }
-        return false
-    }
 }
 
 // MARK: - Job Row View

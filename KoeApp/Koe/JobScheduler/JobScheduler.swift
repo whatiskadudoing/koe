@@ -2,8 +2,9 @@ import Combine
 import Foundation
 import KoeDomain
 import KoeTranscription
-import os.log
+import UserNotifications
 import WhisperKit
+import os.log
 
 private let logger = Logger(subsystem: "com.koe.app", category: "JobScheduler")
 
@@ -34,9 +35,9 @@ public final class JobScheduler: ObservableObject {
 
     /// Submit a job to the queue
     public func submit(_ job: Job) {
-        // Don't add duplicate jobs
-        guard !jobs.contains(where: { $0.id == job.id }) else {
-            logger.notice("Job \(job.id) already in queue")
+        // Don't add duplicate jobs - check by name since each createXxxJob() generates new UUID
+        guard !jobs.contains(where: { $0.name == job.name && !$0.isCompleted && !$0.isFailed }) else {
+            logger.notice("Job '\(job.name)' already in queue or processing")
             return
         }
 
@@ -79,11 +80,21 @@ public final class JobScheduler: ObservableObject {
     public func setupState(for nodeId: String) -> NodeSetupState {
         // Check if there's a job for this node
         for job in jobs {
-            // Check if this job is for the requested node
+            // Check if this job is for the requested node via the activate task
             let hasNodeTask = job.tasks.contains { $0.metadata["nodeId"] == nodeId }
-            let hasModelTask = job.tasks.contains {
-                ($0.type == .downloadModel || $0.type == .compileModel) &&
-                    nodeId == "transcribe-whisperkit"
+
+            // For WhisperKit nodes, check if download/compile tasks are for THIS specific model
+            let expectedModel: String?
+            if nodeId == NodeTypeId.whisperKitBalanced {
+                expectedModel = KoeModel.balanced.rawValue
+            } else if nodeId == NodeTypeId.whisperKitAccurate {
+                expectedModel = KoeModel.accurate.rawValue
+            } else {
+                expectedModel = nil
+            }
+
+            let hasModelTask = expectedModel != nil && job.tasks.contains {
+                ($0.type == .downloadModel || $0.type == .compileModel) && $0.metadata["model"] == expectedModel
             }
 
             if hasNodeTask || hasModelTask {
@@ -99,9 +110,17 @@ public final class JobScheduler: ObservableObject {
         }
 
         // Not in queue - check if setup is needed
-        if nodeId == "transcribe-whisperkit" {
+        if nodeId == NodeTypeId.whisperKitBalanced {
             // Use BackgroundModelService to check model status
-            if BackgroundModelService.shared.isModelReady(.turbo) {
+            if BackgroundModelService.shared.isModelReady(.balanced) {
+                return .ready
+            }
+            return .setupRequired
+        }
+
+        if nodeId == NodeTypeId.whisperKitAccurate {
+            // Use BackgroundModelService to check model status
+            if BackgroundModelService.shared.isModelReady(.accurate) {
                 return .ready
             }
             return .setupRequired
@@ -170,7 +189,7 @@ public final class JobScheduler: ObservableObject {
                 let taskName = jobs[jobIndex].tasks[taskIndex].name
                 logger.error("Task failed: \(taskName)")
                 saveState()
-                return // Stop processing this job
+                return  // Stop processing this job
             }
 
             saveState()
@@ -186,6 +205,29 @@ public final class JobScheduler: ObservableObject {
                 object: nil,
                 userInfo: ["jobId": completedJobId]
             )
+
+            // Send macOS notification
+            sendCompletionNotification(jobName: completedJobName)
+        }
+    }
+
+    /// Send macOS notification when job completes
+    private func sendCompletionNotification(jobName: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Setup Complete"
+        content.body = "\(jobName) is ready to use"
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "job-complete-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                logger.error("Failed to send notification: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -211,7 +253,7 @@ public final class JobScheduler: ObservableObject {
             return false
         }
 
-        let model = KoeModel(rawValue: modelName) ?? .turbo
+        let model = KoeModel(rawValue: modelName) ?? .balanced
         let transcriber = WhisperKitTranscriber()
 
         // Check if already downloaded
@@ -249,88 +291,56 @@ public final class JobScheduler: ObservableObject {
         }
 
         do {
-            jobs[jobIndex].tasks[taskIndex].message = "Compiling for Apple Neural Engine..."
+            jobs[jobIndex].tasks[taskIndex].message = "Compiling model..."
             jobs[jobIndex].tasks[taskIndex].progress = 0.1
 
             // Get model path
             let modelFolder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
                 .appendingPathComponent("Koe")
                 .appendingPathComponent("Models")
-            let modelPath = modelFolder.appendingPathComponent("models/argmaxinc/whisperkit-coreml/openai_whisper-\(modelName)")
+            let modelPath = modelFolder.appendingPathComponent(
+                "models/argmaxinc/whisperkit-coreml/openai_whisper-\(modelName)")
 
             guard FileManager.default.fileExists(atPath: modelPath.path) else {
                 jobs[jobIndex].tasks[taskIndex].error = "Model not found at \(modelPath.path)"
                 return false
             }
 
-            jobs[jobIndex].tasks[taskIndex].progress = 0.1
-            jobs[jobIndex].tasks[taskIndex].message = "Preparing Neural Engine optimization..."
+            jobs[jobIndex].tasks[taskIndex].progress = 0.2
+            jobs[jobIndex].tasks[taskIndex].message = "Loading model..."
 
-            // Force ANE compilation with cpuAndNeuralEngine compute options
-            let aneComputeOptions = ModelComputeOptions(
-                audioEncoderCompute: .cpuAndNeuralEngine,
+            // Use GPU+ANE for best performance on Mac
+            // AudioEncoder: GPU handles large matrix operations efficiently
+            // TextDecoder: Neural Engine optimized for sequential token generation
+            let computeOptions = ModelComputeOptions(
+                audioEncoderCompute: .cpuAndGPU,
                 textDecoderCompute: .cpuAndNeuralEngine
             )
 
-            logger.notice("Starting ANE compilation for model: \(modelName)")
+            logger.notice("Compiling model: \(modelName)")
 
-            // Compilation stages with estimated times (total ~4 min):
-            // 1. MelSpectrogram (~5 sec)
-            // 2. AudioEncoder (~90 sec - largest)
-            // 3. TextDecoder (~90 sec)
-            // 4. TextDecoderContextPrefill (~30 sec)
-            // 5. Prewarm (~25 sec)
+            jobs[jobIndex].tasks[taskIndex].progress = 0.3
+            jobs[jobIndex].tasks[taskIndex].message = "Compiling for GPU + Neural Engine..."
 
-            // Background task to show estimated progress
-            let stages = [
-                (0.15, "1/4 Compiling MelSpectrogram...", 5.0),
-                (0.25, "2/4 Compiling AudioEncoder (largest)...", 90.0),
-                (0.55, "3/4 Compiling TextDecoder...", 90.0),
-                (0.75, "4/4 Compiling TextDecoderContextPrefill...", 30.0),
-                (0.85, "Warming up Neural Engine...", 25.0),
-            ]
-
-            let progressTask = Task { @MainActor in
-                var accumulated: TimeInterval = 0
-                for (progress, message, duration) in stages {
-                    if Task.isCancelled { break }
-                    self.jobs[jobIndex].tasks[taskIndex].progress = progress
-                    self.jobs[jobIndex].tasks[taskIndex].message = message
-                    self.saveState()
-                    accumulated += duration
-                    try? await Task.sleep(for: .seconds(duration))
-                }
-            }
-
-            // Initialize WhisperKit with ANE options - this triggers compilation
+            // Initialize WhisperKit to compile model for optimal performance
             let _ = try await WhisperKit(
                 modelFolder: modelPath.path,
-                computeOptions: aneComputeOptions,
-                verbose: true,
-                logLevel: .debug,
-                prewarm: true,
+                computeOptions: computeOptions,
+                verbose: false,
+                logLevel: .error,
+                prewarm: false,  // Skip prewarm for faster setup
                 load: true
             )
 
-            // Cancel progress simulation
-            progressTask.cancel()
-
             jobs[jobIndex].tasks[taskIndex].progress = 0.9
-            jobs[jobIndex].tasks[taskIndex].message = "Creating ANE marker..."
-
-            // Create marker file to indicate ANE compilation is complete
-            let aneMarkerPath = modelFolder.appendingPathComponent(".ane-compiled-\(modelName)")
-            try "".write(to: aneMarkerPath, atomically: true, encoding: .utf8)
-
-            jobs[jobIndex].tasks[taskIndex].progress = 0.95
-            jobs[jobIndex].tasks[taskIndex].message = "ANE compilation complete"
-            logger.notice("ANE compilation complete for model: \(modelName)")
+            jobs[jobIndex].tasks[taskIndex].message = "Compilation complete"
+            logger.notice("Model compilation complete: \(modelName)")
 
             return true
         } catch {
             jobs[jobIndex].tasks[taskIndex].error = error.localizedDescription
             let errorDesc = error.localizedDescription
-            logger.error("ANE compile failed: \(errorDesc)")
+            logger.error("Model compilation failed: \(errorDesc)")
             return false
         }
     }
@@ -345,30 +355,30 @@ public final class JobScheduler: ObservableObject {
         jobs[jobIndex].tasks[taskIndex].message = "Activating..."
         jobs[jobIndex].tasks[taskIndex].progress = 0.3
 
-        switch nodeId {
-        case "transcribe-whisperkit":
-            // Enable WhisperKit
-            AppState.shared.isWhisperKitEnabled = true
-            AppState.shared.isAppleSpeechEnabled = false
+        // Get the node's exclusive group for proper lifecycle management
+        let nodeInfo = NodeRegistry.shared.node(for: nodeId)
+        let exclusiveGroup = nodeInfo?.exclusiveGroup
 
-            // Load the model into the main RecordingCoordinator
-            jobs[jobIndex].tasks[taskIndex].message = "Loading model..."
+        do {
+            jobs[jobIndex].tasks[taskIndex].message = "Loading resources..."
             jobs[jobIndex].tasks[taskIndex].progress = 0.5
 
-            await RecordingCoordinator.shared.loadModel(.turbo)
+            // Use lifecycle system to activate the node
+            // This handles: unloading exclusive nodes, loading this node's resources
+            try await NodeLifecycleRegistry.shared.activate(nodeId, exclusiveGroup: exclusiveGroup)
 
-            // Verify model is ready
-            if !RecordingCoordinator.shared.isModelLoaded {
-                jobs[jobIndex].tasks[taskIndex].error = "Failed to load model"
-                return false
+            // Verify activation succeeded (for nodes with handlers)
+            if let handler = NodeLifecycleRegistry.shared.handler(for: nodeId) {
+                if !handler.isLoaded {
+                    jobs[jobIndex].tasks[taskIndex].error = "Failed to load resources"
+                    return false
+                }
             }
 
             jobs[jobIndex].tasks[taskIndex].progress = 0.9
-        case "transcribe-apple":
-            AppState.shared.isAppleSpeechEnabled = true
-            AppState.shared.isWhisperKitEnabled = false
-        default:
-            jobs[jobIndex].tasks[taskIndex].error = "Unknown node: \(nodeId)"
+
+        } catch {
+            jobs[jobIndex].tasks[taskIndex].error = "Activation failed: \(error.localizedDescription)"
             return false
         }
 
@@ -393,7 +403,7 @@ public final class JobScheduler: ObservableObject {
 
     private func loadState() {
         guard let data = UserDefaults.standard.data(forKey: persistenceKey),
-              let savedJobs = try? JSONDecoder().decode([Job].self, from: data)
+            let savedJobs = try? JSONDecoder().decode([Job].self, from: data)
         else {
             return
         }
@@ -418,37 +428,40 @@ public final class JobScheduler: ObservableObject {
 
 // MARK: - Notifications
 
-public extension Notification.Name {
-    static let jobCompleted = Notification.Name("jobCompleted")
-    static let nodeSetupCompleted = Notification.Name("nodeSetupCompleted")
+extension Notification.Name {
+    public static let jobCompleted = Notification.Name("jobCompleted")
+    public static let nodeSetupCompleted = Notification.Name("nodeSetupCompleted")
 }
 
 // MARK: - Job Factory
 
-public extension JobScheduler {
-    /// Create WhisperKit setup job
-    static func createWhisperKitSetupJob() -> Job {
-        Job(
-            name: "WhisperKit Setup",
-            icon: "waveform",
+extension JobScheduler {
+    /// Create WhisperKit setup job for a specific model
+    public static func createWhisperKitSetupJob(model: KoeModel) -> Job {
+        let nodeId = model == .balanced ? NodeTypeId.whisperKitBalanced : NodeTypeId.whisperKitAccurate
+        let displayName = model == .balanced ? "Balanced" : "Accurate"
+
+        return Job(
+            name: "\(displayName) Setup",
+            icon: model == .balanced ? "gauge.with.dots.needle.50percent" : "target",
             tasks: [
                 JobTask(
                     type: .downloadModel,
-                    name: "Download Model",
+                    name: "Download Model (\(model.sizeString))",
                     icon: "arrow.down.circle",
-                    metadata: ["model": KoeModel.turbo.rawValue]
+                    metadata: ["model": model.rawValue]
                 ),
                 JobTask(
                     type: .compileModel,
-                    name: "Compile for Device",
+                    name: "Compile Model",
                     icon: "cpu",
-                    metadata: ["model": KoeModel.turbo.rawValue]
+                    metadata: ["model": model.rawValue]
                 ),
                 JobTask(
                     type: .activateNode,
                     name: "Activate",
                     icon: "checkmark.circle",
-                    metadata: ["nodeId": "transcribe-whisperkit"]
+                    metadata: ["nodeId": nodeId]
                 ),
             ]
         )

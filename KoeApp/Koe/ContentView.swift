@@ -1,9 +1,9 @@
-import SwiftUI
 import KoeDomain
 import KoeMeeting
-import KoeRefinement
 import KoePipeline
+import KoeRefinement
 import KoeUI
+import SwiftUI
 
 struct ContentView: View {
     @Environment(AppState.self) private var appState
@@ -59,10 +59,12 @@ struct ContentView: View {
 
             // Modal overlays at root level (to cover entire window)
             if selectedHistoryItem != nil {
-                ModalOverlay(isPresented: Binding(
-                    get: { selectedHistoryItem != nil },
-                    set: { if !$0 { selectedHistoryItem = nil } }
-                )) {
+                ModalOverlay(
+                    isPresented: Binding(
+                        get: { selectedHistoryItem != nil },
+                        set: { if !$0 { selectedHistoryItem = nil } }
+                    )
+                ) {
                     SettingsModal(
                         title: "Transcription Details",
                         icon: "text.bubble",
@@ -78,10 +80,12 @@ struct ContentView: View {
             }
 
             if let stage = selectedPipelineStage, stage.isToggleable || stage.hasSettings {
-                ModalOverlay(isPresented: Binding(
-                    get: { selectedPipelineStage != nil },
-                    set: { if !$0 { selectedPipelineStage = nil } }
-                )) {
+                ModalOverlay(
+                    isPresented: Binding(
+                        get: { selectedPipelineStage != nil },
+                        set: { if !$0 { selectedPipelineStage = nil } }
+                    )
+                ) {
                     SettingsModal(
                         title: "\(stage.displayName) Settings",
                         icon: stage.icon,
@@ -143,10 +147,10 @@ struct ContentView: View {
             // Auto-enable the node that just completed setup
             Task { @MainActor in
                 switch nodeId {
-                case "transcribe-whisperkit":
-                    appState.isWhisperKitEnabled = true
-                    // Disable Apple Speech if WhisperKit is now enabled (mutual exclusivity)
-                    appState.isAppleSpeechEnabled = false
+                case NodeTypeId.whisperKitBalanced:
+                    appState.isWhisperKitBalancedEnabled = true
+                case NodeTypeId.whisperKitAccurate:
+                    appState.isWhisperKitAccurateEnabled = true
                 default:
                     break
                 }
@@ -190,6 +194,28 @@ struct ContentView: View {
         }
     }
 
+    /// Load the active transcription engine for dictation mode
+    private func loadActiveTranscriptionEngine() {
+        Task {
+            // Use NodeLifecycleRegistry to load the enabled transcription node
+            _ = try? await NodeLifecycleRegistry.shared.loadActiveNode(inGroup: "transcription") { typeId in
+                switch typeId {
+                case "transcribe-whisperkit-balanced": return appState.isWhisperKitBalancedEnabled
+                case "transcribe-whisperkit-accurate": return appState.isWhisperKitAccurateEnabled
+                case "transcribe-apple": return appState.isAppleSpeechEnabled
+                default: return false
+                }
+            }
+        }
+    }
+
+    /// Unload resource-intensive nodes when leaving dictation mode
+    private func unloadResourceIntensiveNodes() {
+        // Uses isResourceIntensive flag from NodeRegistry
+        // Only nodes marked as resource-intensive will be unloaded
+        NodeLifecycleRegistry.shared.unloadResourceIntensiveNodes()
+    }
+
     // MARK: - Dictation View
 
     private var dictationView: some View {
@@ -206,13 +232,9 @@ struct ContentView: View {
                         Task { @MainActor in
                             if appState.recordingState == .idle {
                                 // Manual tap uses VAD mode (auto-stop on silence)
-                                let langCode = appState.selectedLanguage
-                                let language = Language.all.first { $0.code == langCode } ?? .auto
-                                await coordinator.startRecording(mode: .vad, language: language)
+                                await coordinator.startRecording(mode: .vad, language: .auto)
                             } else if appState.recordingState == .recording {
-                                let langCode = appState.selectedLanguage
-                                let language = Language.all.first { $0.code == langCode } ?? .auto
-                                await coordinator.stopRecording(mode: .vad, language: language)
+                                await coordinator.stopRecording(mode: .vad, language: .auto)
                             }
                         }
                     }
@@ -238,6 +260,14 @@ struct ContentView: View {
             }
         }
         .padding(.horizontal, 24)
+        .onAppear {
+            // Load the active transcription engine when dictation view appears
+            loadActiveTranscriptionEngine()
+        }
+        .onDisappear {
+            // Unload resource-intensive nodes to free memory when leaving dictation mode
+            unloadResourceIntensiveNodes()
+        }
     }
 }
 
@@ -247,6 +277,9 @@ struct TabToggle: View {
     @Binding var selectedTab: ContentView.AppTab
     /// Binding to clear auto-switch flag when user manually switches
     var onManualSwitch: ((ContentView.AppTab) -> Void)?
+
+    /// Observe JobScheduler for reactive badge updates
+    @ObservedObject private var scheduler = JobScheduler.shared
 
     private let accentColor = Color(nsColor: NSColor(red: 0.24, green: 0.30, blue: 0.46, alpha: 1.0))
     private let lightGray = Color(nsColor: NSColor(red: 0.60, green: 0.58, blue: 0.56, alpha: 1.0))
@@ -285,7 +318,7 @@ struct TabToggle: View {
                 isSelected: selectedTab == .queue,
                 selectedColor: accentColor,
                 unselectedColor: lightGray,
-                badgeCount: JobScheduler.shared.pendingCount
+                badgeCount: scheduler.pendingCount
             ) {
                 withAnimation(.easeOut(duration: 0.2)) {
                     selectedTab = .queue
@@ -488,7 +521,9 @@ struct MicButton: View {
                 Circle()
                     .fill(backgroundColor)
                     .frame(width: circleSize, height: circleSize)
-                    .shadow(color: .black.opacity(isHovered ? 0.15 : 0.10), radius: isHovered ? 16 : 12, x: 0, y: isHovered ? 6 : 4)
+                    .shadow(
+                        color: .black.opacity(isHovered ? 0.15 : 0.10), radius: isHovered ? 16 : 12, x: 0,
+                        y: isHovered ? 6 : 4)
 
                 // Inner content - icon
                 Image(systemName: stageIcon)
@@ -503,11 +538,14 @@ struct MicButton: View {
                 isHovered = hovering
             }
         }
-        .pressEvents(onPress: {
-            withAnimation(.easeOut(duration: 0.1)) { isPressed = true }
-        }, onRelease: {
-            withAnimation(.easeOut(duration: 0.1)) { isPressed = false }
-        })
+        .pressEvents(
+            onPress: {
+                withAnimation(.easeOut(duration: 0.1)) { isPressed = true }
+            },
+            onRelease: {
+                withAnimation(.easeOut(duration: 0.1)) { isPressed = false }
+            }
+        )
         .animation(.spring(response: 0.3), value: state)
     }
 
@@ -699,11 +737,13 @@ struct HistoryList: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
                     ForEach(entries.prefix(20)) { entry in
-                        HistoryCard(entry: entry, onTap: {
-                            withAnimation(.easeOut(duration: 0.25)) {
-                                selectedItem = entry
-                            }
-                        })
+                        HistoryCard(
+                            entry: entry,
+                            onTap: {
+                                withAnimation(.easeOut(duration: 0.25)) {
+                                    selectedItem = entry
+                                }
+                            })
                     }
                 }
                 .padding(.horizontal, 16)
@@ -758,7 +798,8 @@ struct HistoryCard: View {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color.white)
-                    .shadow(color: .black.opacity(isHovered ? 0.10 : 0.05), radius: isHovered ? 8 : 4, y: isHovered ? 3 : 2)
+                    .shadow(
+                        color: .black.opacity(isHovered ? 0.10 : 0.05), radius: isHovered ? 8 : 4, y: isHovered ? 3 : 2)
             )
         }
         .buttonStyle(.plain)
@@ -865,7 +906,8 @@ struct HistoryRow: View {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color.white)
-                    .shadow(color: .black.opacity(isHovered ? 0.08 : 0.04), radius: isHovered ? 8 : 4, y: isHovered ? 2 : 1)
+                    .shadow(
+                        color: .black.opacity(isHovered ? 0.08 : 0.04), radius: isHovered ? 8 : 4, y: isHovered ? 2 : 1)
             )
         }
         .buttonStyle(.plain)
@@ -992,7 +1034,9 @@ struct HistoryDetailView: View {
 
                         // Dynamic stages from pipeline execution (sorted by execution order)
                         if let record = executionRecord {
-                            ForEach(record.elementMetrics.sorted(by: { $0.startTime < $1.startTime }), id: \.elementType) { metrics in
+                            ForEach(
+                                record.elementMetrics.sorted(by: { $0.startTime < $1.startTime }), id: \.elementType
+                            ) { metrics in
                                 PipelineStepCard(
                                     stepName: displayName(for: metrics.elementType),
                                     stepIcon: icon(for: metrics.elementType),
@@ -1200,7 +1244,8 @@ struct HistoryDetailContent: View {
 
                     // Dynamic stages from pipeline execution
                     if let record = executionRecord {
-                        ForEach(record.elementMetrics.sorted(by: { $0.startTime < $1.startTime }), id: \.elementType) { metrics in
+                        ForEach(record.elementMetrics.sorted(by: { $0.startTime < $1.startTime }), id: \.elementType) {
+                            metrics in
                             PipelineStepCard(
                                 stepName: displayName(for: metrics.elementType),
                                 stepIcon: icon(for: metrics.elementType),
@@ -1557,15 +1602,18 @@ struct RefinementToggle: View {
                 }
 
                 // Toggle
-                Toggle("", isOn: Binding(
-                    get: { appState.isRefinementEnabled },
-                    set: { newValue in
-                        handleToggle(newValue)
-                    }
-                ))
-                    .toggleStyle(.switch)
-                    .scaleEffect(0.65)
-                    .disabled(isAIBusy)
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { appState.isRefinementEnabled },
+                        set: { newValue in
+                            handleToggle(newValue)
+                        }
+                    )
+                )
+                .toggleStyle(.switch)
+                .scaleEffect(0.65)
+                .disabled(isAIBusy)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
@@ -1776,15 +1824,24 @@ struct RefinementOptionsPanel: View {
                     .font(.system(size: 10))
                     .foregroundColor(lightGray)
 
-                ToneChip(label: "None", isSelected: appState.toneStyle == "none", isDisabled: appState.isPromptImproverEnabled, accentColor: accentColor, chipBg: chipBg) {
+                ToneChip(
+                    label: "None", isSelected: appState.toneStyle == "none",
+                    isDisabled: appState.isPromptImproverEnabled, accentColor: accentColor, chipBg: chipBg
+                ) {
                     appState.toneStyle = "none"
                 }
 
-                ToneChip(label: "Formal", isSelected: appState.toneStyle == "formal", isDisabled: appState.isPromptImproverEnabled, accentColor: accentColor, chipBg: chipBg) {
+                ToneChip(
+                    label: "Formal", isSelected: appState.toneStyle == "formal",
+                    isDisabled: appState.isPromptImproverEnabled, accentColor: accentColor, chipBg: chipBg
+                ) {
                     appState.toneStyle = "formal"
                 }
 
-                ToneChip(label: "Casual", isSelected: appState.toneStyle == "casual", isDisabled: appState.isPromptImproverEnabled, accentColor: accentColor, chipBg: chipBg) {
+                ToneChip(
+                    label: "Casual", isSelected: appState.toneStyle == "casual",
+                    isDisabled: appState.isPromptImproverEnabled, accentColor: accentColor, chipBg: chipBg
+                ) {
                     appState.toneStyle = "casual"
                 }
             }
@@ -1959,47 +2016,16 @@ struct GlobalSettingsContent: View {
                 }
             }
 
-            // Transcription section
+            // Transcription section - configured via node settings
             GlobalSettingsGroup(title: "Transcription", icon: "waveform") {
-                VStack(alignment: .leading, spacing: 10) {
-                    // Model
-                    HStack {
-                        Text("Model")
-                            .font(.system(size: 11))
-                            .foregroundColor(KoeColors.textLight)
-
-                        Spacer()
-
-                        ModelPicker()
-                    }
-
-                    // Language
-                    HStack {
-                        Text("Language")
-                            .font(.system(size: 11))
-                            .foregroundColor(KoeColors.textLight)
-
-                        Spacer()
-
-                        Picker("", selection: $appState.selectedLanguage) {
-                            ForEach(Language.all, id: \.code) { lang in
-                                Text("\(lang.flag) \(lang.name)").tag(lang.code)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .frame(width: 120)
-                    }
-
-                    // Status
-                    HStack(spacing: 4) {
-                        Image(systemName: appState.isModelLoaded ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 9))
-                            .foregroundColor(appState.isModelLoaded ? .green : KoeColors.textLighter)
-                        Text(appState.isModelLoaded ? "Ready" : "Loading...")
-                            .font(.system(size: 10))
-                            .foregroundColor(KoeColors.textLighter)
-                    }
+                // Status
+                HStack(spacing: 4) {
+                    Image(systemName: appState.isModelLoaded ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 9))
+                        .foregroundColor(appState.isModelLoaded ? .green : KoeColors.textLighter)
+                    Text(appState.isModelLoaded ? "Ready" : "Loading...")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLighter)
                 }
             }
 
@@ -2133,92 +2159,4 @@ struct GlobalSettingsGroup<Content: View>: View {
     }
 }
 
-// MARK: - Model Picker with Availability
-
-struct ModelPicker: View {
-    @Environment(AppState.self) private var appState
-    @ObservedObject private var modelService = BackgroundModelService.shared
-    @State private var showUnavailableAlert = false
-    @State private var attemptedModel: KoeModel?
-
-    var body: some View {
-        @Bindable var appState = appState
-
-        Menu {
-            ForEach(KoeModel.allCases, id: \.rawValue) { model in
-                let isAvailable = modelService.isModelReady(model)
-                let status = modelService.modelStatuses[model.rawValue]
-
-                Button(action: {
-                    if isAvailable {
-                        appState.selectedModel = model.rawValue
-                        Task {
-                            await RecordingCoordinator.shared.loadModel(name: model.rawValue)
-                        }
-                    } else {
-                        attemptedModel = model
-                        showUnavailableAlert = true
-                    }
-                }) {
-                    HStack {
-                        Text(model.displayName)
-
-                        Spacer()
-
-                        if !isAvailable {
-                            if let status = status {
-                                switch status.phase {
-                                case .downloading:
-                                    Text("Downloading...")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                case .compiling:
-                                    Text("Preparing...")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                case .pending:
-                                    Image(systemName: "hourglass")
-                                        .foregroundColor(.gray)
-                                case .failed:
-                                    Image(systemName: "exclamationmark.triangle")
-                                        .foregroundColor(.red)
-                                default:
-                                    EmptyView()
-                                }
-                            } else {
-                                Image(systemName: "hourglass")
-                                    .foregroundColor(.gray)
-                            }
-                        } else if model.rawValue == appState.selectedModel {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text(currentModelName)
-                    .font(.system(size: 11))
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8))
-            }
-            .foregroundColor(KoeColors.textPrimary)
-        }
-        .menuStyle(.borderlessButton)
-        .frame(width: 100, alignment: .trailing)
-        .alert("Model Not Ready", isPresented: $showUnavailableAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            if let model = attemptedModel {
-                Text("\(model.shortName) is being prepared in the background. You'll be notified when it's ready.")
-            }
-        }
-    }
-
-    private var currentModelName: String {
-        if let model = KoeModel(rawValue: appState.selectedModel) {
-            return model.shortName
-        }
-        return "Fast"
-    }
-}
+// Model picker removed - single model (turbo) is used, configured via WhisperKit node

@@ -1,6 +1,6 @@
 import Foundation
-import os.log
 import UserNotifications
+import os.log
 
 private let logger = Logger(subsystem: "com.koe.voice", category: "CommandDetector")
 
@@ -119,7 +119,8 @@ public final class CommandDetector: @unchecked Sendable {
             // Also load for FluidVerifier (will use if ECAPA-TDNN enabled and embedding is 256-dim)
             if profile.neuralEmbedding != nil {
                 fluidVerifier.userEmbedding = profile.neuralEmbedding
-                logger.notice("[CommandDetector] Loaded neural embedding with \(profile.neuralEmbedding?.count ?? 0) dimensions")
+                logger.notice(
+                    "[CommandDetector] Loaded neural embedding with \(profile.neuralEmbedding?.count ?? 0) dimensions")
             }
             logger.notice("[CommandDetector] Loaded profile with \(profile.embedding.count)-dim embedding")
         } else {
@@ -153,7 +154,9 @@ public final class CommandDetector: @unchecked Sendable {
             }
         }
 
-        logger.notice("[CommandDetector] Applied settings: VAD=\(currentSettings.vadEnabled), threshold=\(currentSettings.confidenceThreshold), ECAPA=\(currentSettings.useECAPATDNN)")
+        logger.notice(
+            "[CommandDetector] Applied settings: VAD=\(currentSettings.vadEnabled), threshold=\(currentSettings.confidenceThreshold), ECAPA=\(currentSettings.useECAPATDNN)"
+        )
     }
 
     // MARK: - Public Methods
@@ -397,7 +400,8 @@ public final class CommandDetector: @unchecked Sendable {
         let normalizedText = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         let currentWordCount = normalizedText.split(separator: " ").count
 
-        logger.notice("[CommandDetector] Processing: \"\(normalizedText, privacy: .public)\" (words: \(currentWordCount))")
+        logger.notice(
+            "[CommandDetector] Processing: \"\(normalizedText, privacy: .public)\" (words: \(currentWordCount))")
 
         // If we have a pending command, check if user continued speaking
         if pendingCommand != nil {
@@ -418,7 +422,8 @@ public final class CommandDetector: @unchecked Sendable {
             let extendedTrigger = currentSettings.extendedTriggerPhrase.lowercased()
             if normalizedText.contains(extendedTrigger) {
                 logger.notice("[CommandDetector] ✓ Matched extended trigger: \(extendedTrigger, privacy: .public)")
-                processMatchedTrigger(text: normalizedText, samples: samples, wordCount: currentWordCount, settings: currentSettings)
+                processMatchedTrigger(
+                    text: normalizedText, samples: samples, wordCount: currentWordCount, settings: currentSettings)
                 return
             }
         }
@@ -456,7 +461,9 @@ public final class CommandDetector: @unchecked Sendable {
                     logger.notice("[CommandDetector] ⏳ Waiting for silence confirmation...")
                     setPendingCommand(result, wordCount: currentWordCount)
                 } else {
-                    logger.notice("[CommandDetector] ✗ Command '\(command.trigger)' detected but verification failed (confidence: \(confidence))")
+                    logger.notice(
+                        "[CommandDetector] ✗ Command '\(command.trigger)' detected but verification failed (confidence: \(confidence))"
+                    )
                 }
 
                 break  // Only process first matching command
@@ -494,7 +501,9 @@ public final class CommandDetector: @unchecked Sendable {
             logger.notice("[CommandDetector] ⏳ Waiting for silence confirmation...")
             setPendingCommand(result, wordCount: wordCount)
         } else {
-            logger.notice("[CommandDetector] ✗ Extended trigger detected but verification failed (confidence: \(confidence), threshold: \(settings.confidenceThreshold))")
+            logger.notice(
+                "[CommandDetector] ✗ Extended trigger detected but verification failed (confidence: \(confidence), threshold: \(settings.confidenceThreshold))"
+            )
         }
     }
 

@@ -75,7 +75,8 @@ public final class FileBasedMeetingRepository: MeetingRepository, @unchecked Sen
                 // Remove date folder if empty
                 let dateFolder = audioURL.deletingLastPathComponent()
                 if let contents = try? fileManager.contentsOfDirectory(atPath: dateFolder.path),
-                   contents.isEmpty {
+                    contents.isEmpty
+                {
                     try? fileManager.removeItem(at: dateFolder)
                 }
             }

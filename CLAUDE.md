@@ -66,6 +66,44 @@ Even if the class is @MainActor, async operations may not be.
 ### Pipeline Blocking
 Check `RecordingCoordinator.shared.isPipelineProcessing` before starting new recordings.
 
+### Node Registry System
+All pipeline nodes are defined in `NodeRegistry.swift`. When creating a new node:
+
+1. **Define NodeInfo** with all required properties:
+   - `typeId` - unique identifier (kebab-case: "transcribe-whisperkit-balanced")
+   - `displayName` - UI label
+   - `icon` - SF Symbol name
+   - `color` - theme color from KoeColors
+   - `isUserToggleable` - can user enable/disable?
+   - `isAlwaysEnabled` - always on (core functionality)?
+   - `exclusiveGroup` - for mutually exclusive nodes (e.g., "transcription")
+   - `persistenceKey` - UserDefaults key for enabled state
+   - `requiresSetup` - needs download/compile before use?
+   - `setupRequirements` - NodeSetupRequirements if setup needed
+   - `isResourceIntensive` - **IMPORTANT**: set to `true` for heavy nodes (ML models, etc.)
+
+2. **Resource-intensive nodes** (`isResourceIntensive: true`):
+   - Automatically unloaded when leaving dictation mode
+   - Reloaded when entering dictation mode (if enabled)
+   - Examples: WhisperKit Balanced, WhisperKit Accurate
+   - Apple Speech is NOT resource-intensive (uses system API)
+
+3. **Lifecycle handlers**: For nodes needing setup, create a lifecycle handler:
+   - `NodeLifecycleRegistry.swift` - register handlers
+   - Implement `load()` and `unload()` methods
+   - ContentView calls these based on mode changes
+
+### WhisperKit Model Configuration
+Optimal compute options for Mac (GPU + Neural Engine):
+```swift
+let computeOptions = ModelComputeOptions(
+    audioEncoderCompute: .cpuAndGPU,        // GPU for matrix operations
+    textDecoderCompute: .cpuAndNeuralEngine  // ANE for token generation
+)
+```
+- AudioEncoder is NOT compatible with Neural Engine compilation
+- TextDecoder runs efficiently on ANE
+
 ### Installer Progress
 Use `fflush(stdout)` after print statements in installer code for progress visibility.
 

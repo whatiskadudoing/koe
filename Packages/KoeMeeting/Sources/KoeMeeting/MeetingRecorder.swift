@@ -1,7 +1,7 @@
-import Foundation
 import AVFoundation
-import KoeDomain
+import Foundation
 import KoeCore
+import KoeDomain
 
 /// Records meeting audio using Core Audio Taps (macOS 14.4+)
 /// This is the primary recorder that captures system audio without requiring Screen Recording permission

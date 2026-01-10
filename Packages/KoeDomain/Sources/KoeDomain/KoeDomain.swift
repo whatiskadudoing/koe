@@ -7,8 +7,8 @@
 //              TranscriptionRepository, HotkeyService, TextRefinementService
 // - Errors: AudioError, TranscriptionError, TextInsertionError, MeetingError, RefinementError
 
+@_exported import struct Foundation.Data
+@_exported import struct Foundation.Date
+@_exported import struct Foundation.TimeInterval
 // Re-export all public types
 @_exported import struct Foundation.UUID
-@_exported import struct Foundation.Date
-@_exported import struct Foundation.Data
-@_exported import struct Foundation.TimeInterval

@@ -1,7 +1,7 @@
-import Foundation
 import AVFoundation
 import AudioToolbox
 import CoreAudio
+import Foundation
 import KoeCore
 
 // MARK: - Errors
@@ -166,7 +166,8 @@ public final class SystemAudioRecorder: @unchecked Sendable {
         isRecording = true
         lock.unlock()
 
-        KoeLogger.meeting.info("Recording started - System: \(systemAudioURL!.lastPathComponent), Mic: \(micAudioURL!.lastPathComponent)")
+        KoeLogger.meeting.info(
+            "Recording started - System: \(systemAudioURL!.lastPathComponent), Mic: \(micAudioURL!.lastPathComponent)")
     }
 
     /// Stop recording and return the duration
@@ -258,7 +259,7 @@ public final class SystemAudioRecorder: @unchecked Sendable {
             kAudioAggregateDeviceSubDeviceListKey as String: [] as CFArray,
             kAudioAggregateDeviceMasterSubDeviceKey as String: 0,
             kAudioAggregateDeviceIsPrivateKey as String: true,
-            kAudioAggregateDeviceIsStackedKey as String: false
+            kAudioAggregateDeviceIsStackedKey as String: false,
         ]
 
         var deviceID: AudioObjectID = kAudioObjectUnknown
@@ -337,7 +338,9 @@ public final class SystemAudioRecorder: @unchecked Sendable {
         let inputNode = engine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
 
-        KoeLogger.meeting.info("Starting microphone capture: \(inputFormat.sampleRate)Hz -> \(targetSampleRate)Hz, \(inputFormat.channelCount) channels")
+        KoeLogger.meeting.info(
+            "Starting microphone capture: \(inputFormat.sampleRate)Hz -> \(targetSampleRate)Hz, \(inputFormat.channelCount) channels"
+        )
 
         // Create mic audio file with same sample rate as system audio
         let micFormat = AVAudioFormat(
@@ -386,15 +389,17 @@ public final class SystemAudioRecorder: @unchecked Sendable {
             let monoBuffer: AVAudioPCMBuffer
             if buffer.format.channelCount > 1 {
                 // Mix down to mono
-                guard let mono = AVAudioPCMBuffer(
-                    pcmFormat: AVAudioFormat(
-                        commonFormat: .pcmFormatFloat32,
-                        sampleRate: buffer.format.sampleRate,
-                        channels: 1,
-                        interleaved: false
-                    )!,
-                    frameCapacity: buffer.frameLength
-                ) else { return }
+                guard
+                    let mono = AVAudioPCMBuffer(
+                        pcmFormat: AVAudioFormat(
+                            commonFormat: .pcmFormatFloat32,
+                            sampleRate: buffer.format.sampleRate,
+                            channels: 1,
+                            interleaved: false
+                        )!,
+                        frameCapacity: buffer.frameLength
+                    )
+                else { return }
                 mono.frameLength = buffer.frameLength
 
                 if let srcData = buffer.floatChannelData, let dstData = mono.floatChannelData {
@@ -420,10 +425,12 @@ public final class SystemAudioRecorder: @unchecked Sendable {
                 let ratio = targetSampleRate / monoBuffer.format.sampleRate
                 let outputFrameCount = AVAudioFrameCount(Double(monoBuffer.frameLength) * ratio)
 
-                guard let converted = AVAudioPCMBuffer(
-                    pcmFormat: micFormat,
-                    frameCapacity: outputFrameCount
-                ) else { return }
+                guard
+                    let converted = AVAudioPCMBuffer(
+                        pcmFormat: micFormat,
+                        frameCapacity: outputFrameCount
+                    )
+                else { return }
 
                 var error: NSError?
                 let inputBlock: AVAudioConverterInputBlock = { inNumPackets, outStatus in
@@ -532,18 +539,22 @@ public final class SystemAudioRecorder: @unchecked Sendable {
 
         // Log periodically
         if bufferCount == 1 || bufferCount % 500 == 0 {
-            KoeLogger.meeting.debug("Audio buffer #\(bufferCount), level: \(String(format: "%.3f", level)), bytes: \(firstBuffer.mDataByteSize)")
+            KoeLogger.meeting.debug(
+                "Audio buffer #\(bufferCount), level: \(String(format: "%.3f", level)), bytes: \(firstBuffer.mDataByteSize)"
+            )
         }
 
         // Write to system audio file
         guard let audioFile = currentFile, let format = currentFormat else { return }
 
-        guard let avFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: format.mSampleRate,
-            channels: AVAudioChannelCount(format.mChannelsPerFrame),
-            interleaved: false
-        ) else { return }
+        guard
+            let avFormat = AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: format.mSampleRate,
+                channels: AVAudioChannelCount(format.mChannelsPerFrame),
+                interleaved: false
+            )
+        else { return }
 
         let bytesPerFrame = UInt32(MemoryLayout<Float>.size * Int(format.mChannelsPerFrame))
         let frameCount = firstBuffer.mDataByteSize / bytesPerFrame
@@ -557,7 +568,8 @@ public final class SystemAudioRecorder: @unchecked Sendable {
         if format.mChannelsPerFrame == 2 {
             // Stereo: data is interleaved, need to deinterleave
             if let leftChannel = pcmBuffer.floatChannelData?[0],
-               let rightChannel = pcmBuffer.floatChannelData?[1] {
+                let rightChannel = pcmBuffer.floatChannelData?[1]
+            {
                 let frameCountInt = Int(frameCount)
                 for i in 0..<frameCountInt {
                     leftChannel[i] = floatData[i * 2]
@@ -592,8 +604,11 @@ public final class SystemAudioRecorder: @unchecked Sendable {
         let systemFormat = systemFile.processingFormat
         let micFormat = micFile.processingFormat
 
-        KoeLogger.meeting.debug("System audio: \(systemFile.length) frames at \(systemFormat.sampleRate)Hz, \(systemFormat.channelCount) channels")
-        KoeLogger.meeting.debug("Mic audio: \(micFile.length) frames at \(micFormat.sampleRate)Hz, \(micFormat.channelCount) channels")
+        KoeLogger.meeting.debug(
+            "System audio: \(systemFile.length) frames at \(systemFormat.sampleRate)Hz, \(systemFormat.channelCount) channels"
+        )
+        KoeLogger.meeting.debug(
+            "Mic audio: \(micFile.length) frames at \(micFormat.sampleRate)Hz, \(micFormat.channelCount) channels")
 
         // Output format: stereo at system sample rate
         let outputFormat = AVAudioFormat(

@@ -18,7 +18,8 @@ public enum MeetingError: KoeError {
         case .recordingFailed(let error):
             return "Meeting recording failed: \(error.localizedDescription)"
         case .screenRecordingPermissionDenied:
-            return "Screen Recording permission denied. Please enable in System Settings > Privacy & Security > Screen Recording."
+            return
+                "Screen Recording permission denied. Please enable in System Settings > Privacy & Security > Screen Recording."
         case .audioDeviceNotFound:
             return "Audio device not found"
         case .storageFailed(let error):

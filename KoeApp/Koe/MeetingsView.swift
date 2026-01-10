@@ -1,6 +1,6 @@
-import SwiftUI
 import KoeDomain
 import KoeMeeting
+import SwiftUI
 
 struct MeetingsView: View {
     @Environment(MeetingCoordinator.self) private var coordinator
@@ -39,7 +39,8 @@ struct MeetingsView: View {
                             isStartingRecording = true
                             Task {
                                 do {
-                                    try await coordinator.startRecording(appName: "Manual Recording", appBundleId: "com.koe.manual")
+                                    try await coordinator.startRecording(
+                                        appName: "Manual Recording", appBundleId: "com.koe.manual")
                                 } catch {
                                     await MainActor.run {
                                         errorMessage = "Error: \(error.localizedDescription)"
@@ -335,7 +336,9 @@ struct MeetingRow: View {
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(Color.white)
-                    .shadow(color: .black.opacity(isHovered ? 0.08 : 0.04), radius: isHovered ? 12 : 6, y: isHovered ? 4 : 2)
+                    .shadow(
+                        color: .black.opacity(isHovered ? 0.08 : 0.04), radius: isHovered ? 12 : 6, y: isHovered ? 4 : 2
+                    )
             )
         }
         .buttonStyle(.plain)

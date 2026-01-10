@@ -79,14 +79,14 @@ public struct VoiceFeatures: Codable, Sendable {
     /// Convert features to a normalized embedding vector
     public func toEmbedding() -> [Float] {
         [
-            averagePitch / 500.0,        // Normalize pitch (typically 80-300 Hz)
-            pitchVariance / 100.0,       // Normalize variance
-            averageEnergy,               // Already 0-1
-            energyVariance,              // Already small
-            zeroCrossingRate,            // Already normalized
-            spectralCentroid / 8000.0,   // Normalize (typically 1000-4000 Hz)
-            spectralRolloff / 16000.0,   // Normalize to sample rate
-            speakingRate / 10.0          // Normalize (typically 2-6 syllables/sec)
+            averagePitch / 500.0,  // Normalize pitch (typically 80-300 Hz)
+            pitchVariance / 100.0,  // Normalize variance
+            averageEnergy,  // Already 0-1
+            energyVariance,  // Already small
+            zeroCrossingRate,  // Already normalized
+            spectralCentroid / 8000.0,  // Normalize (typically 1000-4000 Hz)
+            spectralRolloff / 16000.0,  // Normalize to sample rate
+            speakingRate / 10.0,  // Normalize (typically 2-6 syllables/sec)
         ]
     }
 

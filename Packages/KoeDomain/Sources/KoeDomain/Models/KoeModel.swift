@@ -1,52 +1,70 @@
+/// WhisperKit transcription models
+/// Each model offers different speed/accuracy tradeoffs
 public enum KoeModel: String, Codable, Sendable, CaseIterable {
-    case turbo = "large-v3_turbo_954MB"
-    case large = "large-v3-v20240930_turbo"
+    /// Balanced model - good speed and accuracy (default)
+    case balanced = "large-v3-v20240930_turbo_632MB"
+
+    /// Accurate model - best accuracy, slower
+    case accurate = "large-v3_947MB"
 
     public var displayName: String {
         switch self {
-        case .turbo: return "Turbo (954 MB)"
-        case .large: return "Large (3.1 GB)"
+        case .balanced: return "Balanced (632 MB)"
+        case .accurate: return "Accurate (947 MB)"
         }
     }
 
     public var shortName: String {
         switch self {
-        case .turbo: return "Turbo"
-        case .large: return "Large"
+        case .balanced: return "Balanced"
+        case .accurate: return "Accurate"
         }
     }
 
     /// Icon for the model toggle UI
     public var icon: String {
         switch self {
-        case .turbo: return "bolt"
-        case .large: return "star"
+        case .balanced: return "gauge.with.dots.needle.50percent"
+        case .accurate: return "target"
         }
     }
 
-    /// Models downloaded during installation
+    /// Description of the model's characteristics
+    public var modelDescription: String {
+        switch self {
+        case .balanced: return "Best speed/accuracy balance"
+        case .accurate: return "Highest accuracy, slower"
+        }
+    }
+
+    /// Models downloaded during installation (none - download on demand)
     public static var installationModels: [KoeModel] {
-        [.turbo]
+        []
     }
 
     /// Models downloaded in background after app launch
     public static var backgroundModels: [KoeModel] {
-        [.large]
+        []  // No background models - download on demand
     }
 
     /// Estimated size in bytes for progress tracking
     public var estimatedBytes: Int64 {
         switch self {
-        case .turbo: return 954_000_000
-        case .large: return 3_100_000_000
+        case .balanced: return 632_000_000
+        case .accurate: return 947_000_000
         }
     }
 
     /// Human-readable size string
     public var sizeString: String {
         switch self {
-        case .turbo: return "954 MB"
-        case .large: return "3.1 GB"
+        case .balanced: return "632 MB"
+        case .accurate: return "947 MB"
         }
+    }
+
+    /// Whether this model uses GPU+ANE for maximum performance
+    public var usesGPUAndANE: Bool {
+        true  // All models use GPU+ANE for best performance
     }
 }

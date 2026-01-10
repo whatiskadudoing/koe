@@ -1,6 +1,6 @@
-import SwiftUI
-import KoeUI
 import KoePipeline
+import KoeUI
+import SwiftUI
 
 /// Main container that displays the horizontal pipeline visualization
 /// Shows parallel triggers at the start, then sequential processing stages
@@ -27,9 +27,12 @@ struct PipelineStripView: View {
     private func confirmSetup() {
         guard let nodeInfo = setupNodeInfo else { return }
 
-        // Create and submit the setup job
-        if nodeInfo.typeId == "transcribe-whisperkit" {
-            let job = JobScheduler.createWhisperKitSetupJob()
+        // Create and submit the setup job based on node type
+        if nodeInfo.typeId == NodeTypeId.whisperKitBalanced {
+            let job = JobScheduler.createWhisperKitSetupJob(model: .balanced)
+            JobScheduler.shared.submit(job)
+        } else if nodeInfo.typeId == NodeTypeId.whisperKitAccurate {
+            let job = JobScheduler.createWhisperKitSetupJob(model: .accurate)
             JobScheduler.shared.submit(job)
         }
     }
@@ -139,8 +142,8 @@ struct PipelineStripView: View {
         case .recording:
             return stage == .recorder
         case .transcribing:
-            // Both transcription nodes show running state when transcribing
-            return stage == .transcribe || stage == .transcribeWhisperKit || stage == .transcribeApple
+            // All transcription engine nodes show running state when transcribing
+            return stage.isTranscriptionEngine
         case .refining:
             return stage == .improve
         }
@@ -237,49 +240,66 @@ struct ParallelTranscriptionView: View {
     let onOpenSettings: (PipelineStageInfo) -> Void
     var onSetupRequired: ((NodeInfo) -> Void)?
 
-    private var isWhisperKitEnabled: Bool {
-        nodeController.isEnabled(.transcribeWhisperKit)
-    }
-
     private var isAppleEnabled: Bool {
         nodeController.isEnabled(.transcribeApple)
     }
 
+    private var isBalancedEnabled: Bool {
+        nodeController.isEnabled(.transcribeWhisperKitBalanced)
+    }
+
+    private var isAccurateEnabled: Bool {
+        nodeController.isEnabled(.transcribeWhisperKitAccurate)
+    }
+
+    private var activeEngine: PipelineStageInfo? {
+        if isAppleEnabled { return .transcribeApple }
+        if isBalancedEnabled { return .transcribeWhisperKitBalanced }
+        if isAccurateEnabled { return .transcribeWhisperKitAccurate }
+        return nil
+    }
+
     private var isAnyTranscriptionEnabled: Bool {
-        isWhisperKitEnabled || isAppleEnabled
+        activeEngine != nil
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            // Split connector from recorder
-            PipelineSplitConnector(
-                isTopActive: isWhisperKitEnabled,
-                isBottomActive: isAppleEnabled,
-                isSplitActive: isAnyTranscriptionEnabled,
+            // Split connector from recorder to 3 transcription nodes
+            TranscriptionSplitConnector(
+                isTopActive: isAppleEnabled,
+                isMiddleActive: isBalancedEnabled,
+                isBottomActive: isAccurateEnabled,
+                isSplitActive: true,
                 activeColor: KoeColors.accent
             )
 
             // Transcription engines stacked vertically
-            VStack(spacing: 8) {
-                // WhisperKit transcription
-                transcriptionNode(
-                    stage: .transcribeWhisperKit,
-                    isRunning: isTranscribing && isWhisperKitEnabled,
-                    isDimmedByOther: isTranscribing && isAppleEnabled && !isWhisperKitEnabled
-                )
-
-                // Apple Speech transcription
+            VStack(spacing: 4) {
+                // Apple Speech
                 transcriptionNode(
                     stage: .transcribeApple,
-                    isRunning: isTranscribing && isAppleEnabled,
-                    isDimmedByOther: isTranscribing && isWhisperKitEnabled && !isAppleEnabled
+                    isRunning: isTranscribing && isAppleEnabled
+                )
+
+                // WhisperKit Balanced
+                transcriptionNode(
+                    stage: .transcribeWhisperKitBalanced,
+                    isRunning: isTranscribing && isBalancedEnabled
+                )
+
+                // WhisperKit Accurate
+                transcriptionNode(
+                    stage: .transcribeWhisperKitAccurate,
+                    isRunning: isTranscribing && isAccurateEnabled
                 )
             }
 
-            // Merge connector to next stage
-            PipelineMergeConnector(
-                isTopActive: isWhisperKitEnabled,
-                isBottomActive: isAppleEnabled,
+            // Merge connector from 3 transcription nodes to next stage
+            TranscriptionMergeConnector(
+                isTopActive: isAppleEnabled,
+                isMiddleActive: isBalancedEnabled,
+                isBottomActive: isAccurateEnabled,
                 isMergeActive: isAnyTranscriptionEnabled,
                 activeColor: KoeColors.accent
             )
@@ -287,7 +307,10 @@ struct ParallelTranscriptionView: View {
     }
 
     @ViewBuilder
-    private func transcriptionNode(stage: PipelineStageInfo, isRunning: Bool, isDimmedByOther: Bool) -> some View {
+    private func transcriptionNode(stage: PipelineStageInfo, isRunning: Bool) -> some View {
+        let isEnabled = nodeController.isEnabled(stage)
+        let isDimmed = isTranscribing && activeEngine != stage
+
         PipelineNodeView(
             stage: stage,
             isEnabled: nodeController.binding(for: stage),
@@ -295,13 +318,151 @@ struct ParallelTranscriptionView: View {
             isRunning: isRunning,
             metrics: nil,
             onToggle: {
-                // Toggle with mutual exclusivity - disable the other transcription node
+                // Toggle with mutual exclusivity - disable other transcription nodes
                 nodeController.toggleExclusive(stage, in: PipelineStageInfo.transcriptionStages)
             },
             onOpenSettings: { onOpenSettings(stage) },
             onSetupRequired: onSetupRequired
         )
-        .opacity(isDimmedByOther ? 0.4 : 1.0)
+        .opacity(isDimmed ? 0.4 : (isEnabled ? 1.0 : 0.6))
+    }
+}
+
+// MARK: - Transcription Split Connector (1 input to 3 outputs)
+
+struct TranscriptionSplitConnector: View {
+    let isTopActive: Bool
+    let isMiddleActive: Bool
+    let isBottomActive: Bool
+    let isSplitActive: Bool
+    let activeColor: Color
+
+    private let nodeHeight: CGFloat = 60
+    private let spacing: CGFloat = 4
+    private let inputWidth: CGFloat = 20
+    private let splitWidth: CGFloat = 16
+
+    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
+
+    var body: some View {
+        Canvas { context, size in
+            let midY = size.height / 2
+            let topY = nodeHeight / 2
+            let bottomY = size.height - (nodeHeight / 2)
+            let splitX = inputWidth
+
+            // Input line from previous node to split point
+            var inPath = Path()
+            inPath.move(to: CGPoint(x: 0, y: midY))
+            inPath.addLine(to: CGPoint(x: splitX, y: midY))
+            context.stroke(
+                inPath,
+                with: .color(isSplitActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round)
+            )
+
+            // Line from split point to top node (Apple Speech)
+            var topPath = Path()
+            topPath.move(to: CGPoint(x: splitX, y: midY))
+            topPath.addLine(to: CGPoint(x: splitX, y: topY))
+            topPath.addLine(to: CGPoint(x: size.width, y: topY))
+            context.stroke(
+                topPath,
+                with: .color(isTopActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            )
+
+            // Line from split point to middle node (Balanced)
+            var middlePath = Path()
+            middlePath.move(to: CGPoint(x: splitX, y: midY))
+            middlePath.addLine(to: CGPoint(x: size.width, y: midY))
+            context.stroke(
+                middlePath,
+                with: .color(isMiddleActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round)
+            )
+
+            // Line from split point to bottom node (Accurate)
+            var bottomPath = Path()
+            bottomPath.move(to: CGPoint(x: splitX, y: midY))
+            bottomPath.addLine(to: CGPoint(x: splitX, y: bottomY))
+            bottomPath.addLine(to: CGPoint(x: size.width, y: bottomY))
+            context.stroke(
+                bottomPath,
+                with: .color(isBottomActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            )
+        }
+        .frame(width: inputWidth + splitWidth, height: (nodeHeight * 3) + (spacing * 2))
+    }
+}
+
+// MARK: - Transcription Merge Connector (3 inputs to 1 output)
+
+struct TranscriptionMergeConnector: View {
+    let isTopActive: Bool
+    let isMiddleActive: Bool
+    let isBottomActive: Bool
+    let isMergeActive: Bool
+    let activeColor: Color
+
+    private let nodeHeight: CGFloat = 60
+    private let spacing: CGFloat = 4
+    private let mergeWidth: CGFloat = 16
+    private let outputWidth: CGFloat = 20
+
+    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
+
+    var body: some View {
+        Canvas { context, size in
+            let midY = size.height / 2
+            let topY = nodeHeight / 2
+            let bottomY = size.height - (nodeHeight / 2)
+            let mergeX = mergeWidth
+
+            // Line from top node to merge point
+            var topPath = Path()
+            topPath.move(to: CGPoint(x: 0, y: topY))
+            topPath.addLine(to: CGPoint(x: mergeX, y: topY))
+            topPath.addLine(to: CGPoint(x: mergeX, y: midY))
+            context.stroke(
+                topPath,
+                with: .color(isTopActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            )
+
+            // Line from middle node to merge point
+            var middlePath = Path()
+            middlePath.move(to: CGPoint(x: 0, y: midY))
+            middlePath.addLine(to: CGPoint(x: mergeX, y: midY))
+            context.stroke(
+                middlePath,
+                with: .color(isMiddleActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round)
+            )
+
+            // Line from bottom node to merge point
+            var bottomPath = Path()
+            bottomPath.move(to: CGPoint(x: 0, y: bottomY))
+            bottomPath.addLine(to: CGPoint(x: mergeX, y: bottomY))
+            bottomPath.addLine(to: CGPoint(x: mergeX, y: midY))
+            context.stroke(
+                bottomPath,
+                with: .color(isBottomActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            )
+
+            // Output line from merge point to next node
+            var outPath = Path()
+            outPath.move(to: CGPoint(x: mergeX, y: midY))
+            outPath.addLine(to: CGPoint(x: size.width, y: midY))
+            context.stroke(
+                outPath,
+                with: .color(isMergeActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round)
+            )
+        }
+        .frame(width: mergeWidth + outputWidth, height: (nodeHeight * 3) + (spacing * 2))
     }
 }
 
@@ -375,7 +536,7 @@ struct PipelineMergeConnector: View {
     private let nodeHeight: CGFloat = 60
     private let spacing: CGFloat = 8
     private let mergeWidth: CGFloat = 16  // Width for the merge lines
-    private let outputWidth: CGFloat = 20 // Width for output line
+    private let outputWidth: CGFloat = 20  // Width for output line
 
     private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
 

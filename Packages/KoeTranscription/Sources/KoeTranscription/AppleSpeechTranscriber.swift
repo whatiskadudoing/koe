@@ -1,6 +1,6 @@
 import Foundation
-import Speech
 import KoeDomain
+import Speech
 
 /// Apple Speech-based transcription service using SFSpeechRecognizer
 /// Instant startup - no model download required
@@ -171,13 +171,14 @@ public final class AppleSpeechTranscriber: TranscriptionService, @unchecked Send
 
         // fmt chunk
         wavData.append(contentsOf: "fmt ".utf8)
-        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(16).littleEndian) { Array($0) }) // Subchunk1Size
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(16).littleEndian) { Array($0) })  // Subchunk1Size
         wavData.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) })  // AudioFormat (PCM)
         wavData.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) })  // NumChannels (mono)
-        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(sampleRate).littleEndian) { Array($0) }) // SampleRate
-        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(sampleRate * Double(bytesPerSample)).littleEndian) { Array($0) }) // ByteRate
-        wavData.append(contentsOf: withUnsafeBytes(of: UInt16(bytesPerSample).littleEndian) { Array($0) }) // BlockAlign
-        wavData.append(contentsOf: withUnsafeBytes(of: UInt16(16).littleEndian) { Array($0) }) // BitsPerSample
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt32(sampleRate).littleEndian) { Array($0) })  // SampleRate
+        wavData.append(
+            contentsOf: withUnsafeBytes(of: UInt32(sampleRate * Double(bytesPerSample)).littleEndian) { Array($0) })  // ByteRate
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt16(bytesPerSample).littleEndian) { Array($0) })  // BlockAlign
+        wavData.append(contentsOf: withUnsafeBytes(of: UInt16(16).littleEndian) { Array($0) })  // BitsPerSample
 
         // data chunk
         wavData.append(contentsOf: "data".utf8)

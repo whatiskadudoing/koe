@@ -1,6 +1,6 @@
 import Foundation
-import KoeDomain
 import KoeCore
+import KoeDomain
 
 /// Text refinement service using Ollama
 public final class OllamaRefinementService: @unchecked Sendable {

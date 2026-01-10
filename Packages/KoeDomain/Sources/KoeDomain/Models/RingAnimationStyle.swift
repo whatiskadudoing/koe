@@ -2,8 +2,8 @@ import Foundation
 
 /// Available animation styles for the audio-reactive ring
 public enum RingAnimationStyle: String, CaseIterable, Codable, Sendable {
-    case wave = "wave"           // Smooth flowing sine waves (Siri-style)
-    case blob = "blob"           // Organic morphing shape
+    case wave = "wave"  // Smooth flowing sine waves (Siri-style)
+    case blob = "blob"  // Organic morphing shape
 
     public var displayName: String {
         switch self {

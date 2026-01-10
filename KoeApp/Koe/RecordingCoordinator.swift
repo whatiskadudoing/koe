@@ -1,14 +1,14 @@
-import SwiftUI
 import AppKit
-import KoeDomain
 import KoeAudio
-import KoeTranscription
-import KoeTextInsertion
-import KoeHotkey
-import KoeCore
-import KoeRefinement
-import KoePipeline
 import KoeCommands
+import KoeCore
+import KoeDomain
+import KoeHotkey
+import KoePipeline
+import KoeRefinement
+import KoeTextInsertion
+import KoeTranscription
+import SwiftUI
 
 /// Coordinates recording, transcription, and text insertion
 /// This replaces the monolithic RecordingService with a clean, modular approach
@@ -116,17 +116,13 @@ public final class RecordingCoordinator {
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
                     // Hotkey uses push-to-talk (records while held)
-                    let langCode = AppState.shared.selectedLanguage
-                    let language = Language.all.first { $0.code == langCode } ?? .auto
-                    await self.startRecording(mode: .vad, language: language)
+                    await self.startRecording(mode: .vad, language: .auto)
                 }
             },
             onKeyUp: { [weak self] in
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
-                    let langCode = AppState.shared.selectedLanguage
-                    let language = Language.all.first { $0.code == langCode } ?? .auto
-                    await self.stopRecording(mode: .vad, language: language)
+                    await self.stopRecording(mode: .vad, language: .auto)
                 }
             }
         )
@@ -158,14 +154,12 @@ public final class RecordingCoordinator {
         triggerManager.onEvent { [weak self] event in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                let langCode = AppState.shared.selectedLanguage
-                let language = Language.all.first { $0.code == langCode } ?? .auto
 
                 switch event {
                 case .start:
-                    await self.startRecording(mode: .vad, language: language)
+                    await self.startRecording(mode: .vad, language: .auto)
                 case .stop:
-                    await self.stopRecording(mode: .vad, language: language)
+                    await self.stopRecording(mode: .vad, language: .auto)
                 }
             }
         }
@@ -196,6 +190,11 @@ public final class RecordingCoordinator {
         whisperKitTranscriber.loadingProgress
     }
 
+    /// Currently loaded WhisperKit model (nil if no model loaded)
+    public var currentModel: KoeModel? {
+        whisperKitTranscriber.currentModel
+    }
+
     public func loadModel(_ model: KoeModel) async {
         // Only load WhisperKit model if WhisperKit is enabled
         guard AppState.shared.isWhisperKitEnabled else {
@@ -223,7 +222,7 @@ public final class RecordingCoordinator {
     }
 
     public func loadModel(name: String) async {
-        let model = KoeModel(rawValue: name) ?? .turbo
+        let model = KoeModel(rawValue: name) ?? .balanced
         await loadModel(model)
     }
 
@@ -487,13 +486,14 @@ public final class RecordingCoordinator {
 
     private func transcribeStreamingBuffer(language: Language) async {
         guard !isTranscribing,
-              let startTime = recordingStartTime,
-              Date().timeIntervalSince(startTime) > 1.0 else {
+            let startTime = recordingStartTime,
+            Date().timeIntervalSince(startTime) > 1.0
+        else {
             return
         }
 
         let samples = audioRecorder.getAudioSamples()
-        guard samples.count > Int(16000 / 2) else { return } // At least 0.5s
+        guard samples.count > Int(16000 / 2) else { return }  // At least 0.5s
 
         isTranscribing = true
         defer { isTranscribing = false }
@@ -580,7 +580,9 @@ public final class RecordingCoordinator {
                 pipelineRunId = result.pipelineRunId
 
                 if wasRefined {
-                    logger.info("Pipeline completed: \(transcribedText.count) → \(finalText.count) chars in \(result.summary.formattedElapsedTime)")
+                    logger.info(
+                        "Pipeline completed: \(transcribedText.count) → \(finalText.count) chars in \(result.summary.formattedElapsedTime)"
+                    )
                 }
 
                 // Pipeline handles text insertion and auto-enter
@@ -628,14 +630,17 @@ public final class RecordingCoordinator {
 
             // Save to transcription history
             let duration = Date().timeIntervalSince(startTime)
-            let settings = wasRefined ? RefinementSettings(
-                cleanup: AppState.shared.isCleanupEnabled,
-                tone: AppState.shared.toneStyle,
-                promptMode: AppState.shared.isPromptImproverEnabled,
-                customInstructions: AppState.shared.customRefinementPrompt.isEmpty ? nil : AppState.shared.customRefinementPrompt,
-                aiTier: AppState.shared.currentAITier.rawValue,
-                durationSeconds: refinementDuration
-            ) : nil
+            let settings =
+                wasRefined
+                ? RefinementSettings(
+                    cleanup: AppState.shared.isCleanupEnabled,
+                    tone: AppState.shared.toneStyle,
+                    promptMode: AppState.shared.isPromptImproverEnabled,
+                    customInstructions: AppState.shared.customRefinementPrompt.isEmpty
+                        ? nil : AppState.shared.customRefinementPrompt,
+                    aiTier: AppState.shared.currentAITier.rawValue,
+                    durationSeconds: refinementDuration
+                ) : nil
             AppState.shared.addTranscription(
                 finalText,
                 duration: duration,
@@ -691,9 +696,9 @@ public final class RecordingCoordinator {
 
         // Simple, direct prompt that small models can follow
         return """
-        Edit this text: \(taskList).
-        Reply with ONLY the edited text. No explanations. No quotes. Just the text.
-        """
+            Edit this text: \(taskList).
+            Reply with ONLY the edited text. No explanations. No quotes. Just the text.
+            """
     }
 
     /// Build summary of enabled options for logging

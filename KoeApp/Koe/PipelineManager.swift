@@ -1,10 +1,10 @@
-import Foundation
 import AppKit
+import Foundation
+import KoeDomain
 import KoePipeline
 import KoeRefinement
 import KoeTextInsertion
 import KoeTranscription
-import KoeDomain
 
 /// Manages pipeline creation, configuration, and execution
 /// Bridges KoePipeline stages/actions with actual Koe services
@@ -51,35 +51,38 @@ public final class PipelineManager {
         // Text Improve stage (combined: cleanup, tone, prompt mode) - single AI call
         if AppState.shared.isRefinementEnabled {
             let config = buildImproveConfig()
-            elements.append(PipelineElementInstance(
-                typeId: "text-improve",
-                configuration: [
-                    "cleanupEnabled": AnyCodable(config.cleanupEnabled),
-                    "tone": AnyCodable(config.tone),
-                    "promptMode": AnyCodable(config.promptMode),
-                    "model": AnyCodable("qwen-3b")
-                ]
-            ))
+            elements.append(
+                PipelineElementInstance(
+                    typeId: "text-improve",
+                    configuration: [
+                        "cleanupEnabled": AnyCodable(config.cleanupEnabled),
+                        "tone": AnyCodable(config.tone),
+                        "promptMode": AnyCodable(config.promptMode),
+                        "model": AnyCodable("qwen-3b"),
+                    ]
+                ))
         }
 
         // Auto Type action
-        elements.append(PipelineElementInstance(
-            typeId: "auto-type",
-            configuration: [
-                "speed": AnyCodable("instant"),
-                "delayBefore": AnyCodable(0.1)
-            ]
-        ))
+        elements.append(
+            PipelineElementInstance(
+                typeId: "auto-type",
+                configuration: [
+                    "speed": AnyCodable("instant"),
+                    "delayBefore": AnyCodable(0.1),
+                ]
+            ))
 
         // Auto Enter action (if enabled)
         if AppState.shared.isAutoEnterEnabled {
-            elements.append(PipelineElementInstance(
-                typeId: "auto-enter",
-                configuration: [
-                    "delayAfterType": AnyCodable(0.1),
-                    "enterCount": AnyCodable(1)
-                ]
-            ))
+            elements.append(
+                PipelineElementInstance(
+                    typeId: "auto-enter",
+                    configuration: [
+                        "delayAfterType": AnyCodable(0.1),
+                        "enterCount": AnyCodable(1),
+                    ]
+                ))
         }
 
         let pipeline = Pipeline(
@@ -123,15 +126,19 @@ public final class PipelineManager {
         let status: ElementExecutionMetrics.ExecutionStatus = .success
         let metricsArray = Array(resultContext.summary.elementMetrics.values)
         let runId = UUID()
-        NSLog("[Pipeline] Creating execution record with %d metrics from context, runId=%@", metricsArray.count, runId.uuidString)
+        NSLog(
+            "[Pipeline] Creating execution record with %d metrics from context, runId=%@", metricsArray.count,
+            runId.uuidString)
         for (key, value) in resultContext.summary.elementMetrics {
-            NSLog("[Pipeline] Context metric: key='%@', type='%@', duration=%@", key, value.elementType, value.formattedDuration)
+            NSLog(
+                "[Pipeline] Context metric: key='%@', type='%@', duration=%@", key, value.elementType,
+                value.formattedDuration)
         }
 
         // Capture current settings for the execution record
         let executionSettings = PipelineExecutionSettings(
-            language: AppState.shared.selectedLanguage,
-            model: AppState.shared.selectedModel,
+            language: "auto",
+            model: KoeModel.balanced.rawValue,
             cleanupEnabled: AppState.shared.isCleanupEnabled,
             tone: AppState.shared.toneStyle,
             promptMode: AppState.shared.isPromptImproverEnabled,
@@ -254,10 +261,10 @@ public final class PipelineManager {
         let taskList = tasks.isEmpty ? "clean up the text" : tasks.joined(separator: ", ")
 
         return """
-        Edit this text: \(taskList).
-        Keep the original meaning. Do NOT add bullet points or extra structure.
-        Reply with ONLY the edited text. No explanations. No quotes. Just the text.
-        """
+            Edit this text: \(taskList).
+            Keep the original meaning. Do NOT add bullet points or extra structure.
+            Reply with ONLY the edited text. No explanations. No quotes. Just the text.
+            """
     }
 
     // MARK: - Target Lock Integration
@@ -283,7 +290,7 @@ public final class PipelineManager {
         case .restored:
             // Successfully restored focus - small delay then insert
             NSLog("[Pipeline] Focus restored to locked target, inserting text")
-            try await Task.sleep(nanoseconds: 100_000_000) // 100ms delay after app switch
+            try await Task.sleep(nanoseconds: 100_000_000)  // 100ms delay after app switch
             try await textInserter.insertText(text)
 
         case .failed(let reason):

@@ -19,12 +19,12 @@ public enum SetupStepType: Codable, Sendable, Equatable {
     /// Display name for UI
     public var displayName: String {
         switch self {
-        case let .downloadModel(_, sizeBytes):
+        case .downloadModel(_, let sizeBytes):
             let sizeStr = ByteCountFormatter.string(fromByteCount: sizeBytes, countStyle: .file)
             return "Download model (\(sizeStr))"
         case .compileModel:
             return "Compile for your device"
-        case let .checkAPIKey(provider):
+        case .checkAPIKey(let provider):
             return "Configure \(provider) API key"
         case .loadIntoMemory:
             return "Load into memory"
@@ -160,7 +160,7 @@ public struct NodeSetupTask: Identifiable, Sendable {
             return currentStep?.displayName ?? "Processing..."
         case .completed:
             return "Ready"
-        case let .failed(message):
+        case .failed(let message):
             return "Failed: \(message)"
         }
     }
@@ -206,27 +206,36 @@ public struct NodeSetupRequirements: Sendable {
 
 // MARK: - Predefined Setup Requirements
 
-public extension NodeSetupRequirements {
-    /// WhisperKit transcription engine setup
-    static let whisperKit = NodeSetupRequirements(
-        nodeId: "transcribe-whisperkit",
+extension NodeSetupRequirements {
+    /// WhisperKit Balanced - turbo v20240930 model (632 MB)
+    public static let whisperKitBalanced = NodeSetupRequirements(
+        nodeId: "transcribe-whisperkit-balanced",
         stepTypes: [
-            .downloadModel(url: "argmaxinc/whisperkit-coreml", sizeBytes: 954_000_000),
-            .compileModel
+            .downloadModel(url: "argmaxinc/whisperkit-coreml", sizeBytes: 632_000_000),
+            .compileModel,
+        ]
+    )
+
+    /// WhisperKit Accurate - large-v3 model (947 MB)
+    public static let whisperKitAccurate = NodeSetupRequirements(
+        nodeId: "transcribe-whisperkit-accurate",
+        stepTypes: [
+            .downloadModel(url: "argmaxinc/whisperkit-coreml", sizeBytes: 947_000_000),
+            .compileModel,
         ]
     )
 
     /// AI Improve node setup (local model)
-    static let improveLocal = NodeSetupRequirements(
+    public static let improveLocal = NodeSetupRequirements(
         nodeId: "text-improve",
         stepTypes: [
             .downloadModel(url: "local-llm", sizeBytes: 2_000_000_000),
-            .loadIntoMemory
+            .loadIntoMemory,
         ]
     )
 
     /// AI Improve node setup (cloud API)
-    static let improveCloud = NodeSetupRequirements(
+    public static let improveCloud = NodeSetupRequirements(
         nodeId: "text-improve",
         stepTypes: [
             .checkAPIKey(provider: "OpenAI")

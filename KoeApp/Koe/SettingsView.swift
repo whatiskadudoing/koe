@@ -1,8 +1,8 @@
-import SwiftUI
+import KoeCommands
 import KoeDomain
 import KoeRefinement
-import KoeCommands
 import KoeUI
+import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
@@ -32,9 +32,6 @@ struct SettingsView: View {
 
                     // Appearance section
                     AppearanceSettingsSection(appState: appState)
-
-                    // Transcription Model section (Global)
-                    TranscriptionModelSection(appState: appState)
 
                     // AI Refinement Model section (Global)
                     AIModelSettingsSection(
@@ -198,127 +195,6 @@ struct AppearanceSettingsSection: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-        }
-    }
-}
-
-// MARK: - Transcription Model Section (Global)
-
-struct TranscriptionModelSection: View {
-    @Bindable var appState: AppState
-
-    var body: some View {
-        SettingsSectionContainer(title: "Transcription") {
-            VStack(spacing: 0) {
-                // Model selector
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Whisper Model")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(KoeColors.accent)
-
-                        Text(modelDescription)
-                            .font(.system(size: 12))
-                            .foregroundColor(KoeColors.textLight)
-                    }
-
-                    Spacer()
-
-                    Menu {
-                        ForEach(KoeModel.allCases, id: \.rawValue) { model in
-                            let isReady = BackgroundModelService.shared.isModelReady(model)
-                            let isSelected = appState.selectedModel == model.rawValue
-
-                            Button(action: {
-                                guard isReady else { return }
-                                appState.selectedModel = model.rawValue
-                                Task {
-                                    await RecordingCoordinator.shared.loadModel(name: model.rawValue)
-                                }
-                            }) {
-                                HStack {
-                                    Text(model.displayName)
-                                    Spacer()
-                                    if !isReady {
-                                        Text("downloading...")
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.secondary)
-                                    } else if isSelected {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                            .disabled(!isReady)
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(appState.currentKoeModel.displayName)
-                                .font(.system(size: 13))
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 10))
-                        }
-                        .foregroundColor(KoeColors.accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(KoeColors.surface)
-                        .cornerRadius(6)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-
-                Divider()
-                    .padding(.horizontal, 16)
-
-                // Language selector
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Default Language")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(KoeColors.accent)
-
-                        Text("Used for transcription")
-                            .font(.system(size: 12))
-                            .foregroundColor(KoeColors.textLight)
-                    }
-
-                    Spacer()
-
-                    Picker("", selection: $appState.selectedLanguage) {
-                        ForEach(Language.all, id: \.code) { lang in
-                            Text("\(lang.flag) \(lang.name)").tag(lang.code)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(width: 140)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-
-                // Model status
-                Divider()
-                    .padding(.horizontal, 16)
-
-                HStack(spacing: 6) {
-                    Image(systemName: appState.isModelLoaded ? "checkmark.circle.fill" : "arrow.down.circle")
-                        .font(.system(size: 12))
-                        .foregroundColor(appState.isModelLoaded ? .green : KoeColors.textLight)
-                    Text(appState.isModelLoaded ? "Model loaded and ready" : "Loading model...")
-                        .font(.system(size: 12))
-                        .foregroundColor(KoeColors.textLight)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-            }
-        }
-    }
-
-    private var modelDescription: String {
-        switch appState.currentKoeModel {
-        case .turbo: return "Turbo • Fast & accurate • 954 MB"
-        case .large: return "Large • Best quality • 3.1 GB"
         }
     }
 }

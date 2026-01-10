@@ -1,5 +1,5 @@
-import Foundation
 import CoreAudio
+import Foundation
 import KoeCore
 
 /// Monitors audio activity using CoreAudio APIs
@@ -12,7 +12,7 @@ public final class AudioProcessMonitor: @unchecked Sendable {
     public struct AudioProcess: Hashable, Sendable {
         public let pid: pid_t
         public let bundleId: String
-        public let isUsingInput: Bool   // Using microphone
+        public let isUsingInput: Bool  // Using microphone
         public let isUsingOutput: Bool  // Using speaker
     }
 
@@ -33,24 +33,24 @@ public final class AudioProcessMonitor: @unchecked Sendable {
     /// Verified on macOS - these are the actual bundle IDs used by the apps
     private let meetingAppBundleIds: Set<String> = [
         // Video conferencing - native apps
-        "us.zoom.xos",                      // Zoom (verified)
-        "com.microsoft.teams2",             // Microsoft Teams new (verified)
-        "com.microsoft.teams",              // Microsoft Teams classic
-        "com.cisco.webexmeetingsapp",       // Webex Meetings
-        "com.webex.meetingmanager",         // Webex Meeting Manager
-        "Cisco-Systems.Spark",              // Webex unified app
-        "com.ringcentral.glip",             // RingCentral
-        "com.gotomeeting.GoToMeeting",      // GoToMeeting
-        "com.apple.FaceTime",               // FaceTime
+        "us.zoom.xos",  // Zoom (verified)
+        "com.microsoft.teams2",  // Microsoft Teams new (verified)
+        "com.microsoft.teams",  // Microsoft Teams classic
+        "com.cisco.webexmeetingsapp",  // Webex Meetings
+        "com.webex.meetingmanager",  // Webex Meeting Manager
+        "Cisco-Systems.Spark",  // Webex unified app
+        "com.ringcentral.glip",  // RingCentral
+        "com.gotomeeting.GoToMeeting",  // GoToMeeting
+        "com.apple.FaceTime",  // FaceTime
 
         // Browsers - main apps
-        "company.thebrowser.Browser",       // Arc (verified)
-        "com.google.Chrome",                // Chrome (verified)
-        "com.apple.Safari",                 // Safari (verified)
-        "org.mozilla.firefox",              // Firefox
-        "com.microsoft.edgemac",            // Edge
-        "com.brave.Browser",                // Brave
-        "com.vivaldi.Vivaldi",              // Vivaldi
+        "company.thebrowser.Browser",  // Arc (verified)
+        "com.google.Chrome",  // Chrome (verified)
+        "com.apple.Safari",  // Safari (verified)
+        "org.mozilla.firefox",  // Firefox
+        "com.microsoft.edgemac",  // Edge
+        "com.brave.Browser",  // Brave
+        "com.vivaldi.Vivaldi",  // Vivaldi
 
         // Browser helper processes - these handle audio in web meetings
         // Arc helpers (verified)
@@ -73,15 +73,15 @@ public final class AudioProcessMonitor: @unchecked Sendable {
         "com.brave.Browser.helper.renderer",
 
         // Communication apps (verified)
-        "com.tinyspeck.slackmacgap",        // Slack (verified)
-        "com.slack.Slack",                  // Slack alternative
-        "com.hnc.Discord",                  // Discord (verified)
-        "com.skype.skype",                  // Skype
-        "com.facebook.archon",              // Messenger
+        "com.tinyspeck.slackmacgap",  // Slack (verified)
+        "com.slack.Slack",  // Slack alternative
+        "com.hnc.Discord",  // Discord (verified)
+        "com.skype.skype",  // Skype
+        "com.facebook.archon",  // Messenger
 
         // Other recording/meeting apps
-        "com.loom.desktop",                 // Loom
-        "com.grain.grain"                   // Grain
+        "com.loom.desktop",  // Loom
+        "com.grain.grain",  // Grain
     ]
 
     /// Map helper bundle IDs to their parent app names for display
@@ -103,7 +103,7 @@ public final class AudioProcessMonitor: @unchecked Sendable {
         "com.microsoft.edgemac.helper.renderer": "Edge",
         // Brave helpers
         "com.brave.Browser.helper": "Brave",
-        "com.brave.Browser.helper.renderer": "Brave"
+        "com.brave.Browser.helper.renderer": "Brave",
     ]
 
     public init() {}

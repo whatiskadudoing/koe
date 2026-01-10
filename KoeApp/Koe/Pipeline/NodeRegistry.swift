@@ -1,6 +1,6 @@
-import SwiftUI
-import KoeUI
 import KoePipeline
+import KoeUI
+import SwiftUI
 
 // MARK: - Node Info
 
@@ -81,6 +81,12 @@ public struct NodeInfo: Identifiable, Sendable {
     /// Setup requirements for this node (if requiresSetup is true)
     public let setupRequirements: NodeSetupRequirements?
 
+    // MARK: - Resource Management
+
+    /// Whether this node uses significant memory/power and should be unloaded when not in use
+    /// Resource-intensive nodes are automatically unloaded when switching away from dictation mode
+    public let isResourceIntensive: Bool
+
     // MARK: - Init
 
     public init(
@@ -102,7 +108,8 @@ public struct NodeInfo: Identifiable, Sendable {
         exclusiveGroup: String? = nil,
         isExperimental: Bool = false,
         requiresSetup: Bool = false,
-        setupRequirements: NodeSetupRequirements? = nil
+        setupRequirements: NodeSetupRequirements? = nil,
+        isResourceIntensive: Bool = false
     ) {
         self.typeId = typeId
         self.displayName = displayName
@@ -123,6 +130,7 @@ public struct NodeInfo: Identifiable, Sendable {
         self.isExperimental = isExperimental
         self.requiresSetup = requiresSetup
         self.setupRequirements = setupRequirements
+        self.isResourceIntensive = isResourceIntensive
     }
 }
 
@@ -189,12 +197,13 @@ public final class NodeRegistry: @unchecked Sendable {
     public func nodeOrDefault(for typeId: String) -> NodeInfo {
         lock.lock()
         defer { lock.unlock() }
-        return nodes[typeId] ?? NodeInfo(
-            typeId: typeId,
-            displayName: typeId.replacingOccurrences(of: "-", with: " ").capitalized,
-            icon: "gearshape",
-            color: KoeColors.textLight
-        )
+        return nodes[typeId]
+            ?? NodeInfo(
+                typeId: typeId,
+                displayName: typeId.replacingOccurrences(of: "-", with: " ").capitalized,
+                icon: "gearshape",
+                color: KoeColors.textLight
+            )
     }
 
     /// Get all registered nodes
@@ -269,7 +278,7 @@ public final class NodeRegistry: @unchecked Sendable {
             NodeInfo(
                 typeId: "recorder",
                 displayName: "Record",
-                icon: "mic",
+                icon: "mic.fill",
                 color: KoeColors.stateRecording,
                 isUserToggleable: false,
                 isAlwaysEnabled: true,
@@ -278,36 +287,9 @@ public final class NodeRegistry: @unchecked Sendable {
                 hasSettings: true
             ),
 
-            NodeInfo(
-                typeId: "transcribe",
-                displayName: "Transcribe",
-                icon: "text.bubble",
-                color: KoeColors.stateTranscribing,
-                isUserToggleable: false,
-                isAlwaysEnabled: true,
-                outputType: .text,
-                inputDescription: "Audio recording",
-                hasSettings: true
-            ),
-
             // Transcription Engines (mutually exclusive - only one can be active)
-            NodeInfo(
-                typeId: "transcribe-whisperkit",
-                displayName: "WhisperKit",
-                icon: "waveform.circle",
-                color: KoeColors.stateTranscribing,
-                isUserToggleable: true,
-                isAlwaysEnabled: false,
-                outputType: .text,
-                inputDescription: "Audio recording",
-                hasSettings: true,
-                persistenceKey: "transcribeWhisperKitEnabled",
-                exclusiveGroup: "transcription",
-                isExperimental: true,
-                requiresSetup: true,
-                setupRequirements: .whisperKit
-            ),
 
+            // Apple Speech - instant, no download needed
             NodeInfo(
                 typeId: "transcribe-apple",
                 displayName: "Apple Speech",
@@ -320,6 +302,44 @@ public final class NodeRegistry: @unchecked Sendable {
                 hasSettings: true,
                 persistenceKey: "transcribeAppleSpeechEnabled",
                 exclusiveGroup: "transcription"
+            ),
+
+            // WhisperKit Balanced - turbo model, good speed and accuracy (default)
+            NodeInfo(
+                typeId: "transcribe-whisperkit-balanced",
+                displayName: "Balanced",
+                icon: "gauge.with.dots.needle.50percent",
+                color: KoeColors.stateTranscribing,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                outputType: .text,
+                inputDescription: "Audio recording",
+                hasSettings: true,
+                persistenceKey: "transcribeWhisperKitBalancedEnabled",
+                exclusiveGroup: "transcription",
+                isExperimental: true,
+                requiresSetup: true,
+                setupRequirements: .whisperKitBalanced,
+                isResourceIntensive: true
+            ),
+
+            // WhisperKit Accurate - large model, best accuracy
+            NodeInfo(
+                typeId: "transcribe-whisperkit-accurate",
+                displayName: "Accurate",
+                icon: "target",
+                color: KoeColors.stateTranscribing,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                outputType: .text,
+                inputDescription: "Audio recording",
+                hasSettings: true,
+                persistenceKey: "transcribeWhisperKitAccurateEnabled",
+                exclusiveGroup: "transcription",
+                isExperimental: true,
+                requiresSetup: true,
+                setupRequirements: .whisperKitAccurate,
+                isResourceIntensive: true
             ),
 
             // Text Processing
@@ -405,9 +425,9 @@ extension PipelineStageInfo {
         case .hotkeyTrigger: return "hotkey-trigger"
         case .voiceTrigger: return "voice-trigger"
         case .recorder: return "recorder"
-        case .transcribe: return "transcribe"
-        case .transcribeWhisperKit: return "transcribe-whisperkit"
         case .transcribeApple: return "transcribe-apple"
+        case .transcribeWhisperKitBalanced: return "transcribe-whisperkit-balanced"
+        case .transcribeWhisperKitAccurate: return "transcribe-whisperkit-accurate"
         case .improve: return "text-improve"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"

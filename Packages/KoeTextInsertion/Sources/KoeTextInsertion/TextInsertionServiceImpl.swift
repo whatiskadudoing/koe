@@ -1,6 +1,6 @@
-import Foundation
 import ApplicationServices
 import CoreGraphics
+import Foundation
 import KoeDomain
 
 /// Implementation of TextInsertionService for macOS
