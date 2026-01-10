@@ -1,0 +1,17 @@
+{
+    "model": "phi4-mini",
+    "timestamp": "20260110_105840",
+    "tests": [
+{
+    "test_name": "sentiment_analysis",
+    "prompt": "Analyze the tone and sentiment of this message: I'm concerned about the timeline. We've already pushed back twice and stakeholders are getting frustrated.\n",
+    "response": "The analysis reveals a negative, anxious mood conveyed by using phrases like \"I'm concerned,\" indicating worry or anxiety regarding an issue (\"the timeline\"). The repetition that they have been pushing things back implies ongoing challenges which contribute to this tone of frustration.\n\n\nSentiment: Negative due to expressed concern over the repeated delays and acknowledgment of stakeholder dissatisfaction.\n",
+    "expected": "Sentiment: Negative/Concerned, Urgency: High\n",
+    "duration_sec": 2.344406000,
+    "tokens_per_sec": "46.91",
+    "eval_count": 67,
+    "total_duration_ns": 2326902250,
+    "load_duration_ns": 86981958
+}
+    ]
+}

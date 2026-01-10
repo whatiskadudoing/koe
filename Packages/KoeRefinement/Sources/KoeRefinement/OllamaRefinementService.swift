@@ -194,7 +194,7 @@ public final class OllamaRefinementService: @unchecked Sendable {
                 model: currentModel,
                 prompt: text,
                 system: systemPrompt,
-                temperature: 0.3,  // Lower temperature for more consistent output
+                temperature: 0.0,  // Zero temperature for literal text editing
                 timeout: 30
             )
 
@@ -231,7 +231,7 @@ public final class OllamaRefinementService: @unchecked Sendable {
             model: currentModel,
             prompt: text,
             system: systemPrompt,
-            temperature: 0.3,
+            temperature: 0.0,
             timeout: 30
         )
     }

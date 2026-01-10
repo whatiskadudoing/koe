@@ -1,0 +1,17 @@
+{
+    "model": "gemma3n:e2b",
+    "timestamp": "20260110_110820",
+    "tests": [
+{
+    "test_name": "sentiment_analysis",
+    "prompt": "Analyze the tone and sentiment of this message: I'm concerned about the timeline. We've already pushed back twice and stakeholders are getting frustrated.\n",
+    "response": "The tone of the message is **concerned and slightly urgent**. It's not overly emotional, but it carries a sense of worry and a need for action. \n\nHere's a breakdown of the sentiment:\n\n* **Concerned:** This is the primary sentiment. The message clearly expresses worry about the timeline.\n* **Negative (but not overtly angry):** The phrase \"stakeholders are getting frustrated\" indicates a negative consequence of the timeline issues. It's not a harsh accusation, but a statement of fact about the impact.\n* **Neutral/Objective:** The language is relatively neutral and factual. It doesn't use strong emotional words like \"angry\" or \"disappointed.\" It focuses on the timeline and the stakeholders' reaction.\n* **Implied Urgency:** The fact that the timeline has been pushed back twice suggests a need to address the issue proactively. There's an implied urgency to find a solution.\n\n**Overall:** The message is a professional and somewhat anxious communication. It's a plea for attention to a problem and a potential need for a solution before things escalate further. It's not necessarily a complaint, but a statement of a problem with a potential negative outcome.\n",
+    "expected": "Sentiment: Negative/Concerned, Urgency: High\n",
+    "duration_sec": 11.808190000,
+    "tokens_per_sec": "22.40",
+    "eval_count": 249,
+    "total_duration_ns": 11755248042,
+    "load_duration_ns": 170151125
+}
+    ]
+}

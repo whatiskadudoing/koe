@@ -7,6 +7,7 @@ import SwiftUI
 struct PipelineStripView: View {
     @Environment(AppState.self) private var appState
     @Binding var selectedStage: PipelineStageInfo?
+    var onOpenComposite: ((NodeInfo) -> Void)?
 
     /// State for setup confirmation popup
     @State private var showSetupConfirmation = false
@@ -62,7 +63,8 @@ struct PipelineStripView: View {
                 isHotkeyRunning: isHotkeyRunning,
                 isVoiceRunning: isVoiceRunning,
                 onOpenSettings: { stage in selectedStage = stage },
-                onSetupRequired: handleSetupRequired
+                onSetupRequired: handleSetupRequired,
+                onOpenComposite: onOpenComposite
             )
 
             // Pre-transcription stages (recorder)
@@ -80,7 +82,8 @@ struct PipelineStripView: View {
                         metrics: metricsFor(stage),
                         onToggle: { nodeController.toggle(stage) },
                         onOpenSettings: { selectedStage = stage },
-                        onSetupRequired: handleSetupRequired
+                        onSetupRequired: handleSetupRequired,
+                        onOpenComposite: onOpenComposite
                     )
                 }
             }
@@ -91,7 +94,8 @@ struct PipelineStripView: View {
                 selectedStage: $selectedStage,
                 isTranscribing: appState.recordingState == .transcribing,
                 onOpenSettings: { stage in selectedStage = stage },
-                onSetupRequired: handleSetupRequired
+                onSetupRequired: handleSetupRequired,
+                onOpenComposite: onOpenComposite
             )
 
             // Parallel AI processing engines section
@@ -100,7 +104,8 @@ struct PipelineStripView: View {
                 selectedStage: $selectedStage,
                 isRefining: appState.recordingState == .refining,
                 onOpenSettings: { stage in selectedStage = stage },
-                onSetupRequired: handleSetupRequired
+                onSetupRequired: handleSetupRequired,
+                onOpenComposite: onOpenComposite
             )
 
             // Post-AI processing stages (type, enter)
@@ -118,7 +123,8 @@ struct PipelineStripView: View {
                         metrics: metricsFor(stage),
                         onToggle: { nodeController.toggle(stage) },
                         onOpenSettings: { selectedStage = stage },
-                        onSetupRequired: handleSetupRequired
+                        onSetupRequired: handleSetupRequired,
+                        onOpenComposite: onOpenComposite
                     )
                 }
             }
@@ -198,6 +204,7 @@ struct ParallelTriggersView: View {
     let isVoiceRunning: Bool
     let onOpenSettings: (PipelineStageInfo) -> Void
     var onSetupRequired: ((NodeInfo) -> Void)?
+    var onOpenComposite: ((NodeInfo) -> Void)?
 
     private var isAnyTriggerEnabled: Bool {
         nodeController.isEnabled(.hotkeyTrigger) || nodeController.isEnabled(.voiceTrigger)
@@ -251,7 +258,8 @@ struct ParallelTriggersView: View {
             metrics: nil,
             onToggle: { nodeController.toggle(stage) },
             onOpenSettings: { onOpenSettings(stage) },
-            onSetupRequired: onSetupRequired
+            onSetupRequired: onSetupRequired,
+            onOpenComposite: onOpenComposite
         )
         .opacity(isDimmedByOther ? 0.4 : 1.0)
     }
@@ -265,6 +273,7 @@ struct ParallelTranscriptionView: View {
     let isTranscribing: Bool
     let onOpenSettings: (PipelineStageInfo) -> Void
     var onSetupRequired: ((NodeInfo) -> Void)?
+    var onOpenComposite: ((NodeInfo) -> Void)?
 
     private var isAppleEnabled: Bool {
         nodeController.isEnabled(.transcribeApple)
@@ -348,7 +357,8 @@ struct ParallelTranscriptionView: View {
                 nodeController.toggleExclusive(stage, in: PipelineStageInfo.transcriptionStages)
             },
             onOpenSettings: { onOpenSettings(stage) },
-            onSetupRequired: onSetupRequired
+            onSetupRequired: onSetupRequired,
+            onOpenComposite: onOpenComposite
         )
         .opacity(isDimmed ? 0.4 : (isEnabled ? 1.0 : 0.6))
     }
@@ -362,6 +372,7 @@ struct ParallelAIProcessingView: View {
     let isRefining: Bool
     let onOpenSettings: (PipelineStageInfo) -> Void
     var onSetupRequired: ((NodeInfo) -> Void)?
+    var onOpenComposite: ((NodeInfo) -> Void)?
 
     private var isFastEnabled: Bool {
         nodeController.isEnabled(.aiFast)
@@ -445,7 +456,8 @@ struct ParallelAIProcessingView: View {
                 nodeController.toggleExclusive(stage, in: PipelineStageInfo.aiProcessingStages)
             },
             onOpenSettings: { onOpenSettings(stage) },
-            onSetupRequired: onSetupRequired
+            onSetupRequired: onSetupRequired,
+            onOpenComposite: onOpenComposite
         )
         .opacity(isDimmed ? 0.4 : (isEnabled ? 1.0 : 0.6))
     }

@@ -48,7 +48,7 @@ public final class PipelineManager {
         // Note: For the text refinement flow, we skip audio input and transcription
         // since those happen in RecordingCoordinator before pipeline execution
 
-        // Text Improve stage (combined: cleanup, tone, prompt mode) - single AI call
+        // Text Improve stage (combined: cleanup, tone, prompt mode) - single AI call via Ollama
         if AppState.shared.isRefinementEnabled {
             let config = buildImproveConfig()
             elements.append(
@@ -58,7 +58,6 @@ public final class PipelineManager {
                         "cleanupEnabled": AnyCodable(config.cleanupEnabled),
                         "tone": AnyCodable(config.tone),
                         "promptMode": AnyCodable(config.promptMode),
-                        "model": AnyCodable("qwen-3b"),
                     ]
                 ))
         }
@@ -182,8 +181,12 @@ public final class PipelineManager {
             if let stage = element as? TextImproveStage {
                 stage.processHandler = { [weak self] text, config in
                     guard let self = self else { return text }
-                    let prompt = self.buildImprovePrompt(config: config)
-                    return try await self.aiService.refine(text: text, mode: .custom, customPrompt: prompt)
+                    // Translation mode - get target language from AI Model sub-nodes
+                    let targetLang = self.getSelectedLanguageFromSubNodes() ?? "Spanish"
+                    // Pass instruction as system prompt, user text as prompt
+                    let systemInstruction = "You are a translator. Translate the user's text to \(targetLang). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
+                    let userPrompt = "Translate this: \(text)"
+                    return try await self.aiService.refine(text: userPrompt, mode: .custom, customPrompt: systemInstruction)
                 }
             }
 
@@ -233,7 +236,7 @@ public final class PipelineManager {
 
         // Cleanup tasks
         if config.cleanupEnabled {
-            tasks.append("fix grammar and remove filler words (um, uh, like, you know)")
+            tasks.append("fix grammar, punctuation, and remove filler words (um, uh, like, you know, so, basically)")
         }
 
         // Tone adjustment
@@ -260,11 +263,9 @@ public final class PipelineManager {
         // If nothing is enabled, just clean up
         let taskList = tasks.isEmpty ? "clean up the text" : tasks.joined(separator: ", ")
 
-        return """
-            Edit this text: \(taskList).
-            Keep the original meaning. Do NOT add bullet points or extra structure.
-            Reply with ONLY the edited text. No explanations. No quotes. Just the text.
-            """
+        // Note: We return empty string here because we'll put everything in the user prompt
+        // This avoids the system/user message split that causes conversational responses
+        return ""
     }
 
     // MARK: - Target Lock Integration
@@ -311,6 +312,30 @@ public final class PipelineManager {
 
         // Clear target after successful insertion
         targetLockService.clearTarget()
+    }
+
+    // MARK: - Sub-Node Helpers
+
+    /// Get the selected language from AI Model's sub-nodes
+    /// Returns the displayName of the enabled language node, or nil if none is enabled
+    private func getSelectedLanguageFromSubNodes() -> String? {
+        // Get the AI Fast node (AI Model)
+        guard let aiModel = NodeRegistry.shared.node(for: "ai-fast") else {
+            return nil
+        }
+
+        // Find the enabled language node in the "ai-language" exclusive group
+        for subNode in aiModel.subNodes {
+            // Check if this is a language node
+            if subNode.exclusiveGroup == "ai-language",
+               let persistenceKey = subNode.persistenceKey,
+               UserDefaults.standard.bool(forKey: persistenceKey)
+            {
+                return subNode.displayName
+            }
+        }
+
+        return nil
     }
 }
 

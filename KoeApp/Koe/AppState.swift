@@ -190,7 +190,10 @@ public final class AppState {
             if isAIFastEnabled {
                 isAIBalancedEnabled = false
                 isAIReasoningEnabled = false
+                // Configure Ollama for this model
+                configureOllamaForAINode(model: "mistral:7b")
             }
+            updateRefinementFromAINodes()
         }
     }
 
@@ -201,7 +204,10 @@ public final class AppState {
             if isAIBalancedEnabled {
                 isAIFastEnabled = false
                 isAIReasoningEnabled = false
+                // Configure Ollama for this model
+                configureOllamaForAINode(model: "qwen2.5:7b")
             }
+            updateRefinementFromAINodes()
         }
     }
 
@@ -212,13 +218,34 @@ public final class AppState {
             if isAIReasoningEnabled {
                 isAIFastEnabled = false
                 isAIBalancedEnabled = false
+                // Configure Ollama for this model
+                configureOllamaForAINode(model: "deepseek-r1")
             }
+            updateRefinementFromAINodes()
         }
     }
 
     /// Whether any AI processing engine is enabled
     public var isAnyAIProcessingEnabled: Bool {
         isAIFastEnabled || isAIBalancedEnabled || isAIReasoningEnabled
+    }
+
+    /// Configure Ollama with the specified model for AI node
+    private func configureOllamaForAINode(model: String) {
+        // Enable refinement
+        isRefinementEnabled = true
+        // Set AI tier to custom (Ollama)
+        aiTierRaw = "custom"
+        // Set the Ollama model
+        ollamaModel = model
+    }
+
+    /// Update refinement flag based on AI node states
+    private func updateRefinementFromAINodes() {
+        // If all AI nodes are disabled, also disable refinement
+        if !isAnyAIProcessingEnabled {
+            isRefinementEnabled = false
+        }
     }
 
     /// Whether to copy transcribed text to clipboard when target is lost (user switched apps)
@@ -237,6 +264,14 @@ public final class AppState {
     public var ollamaModel: String {
         get { _ollamaModel }
         set { _ollamaModel = newValue }
+    }
+
+    // MARK: - Translation Settings
+
+    /// Target language for AI translation (e.g., "Spanish", "Portuguese", "French")
+    public var translationTargetLanguage: String {
+        get { UserDefaults.standard.string(forKey: "translationTargetLanguage") ?? "Spanish" }
+        set { UserDefaults.standard.set(newValue, forKey: "translationTargetLanguage") }
     }
 
     public var customRefinementPrompt: String {

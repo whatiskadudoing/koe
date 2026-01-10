@@ -1,0 +1,17 @@
+{
+    "model": "qwen2.5:7b",
+    "timestamp": "20260110_110501",
+    "tests": [
+{
+    "test_name": "sentiment_analysis",
+    "prompt": "Analyze the tone and sentiment of this message: I'm concerned about the timeline. We've already pushed back twice and stakeholders are getting frustrated.\n",
+    "response": "The tone of the message appears to be one of concern and possibly anxiety, as evidenced by phrases like \"I'm concerned\" and mentioning that stakeholders are \"getting frustrated.\" The use of \"pushed back twice\" suggests a pattern of delays or extensions in the timeline.\n\nThe sentiment is predominantly negative due to the implication of frustration from stakeholders. This indicates potential issues with project management and stakeholder satisfaction, which could have broader implications for team morale and project success if not addressed.\n\nOverall, the tone conveys a sense of urgency and the message reflects a desire to address the situation before further delays or dissatisfaction occur.\n",
+    "expected": "Sentiment: Negative/Concerned, Urgency: High\n",
+    "duration_sec": 9.802217000,
+    "tokens_per_sec": "16.24",
+    "eval_count": 123,
+    "total_duration_ns": 9778050375,
+    "load_duration_ns": 66904084
+}
+    ]
+}

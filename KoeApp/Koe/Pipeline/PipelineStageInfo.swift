@@ -16,7 +16,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     case transcribeWhisperKitAccurate  // WhisperKit Accurate - 947 MB, best accuracy
 
     // Parallel AI processing engines (mutually exclusive - only one can be active)
-    case aiFast  // Mistral 7B - quick cleanup (~4GB)
+    case aiFast  // Mistral 7B - translation (~4GB)
     case aiBalanced  // Qwen 2.5 7B - balanced speed/quality (~4.5GB)
     case aiReasoning  // DeepSeek-R1 8B - complex reasoning (~5GB)
 
@@ -33,7 +33,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .transcribeApple: return "Apple Speech"
         case .transcribeWhisperKitBalanced: return "Balanced"
         case .transcribeWhisperKitAccurate: return "Accurate"
-        case .aiFast: return "Fast"
+        case .aiFast: return "Translate"
         case .aiBalanced: return "Balanced"
         case .aiReasoning: return "Reasoning"
         case .autoType: return "Type"

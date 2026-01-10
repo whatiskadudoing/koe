@@ -240,8 +240,8 @@ struct ContentView: View {
                     }
                 )
 
-                // Pipeline visualization
-                PipelineStripView(selectedStage: $selectedPipelineStage)
+                // Pipeline visualization with tabs
+                PipelineTabsView(selectedStage: $selectedPipelineStage)
 
                 // Current transcription (if any)
                 if !appState.currentTranscription.isEmpty {

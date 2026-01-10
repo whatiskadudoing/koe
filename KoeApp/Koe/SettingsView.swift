@@ -6,8 +6,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
-    @State private var isTestingConnection = false
-    @State private var availableModels: [OllamaModel] = []
     @State private var showVoiceTraining = false
 
     var body: some View {
@@ -33,13 +31,8 @@ struct SettingsView: View {
                     // Appearance section
                     AppearanceSettingsSection(appState: appState)
 
-                    // AI Refinement Model section (Global)
-                    AIModelSettingsSection(
-                        appState: appState,
-                        availableModels: $availableModels,
-                        isTestingConnection: $isTestingConnection,
-                        testConnection: testConnection
-                    )
+                    // AI Improvement section (simple toggle)
+                    AIImprovementSection(appState: appState)
 
                     // Voice Profile section (Global)
                     VoiceProfileSection(
@@ -64,24 +57,6 @@ struct SettingsView: View {
             VoiceTrainingView { profile in
                 appState.voiceProfile = profile
                 NotificationCenter.default.post(name: .voiceProfileTrained, object: profile)
-            }
-        }
-    }
-
-    private func testConnection() {
-        isTestingConnection = true
-        Task {
-            let service = OllamaRefinementService.shared
-            service.setEndpoint(appState.ollamaEndpoint)
-
-            let connected = await service.checkConnection()
-
-            await MainActor.run {
-                appState.isOllamaConnected = connected
-                if connected {
-                    availableModels = service.availableModels
-                }
-                isTestingConnection = false
             }
         }
     }
@@ -199,7 +174,91 @@ struct AppearanceSettingsSection: View {
     }
 }
 
-// MARK: - AI Model Settings Section (Global)
+// MARK: - AI Translation Section
+
+struct AIImprovementSection: View {
+    @Bindable var appState: AppState
+
+    private let languages = [
+        "Spanish",
+        "Portuguese",
+        "French",
+        "German",
+        "Italian",
+        "Japanese",
+        "Chinese",
+        "Korean",
+        "Russian",
+        "Arabic",
+        "Dutch",
+        "Hindi",
+        "Turkish",
+    ]
+
+    var body: some View {
+        SettingsSectionContainer(title: "AI Translation") {
+            VStack(spacing: 0) {
+                // Language picker
+                HStack {
+                    Text("Target Language")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+
+                    Spacer()
+
+                    Picker("", selection: $appState.translationTargetLanguage) {
+                        ForEach(languages, id: \.self) { lang in
+                            Text(lang).tag(lang)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(width: 120)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+
+                // Info text
+                Divider()
+                    .padding(.horizontal, 16)
+
+                Text("Enable the Translate node in the pipeline to automatically translate your transcriptions to \(appState.translationTargetLanguage) using Mistral 7B.")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textLight)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            }
+        }
+    }
+}
+
+/// AI mode chip button
+struct AIChip: View {
+    let label: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                Text(label)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+            }
+            .foregroundColor(isSelected ? .white : KoeColors.stateRefining)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isSelected ? KoeColors.stateRefining : KoeColors.stateRefining.opacity(0.15))
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - AI Model Settings Section (Legacy - for Custom Ollama)
 
 struct AIModelSettingsSection: View {
     @Bindable var appState: AppState

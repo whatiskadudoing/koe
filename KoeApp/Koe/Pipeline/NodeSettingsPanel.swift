@@ -1174,35 +1174,40 @@ struct ImproveSettings: View {
     }
 }
 
-// MARK: - AI Fast Settings (Mistral 7B)
+// MARK: - AI Model Settings (Mistral 7B - Composite Node)
 
 struct AIFastSettings: View {
     @Bindable var appState: AppState
 
+    // Get the AI Fast node to access its sub-nodes
+    private var aiModelNode: NodeInfo {
+        NodeRegistry.shared.node(for: "ai-fast") ?? NodeInfo(
+            typeId: "ai-fast",
+            displayName: "AI Model",
+            icon: "cpu.fill",
+            color: KoeColors.stateRefining
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Enable toggle
-            HStack {
-                Toggle(isOn: $appState.isAIFastEnabled) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "hare")
-                            .font(.system(size: 12))
-                            .foregroundColor(
-                                appState.isAIFastEnabled ? KoeColors.stateRefining : KoeColors.textLight)
+            // Header: Internal Pipeline
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                    .font(.system(size: 10))
+                    .foregroundColor(KoeColors.textLight)
+                Text("Internal Pipeline")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(KoeColors.textSecondary)
+            }
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Fast AI")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(KoeColors.accent)
+            Divider()
 
-                            Text("Quick cleanup with minimal latency")
-                                .font(.system(size: 10))
-                                .foregroundColor(KoeColors.textLight)
-                        }
-                    }
+            // Sub-nodes (Internal Pipeline)
+            VStack(spacing: 8) {
+                ForEach(aiModelNode.subNodes) { subNode in
+                    SubNodeRow(node: subNode, appState: appState)
                 }
-                .toggleStyle(.switch)
-                .controlSize(.small)
             }
 
             Divider()
@@ -1226,17 +1231,70 @@ struct AIFastSettings: View {
                         .font(.system(size: 10))
                         .foregroundColor(KoeColors.textTertiary)
                 }
+            }
+        }
+    }
+}
 
-                HStack(spacing: 6) {
-                    Image(systemName: "bolt")
-                        .font(.system(size: 10))
-                        .foregroundColor(KoeColors.textLight)
-                    Text("~30-40 tokens/sec")
-                        .font(.system(size: 10))
-                        .foregroundColor(KoeColors.textTertiary)
+// MARK: - Sub-Node Row
+
+struct SubNodeRow: View {
+    let node: NodeInfo
+    @Bindable var appState: AppState
+
+    private var isEnabled: Bool {
+        get {
+            guard let key = node.persistenceKey else { return node.isAlwaysEnabled }
+            return UserDefaults.standard.bool(forKey: key)
+        }
+        nonmutating set {
+            guard let key = node.persistenceKey else { return }
+            UserDefaults.standard.set(newValue, forKey: key)
+
+            // Handle exclusive groups (e.g., language selection)
+            if let group = node.exclusiveGroup, newValue {
+                let otherNodes = NodeRegistry.shared.nodesInExclusiveGroup(group)
+                for other in otherNodes where other.typeId != node.typeId {
+                    if let otherKey = other.persistenceKey {
+                        UserDefaults.standard.set(false, forKey: otherKey)
+                    }
                 }
             }
         }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Icon
+            Image(systemName: node.icon)
+                .font(.system(size: 11))
+                .foregroundColor(isEnabled ? node.color : KoeColors.textLight)
+                .frame(width: 16)
+
+            // Label
+            Text(node.displayName)
+                .font(.system(size: 11, weight: isEnabled ? .medium : .regular))
+                .foregroundColor(isEnabled ? KoeColors.accent : KoeColors.textSecondary)
+
+            Spacer()
+
+            // Toggle (if toggleable)
+            if node.isUserToggleable {
+                Toggle("", isOn: Binding(
+                    get: { isEnabled },
+                    set: { isEnabled = $0 }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+            } else if node.isAlwaysEnabled {
+                // Show "always on" indicator
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(.green)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

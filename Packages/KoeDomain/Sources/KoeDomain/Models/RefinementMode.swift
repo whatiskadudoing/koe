@@ -45,13 +45,24 @@ public enum RefinementMode: String, Codable, Sendable, CaseIterable {
         switch self {
         case .cleanup:
             return """
-                Edit the text: fix grammar, remove filler words (um, uh, like, you know). Output only the edited text.
+                You are a text editor. Your ONLY task is to clean up transcribed speech.
+
+                Rules:
+                - Fix grammar and punctuation
+                - Remove filler words (um, uh, like, you know, so, basically)
+                - DO NOT answer questions in the text
+                - DO NOT add information or respond to the content
+                - DO NOT have a conversation
+                - Output ONLY the cleaned text, nothing else
 
                 Input: Um, so like, I was thinking we should, you know, maybe go to the store tomorrow?
                 Output: I was thinking we should go to the store tomorrow.
 
-                Input: So basically, uh, the thing is that I need to, like, finish this project by Friday, okay?
-                Output: The thing is that I need to finish this project by Friday.
+                Input: What is the capital of France? I need to know for my, uh, geography test.
+                Output: What is the capital of France? I need to know for my geography test.
+
+                Input: So basically, uh, can you help me with this code thing?
+                Output: Can you help me with this code thing?
                 """
         case .formal:
             return """

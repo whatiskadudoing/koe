@@ -87,6 +87,17 @@ public struct NodeInfo: Identifiable, Sendable {
     /// Resource-intensive nodes are automatically unloaded when switching away from dictation mode
     public let isResourceIntensive: Bool
 
+    // MARK: - Composition (Sub-Pipelines)
+
+    /// Internal nodes that make up this composite node's sub-pipeline
+    /// When present, clicking this node opens a tab showing the internal pipeline
+    public let subNodes: [NodeInfo]
+
+    /// Whether this is a composite node with an internal sub-pipeline
+    public var isComposite: Bool {
+        !subNodes.isEmpty
+    }
+
     // MARK: - Init
 
     public init(
@@ -109,7 +120,8 @@ public struct NodeInfo: Identifiable, Sendable {
         isExperimental: Bool = false,
         requiresSetup: Bool = false,
         setupRequirements: NodeSetupRequirements? = nil,
-        isResourceIntensive: Bool = false
+        isResourceIntensive: Bool = false,
+        subNodes: [NodeInfo] = []
     ) {
         self.typeId = typeId
         self.displayName = displayName
@@ -131,6 +143,7 @@ public struct NodeInfo: Identifiable, Sendable {
         self.requiresSetup = requiresSetup
         self.setupRequirements = setupRequirements
         self.isResourceIntensive = isResourceIntensive
+        self.subNodes = subNodes
     }
 }
 
@@ -344,11 +357,11 @@ public final class NodeRegistry: @unchecked Sendable {
 
             // AI Processing Engines (mutually exclusive - only one can be active)
 
-            // Fast - Mistral 7B, quick cleanup with minimal latency
+            // AI Model - Mistral 7B (Composite Node with Internal Pipeline)
             NodeInfo(
                 typeId: "ai-fast",
-                displayName: "Fast",
-                icon: "hare",
+                displayName: "Mistral 7B",
+                icon: "cpu.fill",
                 color: KoeColors.stateRefining,
                 isUserToggleable: true,
                 isAlwaysEnabled: false,
@@ -360,7 +373,122 @@ public final class NodeRegistry: @unchecked Sendable {
                 exclusiveGroup: "ai-processing",
                 requiresSetup: true,
                 setupRequirements: .aiFast,
-                isResourceIntensive: true
+                isResourceIntensive: true,
+                subNodes: [
+                    // Capability Nodes (What the AI should do - Mutually Exclusive)
+                    NodeInfo(
+                        typeId: "ai-fast.capability.translate",
+                        displayName: "Translate",
+                        icon: "character.bubble",
+                        color: KoeColors.stateRefining,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiCapabilityTranslate",
+                        exclusiveGroup: "ai-capability"
+                    ),
+                    NodeInfo(
+                        typeId: "ai-fast.capability.summarize",
+                        displayName: "Summarize",
+                        icon: "doc.text.magnifyingglass",
+                        color: KoeColors.stateRefining,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiCapabilitySummarize",
+                        exclusiveGroup: "ai-capability"
+                    ),
+                    NodeInfo(
+                        typeId: "ai-fast.capability.rewrite",
+                        displayName: "Rewrite",
+                        icon: "pencil.line",
+                        color: KoeColors.stateRefining,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiCapabilityRewrite",
+                        exclusiveGroup: "ai-capability"
+                    ),
+
+                    // Language Selectors (Mutually Exclusive - for Translate capability)
+                    NodeInfo(
+                        typeId: "ai-fast.lang.spanish",
+                        displayName: "Spanish",
+                        icon: "globe",
+                        color: KoeColors.accent,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiLangSpanish",
+                        exclusiveGroup: "ai-language"
+                    ),
+                    NodeInfo(
+                        typeId: "ai-fast.lang.portuguese",
+                        displayName: "Portuguese",
+                        icon: "globe",
+                        color: KoeColors.accent,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiLangPortuguese",
+                        exclusiveGroup: "ai-language"
+                    ),
+                    NodeInfo(
+                        typeId: "ai-fast.lang.french",
+                        displayName: "French",
+                        icon: "globe",
+                        color: KoeColors.accent,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiLangFrench",
+                        exclusiveGroup: "ai-language"
+                    ),
+                    NodeInfo(
+                        typeId: "ai-fast.lang.german",
+                        displayName: "German",
+                        icon: "globe",
+                        color: KoeColors.accent,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiLangGerman",
+                        exclusiveGroup: "ai-language"
+                    ),
+                    NodeInfo(
+                        typeId: "ai-fast.lang.italian",
+                        displayName: "Italian",
+                        icon: "globe",
+                        color: KoeColors.accent,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiLangItalian",
+                        exclusiveGroup: "ai-language"
+                    ),
+                    NodeInfo(
+                        typeId: "ai-fast.lang.japanese",
+                        displayName: "Japanese",
+                        icon: "globe",
+                        color: KoeColors.accent,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiLangJapanese",
+                        exclusiveGroup: "ai-language"
+                    ),
+                    NodeInfo(
+                        typeId: "ai-fast.lang.chinese",
+                        displayName: "Chinese",
+                        icon: "globe",
+                        color: KoeColors.accent,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiLangChinese",
+                        exclusiveGroup: "ai-language"
+                    ),
+                    NodeInfo(
+                        typeId: "ai-fast.lang.korean",
+                        displayName: "Korean",
+                        icon: "globe",
+                        color: KoeColors.accent,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiLangKorean",
+                        exclusiveGroup: "ai-language"
+                    ),
+                ]
             ),
 
             // Balanced - Qwen 2.5 7B, good balance of speed and quality

@@ -39,9 +39,9 @@ public final class WhisperKitBalancedLifecycleHandler: NodeLifecycleHandler {
     public func unload() {
         logger.info("Unloading WhisperKit Balanced model...")
 
-        // Update state flags
-        AppState.shared.isWhisperKitBalancedEnabled = false
-        AppState.shared.isWhisperKitEnabled = false
+        // Note: Do NOT clear the enabled flags here!
+        // The enabled flags represent user preference, not runtime state.
+        // Clearing them would prevent reload when returning to dictation mode.
 
         // Unload the model to free memory
         RecordingCoordinator.shared.unloadModel()
@@ -84,9 +84,9 @@ public final class WhisperKitAccurateLifecycleHandler: NodeLifecycleHandler {
     public func unload() {
         logger.info("Unloading WhisperKit Accurate model...")
 
-        // Update state flags
-        AppState.shared.isWhisperKitAccurateEnabled = false
-        AppState.shared.isWhisperKitEnabled = false
+        // Note: Do NOT clear the enabled flags here!
+        // The enabled flags represent user preference, not runtime state.
+        // Clearing them would prevent reload when returning to dictation mode.
 
         // Unload the model to free memory
         RecordingCoordinator.shared.unloadModel()

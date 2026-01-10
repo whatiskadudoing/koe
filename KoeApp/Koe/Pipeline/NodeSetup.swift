@@ -226,6 +226,11 @@ extension NodeSetupRequirements {
     )
 
     // MARK: - AI Processing Models
+    //
+    // Prompt Engineering References:
+    // - Mistral Prompting Guide: https://docs.mistral.ai/guides/prompting_capabilities
+    // - Mistral System Prompt Best Practices: https://blog.promptlayer.com/mistral-system-prompt/
+    // - Mistral 7B Prompt Engineering: https://www.promptingguide.ai/models/mistral-7b
 
     /// AI Fast - Mistral 7B (~4GB) - Quick cleanup with minimal latency
     public static let aiFast = NodeSetupRequirements(

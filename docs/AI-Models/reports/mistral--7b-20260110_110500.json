@@ -1,0 +1,17 @@
+{
+    "model": "mistral:7b",
+    "timestamp": "20260110_110500",
+    "tests": [
+{
+    "test_name": "sentiment_analysis",
+    "prompt": "Analyze the tone and sentiment of this message: I'm concerned about the timeline. We've already pushed back twice and stakeholders are getting frustrated.\n",
+    "response": " The tone of this message is somewhat formal and professional, with a touch of urgency due to the repeated delays mentioned. The sentiment appears to be somewhat negative, as the speaker expresses concern and mentions that stakeholders are growing frustrated. However, there's also an element of responsibility and a desire to address the issue, given the repeated pushbacks.\n",
+    "expected": "Sentiment: Negative/Concerned, Urgency: High\n",
+    "duration_sec": 5.675589000,
+    "tokens_per_sec": "14.79",
+    "eval_count": 74,
+    "total_duration_ns": 5660328708,
+    "load_duration_ns": 10487250
+}
+    ]
+}

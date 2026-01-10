@@ -8,6 +8,7 @@ import SwiftUI
 /// Interactions:
 /// - Click toggle indicator: turn on/off (if toggleable)
 /// - Double tap node: open settings (if has settings)
+/// - Shift + tap composite node: open sub-pipeline
 struct PipelineNodeView: View {
     let stage: PipelineStageInfo
     @Binding var isEnabled: Bool
@@ -17,6 +18,7 @@ struct PipelineNodeView: View {
     let onToggle: () -> Void
     let onOpenSettings: () -> Void
     var onSetupRequired: ((NodeInfo) -> Void)?
+    var onOpenComposite: ((NodeInfo) -> Void)?
 
     /// Observe JobScheduler for reactive UI updates during setup
     @ObservedObject private var scheduler = JobScheduler.shared
@@ -119,9 +121,14 @@ struct PipelineNodeView: View {
         let timeSinceLastTap = now.timeIntervalSince(lastTapTime)
 
         if timeSinceLastTap < doubleTapThreshold {
-            // Double tap - open settings
+            // Double tap
             lastTapTime = .distantPast
-            if stage.hasSettings {
+
+            // If composite node, open sub-pipeline
+            if stage.nodeInfo.isComposite {
+                onOpenComposite?(stage.nodeInfo)
+            } else if stage.hasSettings {
+                // Otherwise open settings
                 onOpenSettings()
             }
         } else {
@@ -179,12 +186,31 @@ struct PipelineNodeView: View {
                 }
 
                 // Experimental badge (flask icon in bottom-left)
-                if stage.nodeInfo.isExperimental {
+                if stage.nodeInfo.isExperimental && !stage.nodeInfo.isComposite {
                     Image(systemName: "flask")
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundColor(.orange)
                         .frame(width: nodeSize, height: nodeSize, alignment: .bottomLeading)
                         .offset(x: 4, y: -4)
+                }
+
+                // Composite node badge (layers icon in bottom-left) - clickable to expand
+                if stage.nodeInfo.isComposite {
+                    Button(action: {
+                        onOpenComposite?(stage.nodeInfo)
+                    }) {
+                        Image(systemName: "square.stack.3d.up.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.blue)
+                            .padding(2)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.9))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: nodeSize, height: nodeSize, alignment: .bottomLeading)
+                    .offset(x: 2, y: -2)
                 }
 
                 // Setup required badge (download icon in bottom-right)

@@ -742,7 +742,7 @@ extension JobScheduler {
 
         var displayName: String {
             switch self {
-            case .fast: return "Fast AI"
+            case .fast: return "Translate"
             case .balanced: return "Balanced AI"
             case .reasoning: return "Reasoning AI"
             }
@@ -750,7 +750,7 @@ extension JobScheduler {
 
         var icon: String {
             switch self {
-            case .fast: return "hare"
+            case .fast: return "character.bubble"
             case .balanced: return "gauge.with.dots.needle.50percent"
             case .reasoning: return "brain"
             }
