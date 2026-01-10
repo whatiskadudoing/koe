@@ -400,11 +400,8 @@ struct ParallelAIProcessingView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Split connector from transcription merge to 3 AI nodes
-            TranscriptionSplitConnector(
-                isTopActive: isFastEnabled,
-                isMiddleActive: isBalancedEnabled,
-                isBottomActive: isReasoningEnabled,
-                isSplitActive: true,
+            GenericSplitConnector(
+                nodeStates: [isFastEnabled, isBalancedEnabled, isReasoningEnabled],
                 activeColor: KoeColors.accent
             )
 
@@ -430,11 +427,8 @@ struct ParallelAIProcessingView: View {
             }
 
             // Merge connector from 3 AI nodes to next stage
-            TranscriptionMergeConnector(
-                isTopActive: isFastEnabled,
-                isMiddleActive: isBalancedEnabled,
-                isBottomActive: isReasoningEnabled,
-                isMergeActive: isAnyAIEnabled,
+            GenericMergeConnector(
+                nodeStates: [isFastEnabled, isBalancedEnabled, isReasoningEnabled],
                 activeColor: KoeColors.accent
             )
         }
@@ -472,7 +466,8 @@ struct TranscriptionSplitConnector: View {
     let isSplitActive: Bool
     let activeColor: Color
 
-    private let nodeHeight: CGFloat = 60
+    private let nodeHeight: CGFloat = 60  // Total slot height
+    private let nodeSize: CGFloat = 44    // Actual node visual size
     private let spacing: CGFloat = 4
     private let inputWidth: CGFloat = 20
     private let splitWidth: CGFloat = 16
@@ -482,8 +477,8 @@ struct TranscriptionSplitConnector: View {
     var body: some View {
         Canvas { context, size in
             let midY = size.height / 2
-            let topY = nodeHeight / 2
-            let bottomY = size.height - (nodeHeight / 2)
+            let topY = nodeSize / 2  // Center of first node visual
+            let bottomY = size.height - (nodeSize / 2)  // Center of last node visual
             let splitX = inputWidth
 
             // Input line from previous node to split point
@@ -541,7 +536,8 @@ struct TranscriptionMergeConnector: View {
     let isMergeActive: Bool
     let activeColor: Color
 
-    private let nodeHeight: CGFloat = 60
+    private let nodeHeight: CGFloat = 60  // Total slot height
+    private let nodeSize: CGFloat = 44    // Actual node visual size
     private let spacing: CGFloat = 4
     private let mergeWidth: CGFloat = 16
     private let outputWidth: CGFloat = 20
@@ -551,8 +547,8 @@ struct TranscriptionMergeConnector: View {
     var body: some View {
         Canvas { context, size in
             let midY = size.height / 2
-            let topY = nodeHeight / 2
-            let bottomY = size.height - (nodeHeight / 2)
+            let topY = nodeSize / 2  // Center of first node visual
+            let bottomY = size.height - (nodeSize / 2)  // Center of last node visual
             let mergeX = mergeWidth
 
             // Line from top node to merge point
@@ -598,6 +594,110 @@ struct TranscriptionMergeConnector: View {
             )
         }
         .frame(width: mergeWidth + outputWidth, height: (nodeHeight * 3) + (spacing * 2))
+    }
+}
+
+// MARK: - Generic Parallel Section Connectors (Reusable for any number of nodes)
+
+/// Generic split connector that works with any number of nodes
+struct GenericSplitConnector: View {
+    let nodeStates: [Bool]  // Active state for each node
+    let activeColor: Color
+    let nodeHeight: CGFloat = 60  // Total slot height per node (includes node + spacing)
+    let spacing: CGFloat = 4
+
+    private let inputWidth: CGFloat = 20
+    private let splitWidth: CGFloat = 16
+    private let nodeSize: CGFloat = 44  // Actual visual node size
+    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
+
+    var body: some View {
+        Canvas { context, size in
+            let midY = size.height / 2
+            let splitX = inputWidth
+            let hasAnyActive = nodeStates.contains(true)
+
+            // Input line from previous node to split point
+            var inPath = Path()
+            inPath.move(to: CGPoint(x: 0, y: midY))
+            inPath.addLine(to: CGPoint(x: splitX, y: midY))
+            context.stroke(
+                inPath,
+                with: .color(hasAnyActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round)
+            )
+
+            // Lines from split point to each node
+            for (index, isActive) in nodeStates.enumerated() {
+                // Calculate Y position: aim at center of actual node visual (not center of slot)
+                let nodeY = (CGFloat(index) * nodeHeight) + (CGFloat(index) * spacing) + (nodeSize / 2)
+
+                var path = Path()
+                path.move(to: CGPoint(x: splitX, y: midY))
+                path.addLine(to: CGPoint(x: splitX, y: nodeY))
+                path.addLine(to: CGPoint(x: size.width, y: nodeY))
+                context.stroke(
+                    path,
+                    with: .color(isActive ? activeColor : inactiveColor),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+                )
+            }
+        }
+        .frame(
+            width: inputWidth + splitWidth,
+            height: (CGFloat(nodeStates.count) * nodeHeight) + (CGFloat(max(0, nodeStates.count - 1)) * spacing)
+        )
+    }
+}
+
+/// Generic merge connector that works with any number of nodes
+struct GenericMergeConnector: View {
+    let nodeStates: [Bool]  // Active state for each node
+    let activeColor: Color
+    let nodeHeight: CGFloat = 60  // Total slot height per node (includes node + spacing)
+    let spacing: CGFloat = 4
+
+    private let mergeWidth: CGFloat = 16
+    private let outputWidth: CGFloat = 20
+    private let nodeSize: CGFloat = 44  // Actual visual node size
+    private var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
+
+    var body: some View {
+        Canvas { context, size in
+            let midY = size.height / 2
+            let mergeX = mergeWidth
+            let hasAnyActive = nodeStates.contains(true)
+
+            // Lines from each node to merge point
+            for (index, isActive) in nodeStates.enumerated() {
+                // Calculate Y position: aim at center of actual node visual (not center of slot)
+                let nodeY = (CGFloat(index) * nodeHeight) + (CGFloat(index) * spacing) + (nodeSize / 2)
+
+                var path = Path()
+                path.move(to: CGPoint(x: 0, y: nodeY))
+                path.addLine(to: CGPoint(x: mergeX, y: nodeY))
+                path.addLine(to: CGPoint(x: mergeX, y: midY))
+                context.stroke(
+                    path,
+                    with: .color(isActive ? activeColor : inactiveColor),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+                )
+            }
+
+            // Output line from merge point to next node
+            var outPath = Path()
+            outPath.move(to: CGPoint(x: mergeX, y: midY))
+            outPath.addLine(to: CGPoint(x: size.width, y: midY))
+            context.stroke(
+                outPath,
+                with: .color(hasAnyActive ? activeColor : inactiveColor),
+                style: StrokeStyle(lineWidth: 2, lineCap: .round)
+            )
+        }
+        .frame(
+            width: mergeWidth + outputWidth,
+            height: (CGFloat(nodeStates.count) * nodeHeight) + (CGFloat(max(0, nodeStates.count - 1)) * spacing)
+        )
     }
 }
 

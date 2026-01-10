@@ -280,53 +280,49 @@ struct SubPipelineCanvas: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Capability nodes section (What the AI should do)
+            // Capability nodes section - use same generic connectors as main pipeline
             if !capabilityNodes.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    // Section label
-                    Text("Capability")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(KoeColors.textLight)
-                        .padding(.leading, 4)
+                // Split connector before capabilities
+                GenericSplitConnector(
+                    nodeStates: capabilityNodes.map { isNodeEnabled($0) },
+                    activeColor: KoeColors.accent
+                )
 
-                    // Capability options stacked vertically
-                    VStack(spacing: 4) {
-                        ForEach(capabilityNodes) { node in
-                            let isActive = isNodeEnabled(node)
-                            SubPipelineNodeView(node: node)
-                                .opacity(hasActiveCapability && !isActive ? 0.4 : 1.0)
-                        }
+                // Capability nodes
+                VStack(spacing: 4) {
+                    ForEach(capabilityNodes) { node in
+                        let isActive = isNodeEnabled(node)
+                        SubPipelineNodeView(node: node)
+                            .opacity(hasActiveCapability && !isActive ? 0.4 : 1.0)
                     }
                 }
 
-                // Connector to language options
-                if !languageNodes.isEmpty {
-                    ParallelOptionsSplitConnector(isActive: hasActiveCapability)
-                }
+                // Merge connector after capabilities
+                GenericMergeConnector(
+                    nodeStates: capabilityNodes.map { isNodeEnabled($0) },
+                    activeColor: activeCapability?.color ?? KoeColors.accent
+                )
             }
 
-            // Language nodes section (Target language)
-            if !languageNodes.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    // Section label
-                    Text("Language")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(KoeColors.textLight)
-                        .padding(.leading, 4)
+            // Language nodes section - use same generic connectors
+            if !languageNodes.isEmpty && hasActiveCapability {
+                GenericSplitConnector(
+                    nodeStates: languageNodes.map { isNodeEnabled($0) },
+                    activeColor: KoeColors.accent
+                )
 
-                    // Language options stacked vertically
-                    VStack(spacing: 4) {
-                        ForEach(languageNodes) { node in
-                            let isActive = isNodeEnabled(node)
-                            SubPipelineNodeView(node: node)
-                                .opacity(hasActiveLanguage && !isActive ? 0.4 : 1.0)
-                        }
+                // Language nodes
+                VStack(spacing: 4) {
+                    ForEach(languageNodes) { node in
+                        let isActive = isNodeEnabled(node)
+                        SubPipelineNodeView(node: node)
+                            .opacity(hasActiveLanguage && !isActive ? 0.4 : 1.0)
                     }
                 }
 
-                // Merge connector from language options
-                ParallelOptionsMergeConnector(
-                    isActive: hasActiveLanguage,
+                // Merge connector from languages
+                GenericMergeConnector(
+                    nodeStates: languageNodes.map { isNodeEnabled($0) },
                     activeColor: activeLanguage?.color ?? KoeColors.accent
                 )
             }
@@ -342,28 +338,7 @@ struct SubPipelineCanvas: View {
     }
 }
 
-// MARK: - Parallel Options Connectors (Like Transcription Split/Merge)
-
-struct ParallelOptionsSplitConnector: View {
-    let isActive: Bool
-
-    var body: some View {
-        Rectangle()
-            .fill(isActive ? KoeColors.accent : KoeColors.textLighter.opacity(0.3))
-            .frame(width: 20, height: 2)
-    }
-}
-
-struct ParallelOptionsMergeConnector: View {
-    let isActive: Bool
-    let activeColor: Color
-
-    var body: some View {
-        Rectangle()
-            .fill(isActive ? activeColor : KoeColors.textLighter.opacity(0.3))
-            .frame(width: 20, height: 2)
-    }
-}
+// MARK: - Output Indicator
 
 struct OutputIndicator: View {
     var body: some View {
@@ -391,16 +366,12 @@ struct OutputIndicator: View {
 
 struct SubPipelineNodeView: View {
     let node: NodeInfo
-    @State private var isEnabled: Bool
     @State private var isHovered = false
+    @State private var refreshID = UUID()
 
-    init(node: NodeInfo) {
-        self.node = node
-        if let key = node.persistenceKey {
-            _isEnabled = State(initialValue: UserDefaults.standard.bool(forKey: key))
-        } else {
-            _isEnabled = State(initialValue: node.isAlwaysEnabled)
-        }
+    private var isEnabled: Bool {
+        guard let key = node.persistenceKey else { return node.isAlwaysEnabled }
+        return UserDefaults.standard.bool(forKey: key)
     }
 
     private let nodeSize: CGFloat = 44
@@ -455,19 +426,28 @@ struct SubPipelineNodeView: View {
         .onTapGesture {
             if node.isUserToggleable {
                 withAnimation(.easeOut(duration: 0.15)) {
-                    isEnabled.toggle()
+                    let newValue = !isEnabled
                     if let key = node.persistenceKey {
-                        UserDefaults.standard.set(isEnabled, forKey: key)
+                        UserDefaults.standard.set(newValue, forKey: key)
 
-                        // Handle exclusive groups
-                        if let group = node.exclusiveGroup, isEnabled {
+                        // Handle exclusive groups - disable other nodes in same group
+                        if let group = node.exclusiveGroup, newValue {
                             let otherNodes = NodeRegistry.shared.nodesInExclusiveGroup(group)
                             for other in otherNodes where other.typeId != node.typeId {
                                 if let otherKey = other.persistenceKey {
                                     UserDefaults.standard.set(false, forKey: otherKey)
                                 }
                             }
+
+                            // Notify all nodes in this exclusive group to refresh
+                            NotificationCenter.default.post(
+                                name: .subNodeExclusiveGroupChanged,
+                                object: group
+                            )
                         }
+
+                        // Trigger refresh for this node
+                        refreshID = UUID()
                     }
                 }
             }
@@ -477,7 +457,22 @@ struct SubPipelineNodeView: View {
                 isHovered = hovering
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .subNodeExclusiveGroupChanged)) { notification in
+            // Refresh when any node in an exclusive group changes
+            if let changedGroup = notification.object as? String,
+               node.exclusiveGroup == changedGroup
+            {
+                refreshID = UUID()
+            }
+        }
+        .id(refreshID)
     }
+}
+
+// MARK: - Notification Extension
+
+extension Notification.Name {
+    static let subNodeExclusiveGroupChanged = Notification.Name("subNodeExclusiveGroupChanged")
 }
 
 // MARK: - Sub-Pipeline Connector
