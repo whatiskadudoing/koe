@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.16.0-beta.1](https://github.com/whatiskadudoing/koe/compare/v1.15.0-beta.1...v1.16.0-beta.1) (2026-01-10)
+
+
+### Features
+
+* add composite node sub-pipeline configuration system ([8bbfa56](https://github.com/whatiskadudoing/koe/commit/8bbfa566473b3a4087343444323bd8421e099434))
+* add dual transcription engines with Apple Speech default ([0ba0724](https://github.com/whatiskadudoing/koe/commit/0ba07248e0b742579478227ea1b24f304dccef6d))
+* add execution history with full pipeline tracking and toggle trigger ([2f0e8ba](https://github.com/whatiskadudoing/koe/commit/2f0e8baaf9d51909f0e7f9f586c36da7cdc78b84))
+* add Job Scheduler for WhisperKit setup with ANE compilation ([133eab3](https://github.com/whatiskadudoing/koe/commit/133eab38f76db5ed51db46c6007669aba63852c1))
+* add make clean-install for full reset testing ([1a7fe80](https://github.com/whatiskadudoing/koe/commit/1a7fe80ae19e1c2836d9858e1b63590afde8e867))
+* add parallel AI processing nodes with auto Ollama installation ([dfed875](https://github.com/whatiskadudoing/koe/commit/dfed8757ec82a785b10faba20225b5bddeb14a8c))
+* add resource-intensive node flag and consolidate node registry ([47cb207](https://github.com/whatiskadudoing/koe/commit/47cb20720ebf605876ecf70cd238514a6ecd02a5))
+
+
+### Bug Fixes
+
+* align pipeline connectors to node visual centers ([117ac70](https://github.com/whatiskadudoing/koe/commit/117ac704469c26c9149f97782449d2bed289975b))
+* improve pipeline node toggle responsiveness and visual feedback ([7794468](https://github.com/whatiskadudoing/koe/commit/7794468885e0718588b4ae9758f05263eb243679))
+
 ## [1.15.0-beta.1](https://github.com/whatiskadudoing/koe/compare/v1.14.0-beta.1...v1.15.0-beta.1) (2026-01-09)
 
 
