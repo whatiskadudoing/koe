@@ -27,6 +27,7 @@ public final class RecordingCoordinator {
     private let textInserter: TextInsertionServiceImpl
     private let vadProcessor: VADProcessor
     private let hotkeyManager: KoeHotkeyManager
+    private let toggleHotkeyManager: ToggleHotkeyManager
     private let aiService: AIService
 
     /// Returns the active transcriber based on which node is enabled
@@ -91,6 +92,7 @@ public final class RecordingCoordinator {
         textInserter: TextInsertionServiceImpl = TextInsertionServiceImpl(),
         vadProcessor: VADProcessor = VADProcessor(),
         hotkeyManager: KoeHotkeyManager = KoeHotkeyManager(),
+        toggleHotkeyManager: ToggleHotkeyManager = ToggleHotkeyManager(),
         aiService: AIService = AIService.shared
     ) {
         self.audioRecorder = audioRecorder
@@ -99,6 +101,7 @@ public final class RecordingCoordinator {
         self.textInserter = textInserter
         self.vadProcessor = vadProcessor
         self.hotkeyManager = hotkeyManager
+        self.toggleHotkeyManager = toggleHotkeyManager
         self.aiService = aiService
     }
 
@@ -140,6 +143,63 @@ public final class RecordingCoordinator {
 
     public func unregisterHotkey() {
         hotkeyManager.unregister()
+    }
+
+    // MARK: - Toggle Trigger Setup (Native Mac-style: press to start, press to stop)
+
+    /// Set up the toggle trigger (experimental - like macOS dictation F5 key)
+    public func setupToggleTrigger() {
+        guard AppState.shared.isNativeMacTriggerEnabled else {
+            logger.info("Toggle trigger disabled - skipping setup")
+            return
+        }
+
+        // Configure toggle hotkey from AppState settings
+        toggleHotkeyManager.setShortcut(
+            keyCode: AppState.shared.toggleHotkeyKeyCode,
+            modifiers: AppState.shared.toggleHotkeyModifiers
+        )
+
+        toggleHotkeyManager.register { [weak self] isRecording in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if isRecording {
+                    // Start recording
+                    await self.startRecording(mode: .vad, language: .auto)
+                } else {
+                    // Stop recording and process
+                    await self.stopRecording(mode: .vad, language: .auto)
+                }
+            }
+        }
+        logger.info("Toggle trigger registered: \(AppState.shared.toggleHotkeyDisplayString)")
+    }
+
+    /// Update toggle trigger when settings change
+    public func updateToggleTrigger() {
+        if AppState.shared.isNativeMacTriggerEnabled {
+            toggleHotkeyManager.setShortcut(
+                keyCode: AppState.shared.toggleHotkeyKeyCode,
+                modifiers: AppState.shared.toggleHotkeyModifiers
+            )
+            // Re-register if not already registered
+            if !toggleHotkeyManager.isRegistered {
+                setupToggleTrigger()
+            }
+            logger.info("Toggle trigger updated: \(AppState.shared.toggleHotkeyDisplayString)")
+        } else {
+            unregisterToggleTrigger()
+        }
+    }
+
+    public func unregisterToggleTrigger() {
+        toggleHotkeyManager.unregister()
+        logger.info("Toggle trigger unregistered")
+    }
+
+    /// Reset toggle trigger state (call when recording is stopped externally)
+    public func resetToggleTriggerState() {
+        toggleHotkeyManager.resetState()
     }
 
     // MARK: - Trigger Subscription
@@ -529,13 +589,17 @@ public final class RecordingCoordinator {
 
     private func transcribeFinalAudio(mode: TranscriptionMode, language: Language) async {
         let samples = audioRecorder.getAudioSamples()
-        let startTime = Date()
+        let transcriptionStartTime = Date()
 
         // Need at least 0.3 seconds of audio
         guard samples.count > Int(16000 * 0.3) else {
             logger.info("Audio too short: \(samples.count) samples")
             return
         }
+
+        // Capture timing for pre-pipeline context
+        let triggerStartTime = recordingStartTime ?? Date()
+        let recordingEndTime = Date()
 
         // Mark pipeline as processing to prevent new recordings
         isPipelineProcessing = true
@@ -551,11 +615,37 @@ public final class RecordingCoordinator {
                 language: lang
             )
 
+            let transcriptionEndTime = Date()
             let transcribedText = rawText.trimmingCharacters(in: .whitespaces)
 
             guard !transcribedText.isEmpty else {
                 return
             }
+
+            // Build pre-pipeline context for execution data
+            let triggerType: PrePipelineContext.TriggerType
+            if AppState.shared.isVoiceCommandTriggered {
+                triggerType = .voice
+            } else if AppState.shared.isNativeMacTriggerEnabled && toggleHotkeyManager.isRecording {
+                triggerType = .nativeMac
+            } else {
+                triggerType = .hotkey
+            }
+
+            let transcriptionEngine = getActiveTranscriptionEngineId()
+
+            let prePipelineContext = PrePipelineContext(
+                triggerType: triggerType,
+                triggerStartTime: triggerStartTime,
+                recordingStartTime: recordingStartTime ?? triggerStartTime,
+                recordingEndTime: recordingEndTime,
+                audioSampleCount: samples.count,
+                audioSampleRate: 16000,
+                transcriptionStartTime: transcriptionStartTime,
+                transcriptionEndTime: transcriptionEndTime,
+                transcriptionEngine: transcriptionEngine,
+                rawTranscription: transcribedText
+            )
 
             // Use pipeline for post-transcription processing
             // Pipeline handles: Language Improvement → Prompt Optimizer → Auto Type → Auto Enter
@@ -573,7 +663,10 @@ public final class RecordingCoordinator {
             var pipelineRunId: UUID? = nil
 
             do {
-                let result = try await PipelineManager.shared.processText(transcribedText)
+                let result = try await PipelineManager.shared.processText(
+                    transcribedText,
+                    prePipelineContext: prePipelineContext
+                )
                 finalText = result.processedText
                 wasRefined = result.wasRefined
                 refinementDuration = result.summary.elapsedTime
@@ -629,7 +722,7 @@ public final class RecordingCoordinator {
             currentTranscription = finalText
 
             // Save to transcription history
-            let duration = Date().timeIntervalSince(startTime)
+            let duration = Date().timeIntervalSince(triggerStartTime)
             let settings =
                 wasRefined
                 ? RefinementSettings(
@@ -661,6 +754,21 @@ public final class RecordingCoordinator {
             return String(current.dropFirst(previous.count))
         }
         return current
+    }
+
+    // MARK: - Transcription Engine Helper
+
+    /// Get the active transcription engine typeId for execution data
+    private func getActiveTranscriptionEngineId() -> String {
+        if AppState.shared.isAppleSpeechEnabled {
+            return "transcribe-apple"
+        } else if AppState.shared.isWhisperKitBalancedEnabled {
+            return "transcribe-whisperkit-balanced"
+        } else if AppState.shared.isWhisperKitAccurateEnabled {
+            return "transcribe-whisperkit-accurate"
+        }
+        // Default to Apple Speech if nothing is explicitly enabled
+        return "transcribe-apple"
     }
 
     // MARK: - Refinement Prompt Building

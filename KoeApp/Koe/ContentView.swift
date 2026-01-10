@@ -253,11 +253,9 @@ struct ContentView: View {
 
             Spacer()
 
-            // History section - at the bottom
-            if !appState.transcriptionHistory.isEmpty {
-                HistoryList(entries: appState.transcriptionHistory, selectedItem: $selectedHistoryItem)
-                    .frame(maxHeight: 180)
-            }
+            // History section - at the bottom (uses PipelineDataService for detailed data)
+            ExecutionHistoryList()
+                .frame(maxHeight: 180)
         }
         .padding(.horizontal, 24)
         .onAppear {

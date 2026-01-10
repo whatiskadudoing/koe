@@ -120,9 +120,11 @@ public final class JobScheduler: ObservableObject {
                 expectedModel = nil
             }
 
-            let hasModelTask = expectedModel != nil && job.tasks.contains {
-                ($0.type == .downloadModel || $0.type == .compileModel) && $0.metadata["model"] == expectedModel
-            }
+            let hasModelTask =
+                expectedModel != nil
+                && job.tasks.contains {
+                    ($0.type == .downloadModel || $0.type == .compileModel) && $0.metadata["model"] == expectedModel
+                }
 
             if hasNodeTask || hasModelTask {
                 if job.isCompleted {
@@ -446,15 +448,15 @@ public final class JobScheduler: ObservableObject {
             // Parse streaming JSON responses for progress
             for try await line in bytes.lines {
                 if let data = line.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 {
                     if let status = json["status"] as? String {
                         jobs[jobIndex].tasks[taskIndex].message = status
 
                         // Parse progress if available
                         if let completed = json["completed"] as? Int64,
-                           let total = json["total"] as? Int64,
-                           total > 0
+                            let total = json["total"] as? Int64,
+                            total > 0
                         {
                             let progress = Double(completed) / Double(total)
                             jobs[jobIndex].tasks[taskIndex].progress = progress

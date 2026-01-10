@@ -40,8 +40,8 @@ struct SettingsView: View {
                         showVoiceTraining: $showVoiceTraining
                     )
 
-                    // History section
-                    HistorySection(appState: appState)
+                    // Dictation Data section (includes history + execution data)
+                    DictationDataSection(appState: appState)
 
                     // About section
                     AboutSection()
@@ -222,12 +222,14 @@ struct AIImprovementSection: View {
                 Divider()
                     .padding(.horizontal, 16)
 
-                Text("Enable the Translate node in the pipeline to automatically translate your transcriptions to \(appState.translationTargetLanguage) using Mistral 7B.")
-                    .font(.system(size: 11))
-                    .foregroundColor(KoeColors.textLight)
-                    .multilineTextAlignment(.leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                Text(
+                    "Enable the Translate node in the pipeline to automatically translate your transcriptions to \(appState.translationTargetLanguage) using Mistral 7B."
+                )
+                .font(.system(size: 11))
+                .foregroundColor(KoeColors.textLight)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
         }
     }
@@ -500,40 +502,113 @@ struct VoiceProfileSection: View {
     }
 }
 
-// MARK: - History Section
+// MARK: - Dictation Data Section
 
-struct HistorySection: View {
+struct DictationDataSection: View {
     @Bindable var appState: AppState
+    @State private var pipelineDataCount: Int = 0
+    @State private var isClearing: Bool = false
+
+    private let retentionOptions: [(days: Int, label: String)] = [
+        (3, "3 days"),
+        (7, "7 days"),
+        (14, "14 days"),
+        (30, "30 days"),
+    ]
+
+    /// Total stored items (transcription history + pipeline data)
+    private var totalStoredCount: Int {
+        appState.transcriptionHistory.count + pipelineDataCount
+    }
 
     var body: some View {
-        SettingsSectionContainer(title: "History") {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Transcription entries")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(KoeColors.accent)
+        SettingsSectionContainer(title: "Dictation Data") {
+            VStack(spacing: 0) {
+                // Retention period picker
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Auto-delete after")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(KoeColors.accent)
 
-                    Text("\(appState.transcriptionHistory.count) items stored")
-                        .font(.system(size: 12))
-                        .foregroundColor(KoeColors.textLight)
+                        Text("Old dictation data is automatically removed")
+                            .font(.system(size: 12))
+                            .foregroundColor(KoeColors.textLight)
+                    }
+
+                    Spacer()
+
+                    Picker("", selection: $appState.pipelineDataRetentionDays) {
+                        ForEach(retentionOptions, id: \.days) { option in
+                            Text(option.label).tag(option.days)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(width: 100)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
 
-                Spacer()
+                Divider()
+                    .padding(.horizontal, 16)
 
-                Button(action: {
-                    appState.clearHistory()
-                }) {
-                    Text("Clear")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(KoeColors.accent)
+                // Storage status and clear button
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Stored data")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(KoeColors.accent)
+
+                        Text("\(totalStoredCount) items")
+                            .font(.system(size: 12))
+                            .foregroundColor(KoeColors.textLight)
+                    }
+
+                    Spacer()
+
+                    Button(action: {
+                        clearAllData()
+                    }) {
+                        HStack(spacing: 6) {
+                            if isClearing {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                            }
+                            Text("Clear All")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(.red.opacity(0.8))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(KoeColors.accent.opacity(0.1))
+                        .background(Color.red.opacity(0.1))
                         .cornerRadius(16)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isClearing || totalStoredCount == 0)
+                    .opacity(totalStoredCount == 0 ? 0.5 : 1.0)
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
             }
-            .padding(16)
+        }
+        .task {
+            await refreshCount()
+        }
+    }
+
+    private func refreshCount() async {
+        pipelineDataCount = await appState.getPipelineDataCount()
+    }
+
+    private func clearAllData() {
+        isClearing = true
+        Task {
+            // Clear both data stores
+            appState.clearHistory()  // Clears transcription history
+            await appState.clearAllPipelineData()  // Clears pipeline execution data
+            await refreshCount()
+            isClearing = false
         }
     }
 }

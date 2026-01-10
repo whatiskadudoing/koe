@@ -4,6 +4,7 @@ import CoreGraphics
 import KoeCommands
 import KoeDomain
 import KoePipeline
+import KoeStorage
 import SwiftUI
 import UserNotifications
 
@@ -23,6 +24,9 @@ public final class AppState {
 
     /// Whether the current recording was triggered by voice command (vs hotkey)
     public var isVoiceCommandTriggered: Bool = false
+
+    /// Whether the current recording was triggered by toggle key (🎤 microphone key)
+    public var isToggleTriggered: Bool = false
 
     public var currentTranscription: String = ""
     public var audioLevel: Float = 0.0
@@ -106,6 +110,15 @@ public final class AppState {
 
     private var _hotkeyModifiers: Int = 2 {
         didSet { UserDefaults.standard.set(_hotkeyModifiers, forKey: "hotkeyModifiers") }
+    }
+
+    // Toggle hotkey settings (native Mac-style: press to start, press to stop)
+    private var _toggleHotkeyKeyCode: UInt32 = 96 {  // F5 (microphone key)
+        didSet { UserDefaults.standard.set(Int(_toggleHotkeyKeyCode), forKey: "toggleHotkeyKeyCode") }
+    }
+
+    private var _toggleHotkeyModifiers: Int = 0 {  // No modifiers
+        didSet { UserDefaults.standard.set(_toggleHotkeyModifiers, forKey: "toggleHotkeyModifiers") }
     }
 
     // Stored properties for proper @Observable tracking
@@ -365,6 +378,66 @@ public final class AppState {
         }
     }
 
+    // MARK: - Native Mac Toggle Trigger
+
+    /// Whether the native Mac toggle trigger is enabled (press to start, press again to stop)
+    /// Enabled by default - uses the 🎤 microphone key
+    public var isNativeMacTriggerEnabled: Bool = true {
+        didSet {
+            UserDefaults.standard.set(isNativeMacTriggerEnabled, forKey: "isNativeMacTriggerEnabled")
+            NotificationCenter.default.post(name: .toggleTriggerChanged, object: nil)
+        }
+    }
+
+    /// Toggle trigger key code
+    public var toggleHotkeyKeyCode: UInt32 {
+        get { _toggleHotkeyKeyCode }
+        set {
+            _toggleHotkeyKeyCode = newValue
+            NotificationCenter.default.post(name: .toggleTriggerChanged, object: nil)
+        }
+    }
+
+    /// Toggle trigger modifier flags
+    public var toggleHotkeyModifiers: Int {
+        get { _toggleHotkeyModifiers }
+        set {
+            _toggleHotkeyModifiers = newValue
+            NotificationCenter.default.post(name: .toggleTriggerChanged, object: nil)
+        }
+    }
+
+    /// Display string for toggle hotkey (e.g., "🎤")
+    public var toggleHotkeyDisplayString: String {
+        var parts: [String] = []
+
+        if toggleHotkeyModifiers & 4 != 0 { parts.append("⌃") }  // control
+        if toggleHotkeyModifiers & 2 != 0 { parts.append("⌥") }  // option
+        if toggleHotkeyModifiers & 8 != 0 { parts.append("⇧") }  // shift
+        if toggleHotkeyModifiers & 1 != 0 { parts.append("⌘") }  // command
+
+        // Key name
+        switch toggleHotkeyKeyCode {
+        case 49: parts.append("Space")
+        case 36: parts.append("Return")
+        case 61: parts.append("R-⌥")  // Right Option key
+        case 96: parts.append("🎤")  // Microphone key (F5 position)
+        case 97: parts.append("F6")
+        case 98: parts.append("F7")
+        case 100: parts.append("F8")
+        case 101: parts.append("F9")
+        case 109: parts.append("F10")
+        case 103: parts.append("F11")
+        case 111: parts.append("F12")
+        // Letter keys
+        case 2: parts.append("D")
+        case 46: parts.append("M")
+        default: parts.append("Key\(toggleHotkeyKeyCode)")
+        }
+
+        return parts.joined()
+    }
+
     /// Voice profile - stored property for @Observable tracking
     public var voiceProfile: VoiceProfile? {
         didSet {
@@ -436,13 +509,25 @@ public final class AppState {
     }
 
     private func loadHotkeySettings() {
-        // Load saved hotkey settings
+        // Load saved hotkey settings (press-and-hold trigger)
         let savedKeyCode = UserDefaults.standard.integer(forKey: "hotkeyKeyCode")
         if savedKeyCode != 0 {
             _hotkeyKeyCode = UInt32(savedKeyCode)
         }
         if UserDefaults.standard.object(forKey: "hotkeyModifiers") != nil {
             _hotkeyModifiers = UserDefaults.standard.integer(forKey: "hotkeyModifiers")
+        }
+
+        // Load toggle hotkey settings (native Mac-style toggle trigger)
+        let savedToggleKeyCode = UserDefaults.standard.integer(forKey: "toggleHotkeyKeyCode")
+        if savedToggleKeyCode != 0 {
+            _toggleHotkeyKeyCode = UInt32(savedToggleKeyCode)
+        }
+        if UserDefaults.standard.object(forKey: "toggleHotkeyModifiers") != nil {
+            _toggleHotkeyModifiers = UserDefaults.standard.integer(forKey: "toggleHotkeyModifiers")
+        }
+        if UserDefaults.standard.object(forKey: "isNativeMacTriggerEnabled") != nil {
+            isNativeMacTriggerEnabled = UserDefaults.standard.bool(forKey: "isNativeMacTriggerEnabled")
         }
     }
 
@@ -696,6 +781,45 @@ public final class AppState {
         }
     }
 
+    // MARK: - Pipeline Data Settings
+
+    /// Data retention period in days for pipeline execution data
+    /// Default: 7 days
+    public var pipelineDataRetentionDays: Int = 7 {
+        didSet {
+            UserDefaults.standard.set(pipelineDataRetentionDays, forKey: "pipelineDataRetentionDays")
+            // Sync to PipelineDataService
+            Task {
+                await PipelineDataService.shared.setRetentionDays(pipelineDataRetentionDays)
+            }
+        }
+    }
+
+    /// Get count of stored pipeline executions (async)
+    public func getPipelineDataCount() async -> Int {
+        do {
+            return try await PipelineDataService.shared.count()
+        } catch {
+            return 0
+        }
+    }
+
+    /// Clear all pipeline execution data
+    public func clearAllPipelineData() async {
+        do {
+            try await PipelineDataService.shared.clearAll()
+        } catch {
+            print("[AppState] Failed to clear pipeline data: \(error)")
+        }
+    }
+
+    /// Sync retention settings to PipelineDataService (call on app launch)
+    public func syncPipelineDataSettings() {
+        Task {
+            await PipelineDataService.shared.setRetentionDays(pipelineDataRetentionDays)
+        }
+    }
+
     // MARK: - Pipeline Execution History
 
     /// Add a pipeline execution record
@@ -735,11 +859,18 @@ public final class AppState {
     }
 
     private func loadPipelineHistory() {
+        // Load retention days setting
+        if UserDefaults.standard.object(forKey: "pipelineDataRetentionDays") != nil {
+            pipelineDataRetentionDays = UserDefaults.standard.integer(forKey: "pipelineDataRetentionDays")
+        }
+        // Sync to PipelineDataService
+        syncPipelineDataSettings()
+
         if let data = UserDefaults.standard.data(forKey: "pipelineExecutionHistory"),
             let history = try? JSONDecoder().decode([PipelineExecutionRecord].self, from: data)
         {
-            // Filter out entries older than 7 days
-            let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+            // Filter based on configured retention days
+            let cutoff = Date().addingTimeInterval(-Double(pipelineDataRetentionDays) * 24 * 60 * 60)
             pipelineExecutionHistory = history.filter { $0.timestamp > cutoff }
 
             // Rebuild last stage metrics from most recent execution

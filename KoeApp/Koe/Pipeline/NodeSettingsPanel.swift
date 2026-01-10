@@ -1,4 +1,5 @@
 import KoeDomain
+import KoeHotkey
 import KoeUI
 import SwiftUI
 
@@ -17,6 +18,8 @@ struct NodeSettingsContent: View {
             HotkeyTriggerSettings(appState: appState)
         case .voiceTrigger:
             VoiceTriggerSettings(appState: appState)
+        case .nativeMacTrigger:
+            NativeMacTriggerSettings(appState: appState)
         case .recorder:
             RecorderSettings(appState: appState)
         case .transcribeApple:
@@ -101,6 +104,173 @@ struct HotkeyTriggerSettings: View {
 
     private func isSelected(_ preset: (name: String, keyCode: UInt32, modifiers: Int, display: String)) -> Bool {
         appState.hotkeyKeyCode == preset.keyCode && appState.hotkeyModifiers == preset.modifiers
+    }
+}
+
+// MARK: - Permission Status View (for 🎤 key)
+
+struct PermissionStatusView: View {
+    @State private var hasPermission = ToggleHotkeyManager.hasRequiredPermissions
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: hasPermission ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(hasPermission ? KoeColors.stateComplete : .orange)
+                Text("Accessibility Permission")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(hasPermission ? KoeColors.stateComplete : .orange)
+            }
+
+            if hasPermission {
+                Text("Koe can intercept the 🎤 key")
+                    .font(.system(size: 10))
+                    .foregroundColor(KoeColors.textLight)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Required to capture the 🎤 key before macOS")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+
+                    Button(action: {
+                        ToggleHotkeyManager.requestPermissions()
+                        // Check again after a delay
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                            hasPermission = ToggleHotkeyManager.hasRequiredPermissions
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "hand.raised.fill")
+                                .font(.system(size: 10))
+                            Text("Grant Permission")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(KoeColors.accent)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(8)
+        .background(hasPermission ? KoeColors.stateComplete.opacity(0.1) : Color.orange.opacity(0.1))
+        .cornerRadius(6)
+        .onAppear {
+            hasPermission = ToggleHotkeyManager.hasRequiredPermissions
+        }
+    }
+}
+
+// MARK: - Native Mac Trigger Settings
+
+struct NativeMacTriggerSettings: View {
+    @Bindable var appState: AppState
+
+    private let presets: [(name: String, keyCode: UInt32, modifiers: Int, display: String)] = [
+        ("🎤 Mic Key", 96, 0, "🎤"),
+        ("F6", 97, 0, "F6"),
+        ("⌃ M", 46, 4, "⌃M"),
+        ("⌥ D", 2, 2, "⌥D"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header description
+            Text("Toggle Mode (macOS Style)")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(KoeColors.accent)
+
+            Text("Press once to start recording, press again to stop.")
+                .font(.system(size: 11))
+                .foregroundColor(KoeColors.textLight)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            // Enable toggle
+            HStack {
+                Toggle(isOn: $appState.isNativeMacTriggerEnabled) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "mic.badge.plus")
+                            .font(.system(size: 12))
+                            .foregroundColor(
+                                appState.isNativeMacTriggerEnabled ? KoeColors.accent : KoeColors.textLight)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Enable Toggle Trigger")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(KoeColors.accent)
+
+                            Text("Works alongside the hold-to-record trigger")
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
+            if appState.isNativeMacTriggerEnabled {
+                Divider()
+
+                // Permission check for 🎤 key
+                if appState.toggleHotkeyKeyCode == 96 && appState.toggleHotkeyModifiers == 0 {
+                    PermissionStatusView()
+                }
+
+                Divider()
+
+                // Current hotkey display
+                HStack {
+                    Text("Current:")
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.textLight)
+
+                    Text(appState.toggleHotkeyDisplayString)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(KoeColors.accent)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(KoeColors.surface)
+                        .cornerRadius(6)
+                }
+
+                // Preset shortcuts
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Shortcut")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(KoeColors.textTertiary)
+
+                    HStack(spacing: 6) {
+                        ForEach(presets, id: \.name) { preset in
+                            Button(action: {
+                                appState.toggleHotkeyKeyCode = preset.keyCode
+                                appState.toggleHotkeyModifiers = preset.modifiers
+                            }) {
+                                Text(preset.display)
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(isSelected(preset) ? .white : KoeColors.accent)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background(isSelected(preset) ? KoeColors.accent : KoeColors.surface)
+                                    .cornerRadius(6)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+        }
+    }
+
+    private func isSelected(_ preset: (name: String, keyCode: UInt32, modifiers: Int, display: String)) -> Bool {
+        appState.toggleHotkeyKeyCode == preset.keyCode && appState.toggleHotkeyModifiers == preset.modifiers
     }
 }
 
@@ -1181,12 +1351,13 @@ struct AIFastSettings: View {
 
     // Get the AI Fast node to access its sub-nodes
     private var aiModelNode: NodeInfo {
-        NodeRegistry.shared.node(for: "ai-fast") ?? NodeInfo(
-            typeId: "ai-fast",
-            displayName: "AI Model",
-            icon: "cpu.fill",
-            color: KoeColors.stateRefining
-        )
+        NodeRegistry.shared.node(for: "ai-fast")
+            ?? NodeInfo(
+                typeId: "ai-fast",
+                displayName: "AI Model",
+                icon: "cpu.fill",
+                color: KoeColors.stateRefining
+            )
     }
 
     var body: some View {
@@ -1280,10 +1451,13 @@ struct SubNodeRow: View {
 
             // Toggle (if toggleable)
             if node.isUserToggleable {
-                Toggle("", isOn: Binding(
-                    get: { isEnabled },
-                    set: { isEnabled = $0 }
-                ))
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { isEnabled },
+                        set: { isEnabled = $0 }
+                    )
+                )
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.mini)

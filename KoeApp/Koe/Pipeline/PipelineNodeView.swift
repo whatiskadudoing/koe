@@ -169,7 +169,7 @@ struct PipelineNodeView: View {
             // Content: Icon centered, label at bottom (inside card)
             VStack(spacing: 0) {
                 Spacer()
-                    .frame(height: 8) // Space for top badges
+                    .frame(height: 8)  // Space for top badges
 
                 // Icon from provider
                 uiProvider.pipelineIcon(context: uiContext)

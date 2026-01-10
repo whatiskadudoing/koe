@@ -287,6 +287,25 @@ public final class NodeRegistry: @unchecked Sendable {
                 isExperimental: true
             ),
 
+            // Native Mac Toggle Trigger - press to start, press again to stop
+            // Uses the 🎤 microphone key (F5 position) by default
+            NodeInfo(
+                typeId: "native-mac-trigger",
+                displayName: "On Toggle",
+                icon: "mic.badge.plus",
+                color: KoeColors.accent,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                dimsWhenRunning: ["hotkey-trigger", "voice-trigger"],
+                outputType: .none,
+                inputDescription: "Toggle key pressed",
+                isAction: true,
+                actionDescription: "Press 🎤 to start, press again to stop",
+                hasSettings: true,
+                persistenceKey: "isNativeMacTriggerEnabled",
+                exclusiveGroup: "trigger"
+            ),
+
             // Core Processing
             NodeInfo(
                 typeId: "recorder",
@@ -375,48 +394,54 @@ public final class NodeRegistry: @unchecked Sendable {
                 setupRequirements: .aiFast,
                 isResourceIntensive: true,
                 subNodes: [
-                    // Capability Nodes (What the AI should do - Mutually Exclusive)
+                    // Rewrite Styles (Mutually Exclusive - optional tone adjustment)
                     NodeInfo(
-                        typeId: "ai-fast.capability.translate",
-                        displayName: "Translate",
-                        icon: "character.bubble",
+                        typeId: "ai-fast.rewrite.formal",
+                        displayName: "Formal",
+                        icon: "text.badge.checkmark",
                         color: KoeColors.stateRefining,
                         isUserToggleable: true,
                         isAlwaysEnabled: false,
-                        persistenceKey: "aiCapabilityTranslate",
-                        exclusiveGroup: "ai-capability"
+                        persistenceKey: "aiRewriteFormal",
+                        exclusiveGroup: "ai-rewrite-style",
+                        isExperimental: true
                     ),
                     NodeInfo(
-                        typeId: "ai-fast.capability.summarize",
-                        displayName: "Summarize",
-                        icon: "doc.text.magnifyingglass",
+                        typeId: "ai-fast.rewrite.casual",
+                        displayName: "Casual",
+                        icon: "text.bubble",
                         color: KoeColors.stateRefining,
                         isUserToggleable: true,
                         isAlwaysEnabled: false,
-                        persistenceKey: "aiCapabilitySummarize",
-                        exclusiveGroup: "ai-capability"
-                    ),
-                    NodeInfo(
-                        typeId: "ai-fast.capability.rewrite",
-                        displayName: "Rewrite",
-                        icon: "pencil.line",
-                        color: KoeColors.stateRefining,
-                        isUserToggleable: true,
-                        isAlwaysEnabled: false,
-                        persistenceKey: "aiCapabilityRewrite",
-                        exclusiveGroup: "ai-capability"
+                        persistenceKey: "aiRewriteCasual",
+                        exclusiveGroup: "ai-rewrite-style",
+                        isExperimental: true
                     ),
 
-                    // Language Selectors (Mutually Exclusive - for Translate capability)
+                    // Translate Toggle (enables language selection)
                     NodeInfo(
-                        typeId: "ai-fast.lang.spanish",
-                        displayName: "Spanish",
+                        typeId: "ai-fast.translate",
+                        displayName: "Translate",
+                        icon: "character.bubble",
+                        color: KoeColors.accent,
+                        isUserToggleable: true,
+                        isAlwaysEnabled: false,
+                        persistenceKey: "aiTranslateEnabled",
+                        exclusiveGroup: nil,  // Not exclusive - can combine with rewrite
+                        isExperimental: true
+                    ),
+
+                    // Language Selectors (Mutually Exclusive - only shown when Translate is active)
+                    NodeInfo(
+                        typeId: "ai-fast.lang.english",
+                        displayName: "English",
                         icon: "globe",
                         color: KoeColors.accent,
                         isUserToggleable: true,
                         isAlwaysEnabled: false,
-                        persistenceKey: "aiLangSpanish",
-                        exclusiveGroup: "ai-language"
+                        persistenceKey: "aiLangEnglish",
+                        exclusiveGroup: "ai-language",
+                        isExperimental: true
                     ),
                     NodeInfo(
                         typeId: "ai-fast.lang.portuguese",
@@ -426,67 +451,19 @@ public final class NodeRegistry: @unchecked Sendable {
                         isUserToggleable: true,
                         isAlwaysEnabled: false,
                         persistenceKey: "aiLangPortuguese",
-                        exclusiveGroup: "ai-language"
+                        exclusiveGroup: "ai-language",
+                        isExperimental: true
                     ),
                     NodeInfo(
-                        typeId: "ai-fast.lang.french",
-                        displayName: "French",
+                        typeId: "ai-fast.lang.spanish",
+                        displayName: "Spanish",
                         icon: "globe",
                         color: KoeColors.accent,
                         isUserToggleable: true,
                         isAlwaysEnabled: false,
-                        persistenceKey: "aiLangFrench",
-                        exclusiveGroup: "ai-language"
-                    ),
-                    NodeInfo(
-                        typeId: "ai-fast.lang.german",
-                        displayName: "German",
-                        icon: "globe",
-                        color: KoeColors.accent,
-                        isUserToggleable: true,
-                        isAlwaysEnabled: false,
-                        persistenceKey: "aiLangGerman",
-                        exclusiveGroup: "ai-language"
-                    ),
-                    NodeInfo(
-                        typeId: "ai-fast.lang.italian",
-                        displayName: "Italian",
-                        icon: "globe",
-                        color: KoeColors.accent,
-                        isUserToggleable: true,
-                        isAlwaysEnabled: false,
-                        persistenceKey: "aiLangItalian",
-                        exclusiveGroup: "ai-language"
-                    ),
-                    NodeInfo(
-                        typeId: "ai-fast.lang.japanese",
-                        displayName: "Japanese",
-                        icon: "globe",
-                        color: KoeColors.accent,
-                        isUserToggleable: true,
-                        isAlwaysEnabled: false,
-                        persistenceKey: "aiLangJapanese",
-                        exclusiveGroup: "ai-language"
-                    ),
-                    NodeInfo(
-                        typeId: "ai-fast.lang.chinese",
-                        displayName: "Chinese",
-                        icon: "globe",
-                        color: KoeColors.accent,
-                        isUserToggleable: true,
-                        isAlwaysEnabled: false,
-                        persistenceKey: "aiLangChinese",
-                        exclusiveGroup: "ai-language"
-                    ),
-                    NodeInfo(
-                        typeId: "ai-fast.lang.korean",
-                        displayName: "Korean",
-                        icon: "globe",
-                        color: KoeColors.accent,
-                        isUserToggleable: true,
-                        isAlwaysEnabled: false,
-                        persistenceKey: "aiLangKorean",
-                        exclusiveGroup: "ai-language"
+                        persistenceKey: "aiLangSpanish",
+                        exclusiveGroup: "ai-language",
+                        isExperimental: true
                     ),
                 ]
             ),
@@ -587,6 +564,7 @@ extension PipelineStageInfo {
         switch self {
         case .hotkeyTrigger: return "hotkey-trigger"
         case .voiceTrigger: return "voice-trigger"
+        case .nativeMacTrigger: return "native-mac-trigger"
         case .recorder: return "recorder"
         case .transcribeApple: return "transcribe-apple"
         case .transcribeWhisperKitBalanced: return "transcribe-whisperkit-balanced"

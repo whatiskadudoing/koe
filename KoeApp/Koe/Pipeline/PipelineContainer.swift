@@ -18,7 +18,7 @@ struct PipelineContainer<Content: View>: View {
             .padding(.horizontal, PipelineLayout.containerPaddingH)
             .padding(.vertical, PipelineLayout.containerPaddingV)
             .background(KoeColors.surface.opacity(0.5))
-            .cornerRadius(PipelineLayout.cornerRadius + 6) // Slightly larger than node corners
+            .cornerRadius(PipelineLayout.cornerRadius + 6)  // Slightly larger than node corners
     }
 }
 

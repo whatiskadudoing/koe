@@ -63,13 +63,15 @@ struct PipelineStripView: View {
                     selectedStage: $selectedStage,
                     isHotkeyRunning: isHotkeyRunning,
                     isVoiceRunning: isVoiceRunning,
+                    isToggleRunning: isToggleRunning,
                     onOpenSettings: { stage in selectedStage = stage },
                     onSetupRequired: handleSetupRequired,
                     onOpenComposite: onOpenComposite
                 )
 
                 // Pre-transcription stages (recorder)
-                ForEach(Array(PipelineStageInfo.preTranscriptionStages.enumerated()), id: \.element.id) { index, stage in
+                ForEach(Array(PipelineStageInfo.preTranscriptionStages.enumerated()), id: \.element.id) {
+                    index, stage in
                     HStack(spacing: 0) {
                         if index > 0 {
                             PipelineConnector(isActive: true, color: activeTriggerColor)
@@ -110,7 +112,8 @@ struct PipelineStripView: View {
                 )
 
                 // Post-AI processing stages (type, enter)
-                ForEach(Array(PipelineStageInfo.postAIProcessingStages.enumerated()), id: \.element.id) { index, stage in
+                ForEach(Array(PipelineStageInfo.postAIProcessingStages.enumerated()), id: \.element.id) {
+                    index, stage in
                     HStack(spacing: 0) {
                         if index > 0 {
                             PipelineConnector(isActive: true, color: activeTriggerColor)
@@ -151,15 +154,20 @@ struct PipelineStripView: View {
     }
 
     private var isHotkeyRunning: Bool {
-        appState.recordingState == .recording && !appState.isVoiceCommandTriggered
+        appState.recordingState == .recording && !appState.isVoiceCommandTriggered && !appState.isToggleTriggered
     }
 
     private var isVoiceRunning: Bool {
         appState.recordingState == .recording && appState.isVoiceCommandTriggered
     }
 
+    private var isToggleRunning: Bool {
+        appState.recordingState == .recording && appState.isToggleTriggered
+    }
+
     private var isAnyTriggerEnabled: Bool {
         nodeController.isEnabled(.hotkeyTrigger) || nodeController.isEnabled(.voiceTrigger)
+            || nodeController.isEnabled(.nativeMacTrigger)
     }
 
     // MARK: - Stage Helpers
@@ -200,12 +208,14 @@ struct ParallelTriggersView: View {
     @Binding var selectedStage: PipelineStageInfo?
     let isHotkeyRunning: Bool
     let isVoiceRunning: Bool
+    let isToggleRunning: Bool
     let onOpenSettings: (PipelineStageInfo) -> Void
     var onSetupRequired: ((NodeInfo) -> Void)?
     var onOpenComposite: ((NodeInfo) -> Void)?
 
     private var isAnyTriggerEnabled: Bool {
         nodeController.isEnabled(.hotkeyTrigger) || nodeController.isEnabled(.voiceTrigger)
+            || nodeController.isEnabled(.nativeMacTrigger)
     }
 
     private var isHotkeyEnabled: Bool {
@@ -216,6 +226,10 @@ struct ParallelTriggersView: View {
         nodeController.isEnabled(.voiceTrigger)
     }
 
+    private var isToggleEnabled: Bool {
+        nodeController.isEnabled(.nativeMacTrigger)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Triggers stacked vertically
@@ -224,21 +238,28 @@ struct ParallelTriggersView: View {
                 triggerNode(
                     stage: .hotkeyTrigger,
                     isRunning: isHotkeyRunning,
-                    isDimmedByOther: isVoiceRunning
+                    isDimmedByOther: isVoiceRunning || isToggleRunning
                 )
 
                 // Voice trigger - uses controller for state and dimming
                 triggerNode(
                     stage: .voiceTrigger,
                     isRunning: isVoiceRunning,
-                    isDimmedByOther: isHotkeyRunning
+                    isDimmedByOther: isHotkeyRunning || isToggleRunning
+                )
+
+                // Native Mac toggle trigger (🎤 microphone key)
+                triggerNode(
+                    stage: .nativeMacTrigger,
+                    isRunning: isToggleRunning,
+                    isDimmedByOther: isHotkeyRunning || isVoiceRunning
                 )
             }
-            .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: 2))
+            .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: 3))
 
-            // Merge lines from both triggers
+            // Merge lines from all triggers
             MergeConnector(
-                nodeStates: [isHotkeyEnabled, isVoiceEnabled],
+                nodeStates: [isHotkeyEnabled, isVoiceEnabled, isToggleEnabled],
                 activeColor: PipelineLayout.activeColor
             )
         }

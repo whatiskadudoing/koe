@@ -7,7 +7,7 @@ import SwiftUI
 struct PipelineTab: Identifiable, Hashable {
     let id = UUID()
     let title: String
-    let nodeTypeId: String? // nil for main pipeline, typeId for composite nodes
+    let nodeTypeId: String?  // nil for main pipeline, typeId for composite nodes
     let isCloseable: Bool
 
     static let main = PipelineTab(
@@ -173,166 +173,159 @@ struct TabContentView: View {
     let onOpenComposite: (NodeInfo) -> Void
 
     var body: some View {
-        Group {
-            if activeTab.nodeTypeId == nil {
-                // Main pipeline
-                MainPipelineContent(
-                    selectedStage: $selectedStage,
-                    onOpenComposite: onOpenComposite
-                )
-            } else {
-                // Sub-pipeline
-                SubPipelineContent(
-                    nodeTypeId: activeTab.nodeTypeId!,
-                    selectedStage: $selectedStage
+        // Consistent content area - centers pipeline and maintains layout
+        if activeTab.nodeTypeId == nil {
+            // Main pipeline (already has its own PipelineContainer)
+            PipelineStripView(
+                selectedStage: $selectedStage,
+                onOpenComposite: onOpenComposite
+            )
+        } else {
+            // Sub-pipeline wrapped in container
+            PipelineContainer {
+                SubPipelineCanvas(
+                    parentNode: NodeRegistry.shared.node(for: activeTab.nodeTypeId!)!
                 )
             }
         }
-    }
-}
-
-// MARK: - Main Pipeline Content
-
-struct MainPipelineContent: View {
-    @Binding var selectedStage: PipelineStageInfo?
-    let onOpenComposite: (NodeInfo) -> Void
-
-    var body: some View {
-        PipelineStripView(
-            selectedStage: $selectedStage,
-            onOpenComposite: onOpenComposite
-        )
-    }
-}
-
-// MARK: - Sub-Pipeline Content
-
-struct SubPipelineContent: View {
-    let nodeTypeId: String
-    @Binding var selectedStage: PipelineStageInfo?
-
-    private var parentNode: NodeInfo? {
-        NodeRegistry.shared.node(for: nodeTypeId)
-    }
-
-    var body: some View {
-        VStack(spacing: 16) {
-            // Header showing model name and configuration
-            HStack {
-                Image(systemName: parentNode?.icon ?? "gearshape.2")
-                    .font(.system(size: 14))
-                    .foregroundColor(KoeColors.textLight)
-                Text(parentNode?.displayName ?? "Configuration")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(KoeColors.accent)
-                Text("Configuration")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(KoeColors.textSecondary)
-            }
-            .padding(.top, 20)
-
-            // Sub-pipeline canvas wrapped in reusable container
-            ScrollView(.horizontal, showsIndicators: false) {
-                PipelineContainer {
-                    HStack(alignment: .center, spacing: 0) {
-                        if let node = parentNode {
-                            SubPipelineCanvas(parentNode: node)
-                        }
-                    }
-                }
-                .padding(.horizontal, 24)
-            }
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(KoeColors.background)
     }
 }
 
 // MARK: - Sub-Pipeline Canvas (Reuses Main Pipeline Visual Style)
 
+/// Dynamic sub-pipeline canvas that renders nodes based on their configuration.
+/// Works with any composite node - adapts layout based on exclusive groups and standalone nodes.
+///
+/// Layout rules:
+/// - Nodes with same exclusiveGroup render as parallel (split/merge connectors)
+/// - Nodes with no exclusiveGroup render inline as toggles
+/// - Groups containing "gate" in their name control visibility of related groups
+///   (e.g., "translate-gate" controls visibility of "language-selection")
 struct SubPipelineCanvas: View {
     let parentNode: NodeInfo
+    @State private var refreshID = UUID()
 
-    // Group nodes by exclusive groups for visual organization
-    private var capabilityNodes: [NodeInfo] {
-        parentNode.subNodes.filter { $0.exclusiveGroup == "ai-capability" }
+    // MARK: - Dynamic Node Grouping
+
+    /// All unique exclusive groups in the sub-pipeline
+    private var exclusiveGroups: [String] {
+        let groups = Set(parentNode.subNodes.compactMap { $0.exclusiveGroup })
+        // Sort to ensure consistent ordering: style groups first, then gate-controlled groups
+        return groups.sorted { g1, g2 in
+            // Gates come after their controlled groups
+            if g1.contains("-selection") && !g2.contains("-selection") { return false }
+            if !g1.contains("-selection") && g2.contains("-selection") { return true }
+            return g1 < g2
+        }
     }
 
-    private var languageNodes: [NodeInfo] {
-        parentNode.subNodes.filter { $0.exclusiveGroup == "ai-language" }
+    /// Standalone nodes (no exclusive group) - these are toggles that may control other groups
+    private var standaloneNodes: [NodeInfo] {
+        parentNode.subNodes.filter { $0.exclusiveGroup == nil }
     }
 
-    private var activeCapability: NodeInfo? {
-        capabilityNodes.first { isNodeEnabled($0) }
+    /// Get nodes for a specific exclusive group
+    private func nodes(inGroup group: String) -> [NodeInfo] {
+        parentNode.subNodes.filter { $0.exclusiveGroup == group }
     }
 
-    private var activeLanguage: NodeInfo? {
-        languageNodes.first { isNodeEnabled($0) }
+    /// Get the active node in a group (the one that's enabled)
+    private func activeNode(inGroup group: String) -> NodeInfo? {
+        nodes(inGroup: group).first { isNodeEnabled($0) }
     }
 
-    private var hasActiveCapability: Bool {
-        activeCapability != nil
+    /// Check if any node in a group is active
+    private func hasActiveNode(inGroup group: String) -> Bool {
+        activeNode(inGroup: group) != nil
     }
 
-    private var hasActiveLanguage: Bool {
-        activeLanguage != nil
+    /// Check if a selection group should be visible based on its gate node
+    /// Convention: "-selection" groups are controlled by standalone nodes with matching prefix
+    /// e.g., "language-selection" is controlled by a node with typeId containing "translate"
+    private func isGroupVisible(_ group: String) -> Bool {
+        // Selection groups depend on a gate being active
+        if group.contains("-selection") || group.contains("-language") {
+            // Find the gate node (standalone node that controls this)
+            // Convention: translate gate controls language selection
+            if let gateNode = standaloneNodes.first(where: { $0.typeId.contains("translate") }) {
+                return isNodeEnabled(gateNode)
+            }
+        }
+        // Non-gated groups are always visible
+        return true
     }
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
-            // Capability nodes section - use reusable connectors
-            if !capabilityNodes.isEmpty {
-                // Split connector before capabilities
-                SplitConnector(
-                    nodeStates: capabilityNodes.map { isNodeEnabled($0) },
-                    activeColor: PipelineLayout.activeColor
-                )
+            // Input node
+            SubPipelineInputNode()
 
-                // Capability nodes
-                VStack(spacing: PipelineLayout.nodeSpacing) {
-                    ForEach(capabilityNodes) { node in
-                        let isActive = isNodeEnabled(node)
-                        SubPipelineNodeView(node: node)
-                            .opacity(hasActiveCapability && !isActive ? 0.4 : 1.0)
-                    }
-                }
-                .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: capabilityNodes.count))
+            // Render pipeline stages dynamically
+            renderPipelineStages()
 
-                // Merge connector after capabilities
-                MergeConnector(
-                    nodeStates: capabilityNodes.map { isNodeEnabled($0) },
-                    activeColor: activeCapability?.color ?? PipelineLayout.activeColor
-                )
+            // Simple connector to output
+            PipelineConnector(isActive: true, color: PipelineLayout.activeColor)
+
+            // Output node
+            SubPipelineOutputNode()
+        }
+        .id(refreshID)
+        .onReceive(NotificationCenter.default.publisher(for: .subNodeExclusiveGroupChanged)) { _ in
+            refreshID = UUID()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
+            refreshID = UUID()
+        }
+    }
+
+    @ViewBuilder
+    private func renderPipelineStages() -> some View {
+        // First: non-gated exclusive groups (like rewrite styles)
+        ForEach(exclusiveGroups.filter { !$0.contains("-language") && !$0.contains("-selection") }, id: \.self) {
+            group in
+            PipelineConnector(isActive: true, color: PipelineLayout.activeColor)
+            renderExclusiveGroup(group)
+        }
+
+        // Second: standalone toggle nodes (like translate)
+        ForEach(standaloneNodes) { node in
+            PipelineConnector(isActive: true, color: PipelineLayout.activeColor)
+            SubPipelineNodeView(node: node, siblingNodes: parentNode.subNodes)
+        }
+
+        // Third: gated exclusive groups (like language selection) - only show when gate is active
+        ForEach(exclusiveGroups.filter { $0.contains("-language") || $0.contains("-selection") }, id: \.self) { group in
+            if isGroupVisible(group) {
+                renderExclusiveGroup(group)
             }
+        }
+    }
 
-            // Language nodes section - use reusable connectors
-            if !languageNodes.isEmpty && hasActiveCapability {
-                SplitConnector(
-                    nodeStates: languageNodes.map { isNodeEnabled($0) },
-                    activeColor: PipelineLayout.activeColor
-                )
+    @ViewBuilder
+    private func renderExclusiveGroup(_ group: String) -> some View {
+        let groupNodes = nodes(inGroup: group)
+        let active = activeNode(inGroup: group)
+        let hasActive = active != nil
 
-                // Language nodes
-                VStack(spacing: PipelineLayout.nodeSpacing) {
-                    ForEach(languageNodes) { node in
-                        let isActive = isNodeEnabled(node)
-                        SubPipelineNodeView(node: node)
-                            .opacity(hasActiveLanguage && !isActive ? 0.4 : 1.0)
-                    }
+        if !groupNodes.isEmpty {
+            SplitConnector(
+                nodeStates: groupNodes.map { isNodeEnabled($0) },
+                activeColor: PipelineLayout.activeColor
+            )
+
+            VStack(spacing: PipelineLayout.nodeSpacing) {
+                ForEach(groupNodes) { node in
+                    let isActive = isNodeEnabled(node)
+                    SubPipelineNodeView(node: node, siblingNodes: parentNode.subNodes)
+                        .opacity(hasActive && !isActive ? 0.4 : 1.0)
                 }
-                .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: languageNodes.count))
-
-                // Merge connector from languages
-                MergeConnector(
-                    nodeStates: languageNodes.map { isNodeEnabled($0) },
-                    activeColor: activeLanguage?.color ?? PipelineLayout.activeColor
-                )
             }
+            .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: groupNodes.count))
 
-            // Output indicator showing connection to parent node
-            OutputIndicator()
+            MergeConnector(
+                nodeStates: groupNodes.map { isNodeEnabled($0) },
+                activeColor: active?.color ?? PipelineLayout.activeColor
+            )
         }
     }
 
@@ -342,27 +335,54 @@ struct SubPipelineCanvas: View {
     }
 }
 
-// MARK: - Output Indicator
+// MARK: - Input/Output Reference Nodes
 
-struct OutputIndicator: View {
+/// Visual node representing data flow in/out of sub-pipeline
+/// Uses same sizing as regular nodes but with distinct styling
+struct SubPipelineReferenceNode: View {
+    let label: String
+    let icon: String
+
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "arrow.right.circle.fill")
-                .font(.system(size: 20))
-                .foregroundColor(KoeColors.accent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Output to")
-                    .font(.system(size: 9))
+        ZStack {
+            // Background
+            RoundedRectangle(cornerRadius: PipelineLayout.cornerRadius)
+                .fill(KoeColors.surface.opacity(0.8))
+
+            // Content: Icon centered, label at bottom
+            VStack(spacing: 0) {
+                Spacer()
+                    .frame(height: 8)
+
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
                     .foregroundColor(KoeColors.textLight)
-                Text("Parent Node")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(KoeColors.textSecondary)
+
+                Text(label)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundColor(KoeColors.textLight)
+                    .padding(.bottom, 4)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(KoeColors.surface)
-        .cornerRadius(8)
+        .frame(width: PipelineLayout.nodeWidth, height: PipelineLayout.nodeSize)
+        .overlay(
+            RoundedRectangle(cornerRadius: PipelineLayout.cornerRadius)
+                .stroke(KoeColors.textLighter.opacity(0.4), lineWidth: 1.5)
+        )
+    }
+}
+
+/// Input node - represents data entering the sub-pipeline
+struct SubPipelineInputNode: View {
+    var body: some View {
+        SubPipelineReferenceNode(label: "In", icon: "arrow.right.circle")
+    }
+}
+
+/// Output node - represents data leaving the sub-pipeline
+struct SubPipelineOutputNode: View {
+    var body: some View {
+        SubPipelineReferenceNode(label: "Out", icon: "arrow.right.circle.fill")
     }
 }
 
@@ -370,12 +390,19 @@ struct OutputIndicator: View {
 
 struct SubPipelineNodeView: View {
     let node: NodeInfo
+    let siblingNodes: [NodeInfo]  // All nodes in the same parent (for exclusive group handling)
     @State private var isHovered = false
     @State private var refreshID = UUID()
 
     private var isEnabled: Bool {
         guard let key = node.persistenceKey else { return node.isAlwaysEnabled }
         return UserDefaults.standard.bool(forKey: key)
+    }
+
+    /// Get sibling nodes in the same exclusive group
+    private var siblingsInSameGroup: [NodeInfo] {
+        guard let group = node.exclusiveGroup else { return [] }
+        return siblingNodes.filter { $0.exclusiveGroup == group && $0.typeId != node.typeId }
     }
 
     var body: some View {
@@ -392,7 +419,7 @@ struct SubPipelineNodeView: View {
             // Content: Icon centered, label at bottom
             VStack(spacing: 0) {
                 Spacer()
-                    .frame(height: 8) // Space for top badges
+                    .frame(height: 8)  // Space for top badges
 
                 // Icon
                 Image(systemName: node.icon)
@@ -408,15 +435,28 @@ struct SubPipelineNodeView: View {
                     .padding(.bottom, 4)
             }
 
-            // Top badge bar - toggle indicator at top right
+            // Top badge bar - same structure as main pipeline nodes
             HStack(spacing: 2) {
+                // Left side badges
+                HStack(spacing: 2) {
+                    // Experimental badge (flask icon)
+                    if node.isExperimental {
+                        Image(systemName: "flask.fill")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundColor(.orange)
+                    }
+                }
+
                 Spacer()
 
-                // Toggle indicator (for toggleable nodes)
-                if node.isUserToggleable {
-                    Circle()
-                        .fill(isEnabled ? Color.green : Color.gray.opacity(0.3))
-                        .frame(width: 8, height: 8)
+                // Right side badges
+                HStack(spacing: 2) {
+                    // Toggle indicator (for toggleable nodes)
+                    if node.isUserToggleable {
+                        Circle()
+                            .fill(isEnabled ? Color.green : Color.gray.opacity(0.3))
+                            .frame(width: 8, height: 8)
+                    }
                 }
             }
             .padding(.horizontal, 4)
@@ -426,7 +466,9 @@ struct SubPipelineNodeView: View {
         .frame(width: PipelineLayout.nodeWidth, height: PipelineLayout.nodeSize)
         .overlay(
             RoundedRectangle(cornerRadius: PipelineLayout.cornerRadius)
-                .stroke(isEnabled ? node.color : KoeColors.textLighter.opacity(0.3), lineWidth: PipelineLayout.connectorLineWidth)
+                .stroke(
+                    isEnabled ? node.color : KoeColors.textLighter.opacity(0.3),
+                    lineWidth: PipelineLayout.connectorLineWidth)
         )
         .opacity(isEnabled ? 1.0 : 0.6)
         .scaleEffect(isHovered ? 1.05 : 1.0)
@@ -435,18 +477,21 @@ struct SubPipelineNodeView: View {
                 withAnimation(.easeOut(duration: 0.15)) {
                     let newValue = !isEnabled
                     if let key = node.persistenceKey {
-                        UserDefaults.standard.set(newValue, forKey: key)
-
-                        // Handle exclusive groups - disable other nodes in same group
-                        if let group = node.exclusiveGroup, newValue {
-                            let otherNodes = NodeRegistry.shared.nodesInExclusiveGroup(group)
-                            for other in otherNodes where other.typeId != node.typeId {
-                                if let otherKey = other.persistenceKey {
-                                    UserDefaults.standard.set(false, forKey: otherKey)
+                        // Handle exclusive groups - disable ALL siblings in same group FIRST
+                        if node.exclusiveGroup != nil, newValue {
+                            for sibling in siblingsInSameGroup {
+                                if let siblingKey = sibling.persistenceKey {
+                                    UserDefaults.standard.set(false, forKey: siblingKey)
                                 }
                             }
+                        }
 
-                            // Notify all nodes in this exclusive group to refresh
+                        // Now set this node's value
+                        UserDefaults.standard.set(newValue, forKey: key)
+                        UserDefaults.standard.synchronize()
+
+                        // Notify all nodes to refresh
+                        if let group = node.exclusiveGroup {
                             NotificationCenter.default.post(
                                 name: .subNodeExclusiveGroupChanged,
                                 object: group
@@ -467,7 +512,7 @@ struct SubPipelineNodeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .subNodeExclusiveGroupChanged)) { notification in
             // Refresh when any node in an exclusive group changes
             if let changedGroup = notification.object as? String,
-               node.exclusiveGroup == changedGroup
+                node.exclusiveGroup == changedGroup
             {
                 refreshID = UUID()
             }
@@ -494,4 +539,3 @@ struct SubPipelineConnectorLine: View {
             .frame(width: 20, height: 2)
     }
 }
-

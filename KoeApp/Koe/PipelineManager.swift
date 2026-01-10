@@ -3,8 +3,63 @@ import Foundation
 import KoeDomain
 import KoePipeline
 import KoeRefinement
+import KoeStorage
 import KoeTextInsertion
 import KoeTranscription
+
+// MARK: - Pre-Pipeline Context
+
+/// Context from recording and transcription phases that happen before the pipeline
+/// This allows PipelineManager to include all nodes in execution data
+public struct PrePipelineContext: Sendable {
+    /// Which trigger started this pipeline
+    public let triggerType: TriggerType
+
+    /// When the trigger was activated
+    public let triggerStartTime: Date
+
+    /// Recording info
+    public let recordingStartTime: Date
+    public let recordingEndTime: Date
+    public let audioSampleCount: Int
+    public let audioSampleRate: Double
+
+    /// Transcription info
+    public let transcriptionStartTime: Date
+    public let transcriptionEndTime: Date
+    public let transcriptionEngine: String
+    public let rawTranscription: String
+
+    public enum TriggerType: String, Sendable {
+        case hotkey = "hotkey-trigger"
+        case voice = "voice-trigger"
+        case nativeMac = "native-mac-trigger"
+    }
+
+    public init(
+        triggerType: TriggerType,
+        triggerStartTime: Date,
+        recordingStartTime: Date,
+        recordingEndTime: Date,
+        audioSampleCount: Int,
+        audioSampleRate: Double = 16000,
+        transcriptionStartTime: Date,
+        transcriptionEndTime: Date,
+        transcriptionEngine: String,
+        rawTranscription: String
+    ) {
+        self.triggerType = triggerType
+        self.triggerStartTime = triggerStartTime
+        self.recordingStartTime = recordingStartTime
+        self.recordingEndTime = recordingEndTime
+        self.audioSampleCount = audioSampleCount
+        self.audioSampleRate = audioSampleRate
+        self.transcriptionStartTime = transcriptionStartTime
+        self.transcriptionEndTime = transcriptionEndTime
+        self.transcriptionEngine = transcriptionEngine
+        self.rawTranscription = rawTranscription
+    }
+}
 
 /// Manages pipeline creation, configuration, and execution
 /// Bridges KoePipeline stages/actions with actual Koe services
@@ -102,7 +157,12 @@ public final class PipelineManager {
 
     /// Execute the text processing pipeline
     /// Returns the final processed text
-    public func processText(_ text: String) async throws -> PipelineResult {
+    /// - Parameters:
+    ///   - text: The transcribed text to process
+    ///   - prePipelineContext: Optional context from recording/transcription phases
+    public func processText(
+        _ text: String, prePipelineContext: PrePipelineContext? = nil
+    ) async throws -> PipelineResult {
         let (pipeline, context) = createPipeline(forTranscription: text)
 
         // Create orchestrator
@@ -158,6 +218,16 @@ public final class PipelineManager {
         )
         AppState.shared.addPipelineExecution(executionRecord)
 
+        // Save enhanced execution data to JSON repository
+        await saveEnhancedExecutionData(
+            runId: runId,
+            pipeline: pipeline,
+            context: resultContext,
+            inputText: text,
+            metricsArray: metricsArray,
+            prePipelineContext: prePipelineContext
+        )
+
         return PipelineResult(
             originalText: text,
             processedText: resultContext.text,
@@ -184,9 +254,11 @@ public final class PipelineManager {
                     // Translation mode - get target language from AI Model sub-nodes
                     let targetLang = self.getSelectedLanguageFromSubNodes() ?? "Spanish"
                     // Pass instruction as system prompt, user text as prompt
-                    let systemInstruction = "You are a translator. Translate the user's text to \(targetLang). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
+                    let systemInstruction =
+                        "You are a translator. Translate the user's text to \(targetLang). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
                     let userPrompt = "Translate this: \(text)"
-                    return try await self.aiService.refine(text: userPrompt, mode: .custom, customPrompt: systemInstruction)
+                    return try await self.aiService.refine(
+                        text: userPrompt, mode: .custom, customPrompt: systemInstruction)
                 }
             }
 
@@ -328,13 +400,325 @@ public final class PipelineManager {
         for subNode in aiModel.subNodes {
             // Check if this is a language node
             if subNode.exclusiveGroup == "ai-language",
-               let persistenceKey = subNode.persistenceKey,
-               UserDefaults.standard.bool(forKey: persistenceKey)
+                let persistenceKey = subNode.persistenceKey,
+                UserDefaults.standard.bool(forKey: persistenceKey)
             {
                 return subNode.displayName
             }
         }
 
+        return nil
+    }
+
+    // MARK: - Enhanced Data Capture
+
+    /// Save detailed execution data to JSON repository for debugging and analysis
+    private func saveEnhancedExecutionData(
+        runId: UUID,
+        pipeline: Pipeline,
+        context: PipelineContext,
+        inputText: String,
+        metricsArray: [ElementExecutionMetrics],
+        prePipelineContext: PrePipelineContext?
+    ) async {
+        // Build node execution data - start with pre-pipeline nodes if available
+        var nodeDataList: [NodeExecutionData] = []
+
+        // Determine active transcription and AI engines
+        let activeTranscription = getActiveTranscriptionEngine()
+        let activeAI = getActiveAIEngine()
+
+        // Add pre-pipeline nodes (trigger, recorder, transcription)
+        if let preCtx = prePipelineContext {
+            // 1. Trigger node
+            let triggerInfo = NodeRegistry.shared.nodeOrDefault(for: preCtx.triggerType.rawValue)
+            nodeDataList.append(
+                NodeExecutionData(
+                    nodeTypeId: preCtx.triggerType.rawValue,
+                    nodeName: triggerInfo.displayName,
+                    startTime: preCtx.triggerStartTime,
+                    endTime: preCtx.recordingStartTime,
+                    status: .success,
+                    input: .none,
+                    output: .action,
+                    customData: ["action": .string("triggered")]
+                ))
+
+            // 2. Recorder node
+            let recorderInfo = NodeRegistry.shared.nodeOrDefault(for: "recorder")
+            let audioDurationMs = preCtx.recordingEndTime.timeIntervalSince(preCtx.recordingStartTime) * 1000
+            nodeDataList.append(
+                NodeExecutionData(
+                    nodeTypeId: "recorder",
+                    nodeName: recorderInfo.displayName,
+                    startTime: preCtx.recordingStartTime,
+                    endTime: preCtx.recordingEndTime,
+                    status: .success,
+                    input: .none,
+                    output: .audio(path: "", duration: audioDurationMs / 1000),
+                    customData: [
+                        "sampleCount": .int(preCtx.audioSampleCount),
+                        "sampleRate": .double(preCtx.audioSampleRate),
+                        "audioDurationMs": .double(audioDurationMs),
+                    ]
+                ))
+
+            // 3. Transcription node
+            let transcriptionInfo = NodeRegistry.shared.nodeOrDefault(for: preCtx.transcriptionEngine)
+            nodeDataList.append(
+                NodeExecutionData(
+                    nodeTypeId: preCtx.transcriptionEngine,
+                    nodeName: transcriptionInfo.displayName,
+                    startTime: preCtx.transcriptionStartTime,
+                    endTime: preCtx.transcriptionEndTime,
+                    status: .success,
+                    input: .audio(path: "", duration: audioDurationMs / 1000),
+                    output: .text(preCtx.rawTranscription),
+                    customData: [
+                        "engine": .string(preCtx.transcriptionEngine),
+                        "characterCount": .int(preCtx.rawTranscription.count),
+                        "wordCount": .int(preCtx.rawTranscription.split(separator: " ").count),
+                    ]
+                ))
+        }
+
+        // Add nodes from pipeline execution metrics
+        for metrics in metricsArray {
+            // Map element types to proper node typeIds and names
+            var nodeTypeId = metrics.elementType
+            var nodeName: String
+
+            // For "text-improve", map to actual AI engine being used
+            if metrics.elementType == "text-improve" {
+                if let aiEngine = activeAI {
+                    nodeTypeId = aiEngine
+                    let nodeInfo = NodeRegistry.shared.nodeOrDefault(for: aiEngine)
+                    nodeName = nodeInfo.displayName
+                } else {
+                    nodeName = "AI Processing"
+                }
+            } else {
+                let nodeInfo = NodeRegistry.shared.node(for: metrics.elementType)
+                nodeName = nodeInfo?.displayName ?? metrics.elementType
+            }
+
+            // Build node-specific custom data
+            var customData: [String: AnyCodableValue] = [:]
+
+            // Add memory usage if available
+            if let memoryBytes = metrics.memoryUsedBytes {
+                customData["memoryBytes"] = .int(Int(memoryBytes))
+            }
+
+            // Determine input/output based on node type
+            let nodeInput: NodeInput
+            let nodeOutput: NodeOutput
+
+            switch metrics.elementType {
+            case "recorder":
+                nodeInput = .none
+                nodeOutput = .audio(path: context.audioFilePath?.path ?? "", duration: context.elapsedTime)
+                customData["sampleRate"] = .double(context.sampleRate)
+
+            case let type where type.contains("transcribe"):
+                nodeInput = .audio(path: context.audioFilePath?.path ?? "", duration: 0)
+                nodeOutput = .text(context.text)
+                if let lang = context.language {
+                    customData["language"] = .string(lang)
+                }
+                if let conf = context.confidences[metrics.elementType] {
+                    customData["confidence"] = .double(conf)
+                }
+
+            case "text-improve":
+                nodeInput = .text(inputText)
+                nodeOutput = .text(context.text, wasTransformed: context.text != inputText)
+
+                // Add AI engine info
+                if let aiEngine = activeAI {
+                    customData["aiEngine"] = .string(aiEngine)
+                    let aiInfo = NodeRegistry.shared.nodeOrDefault(for: aiEngine)
+                    customData["modelName"] = .string(aiInfo.displayName)
+                }
+
+                // Capture sub-pipeline settings for AI nodes
+                if let aiEngine = activeAI {
+                    let subSettings = SubPipelineSettingsReader.readSettings(for: aiEngine)
+                    if let style = subSettings.rewriteStyle {
+                        customData["rewriteStyle"] = .string(style)
+                    }
+                    customData["translateEnabled"] = .bool(subSettings.translateEnabled)
+                    if let lang = subSettings.targetLanguage {
+                        customData["targetLanguage"] = .string(lang)
+                    }
+                }
+
+                // Add the prompt used
+                let targetLangForImprove = getSelectedLanguageFromSubNodes() ?? "Spanish"
+                let systemPromptForImprove =
+                    "You are a translator. Translate the user's text to \(targetLangForImprove). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
+                customData["systemPrompt"] = .string(systemPromptForImprove)
+                customData["userPrompt"] = .string("Translate this: \(inputText)")
+
+            case let type where type.contains("ai-"):
+                nodeInput = .text(inputText)
+                nodeOutput = .text(context.text, wasTransformed: context.text != inputText)
+
+                // Add AI engine info
+                if let aiEngine = activeAI {
+                    customData["aiEngine"] = .string(aiEngine)
+                    let aiInfo = NodeRegistry.shared.nodeOrDefault(for: aiEngine)
+                    customData["modelName"] = .string(aiInfo.displayName)
+                }
+
+                // Capture sub-pipeline settings for AI nodes
+                if let aiEngine = activeAI {
+                    let subSettings = SubPipelineSettingsReader.readSettings(for: aiEngine)
+                    if let style = subSettings.rewriteStyle {
+                        customData["rewriteStyle"] = .string(style)
+                    }
+                    customData["translateEnabled"] = .bool(subSettings.translateEnabled)
+                    if let lang = subSettings.targetLanguage {
+                        customData["targetLanguage"] = .string(lang)
+                    }
+                }
+
+                // Add the prompt used
+                let targetLang = getSelectedLanguageFromSubNodes() ?? "Spanish"
+                let systemPrompt =
+                    "You are a translator. Translate the user's text to \(targetLang). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
+                customData["systemPrompt"] = .string(systemPrompt)
+                customData["userPrompt"] = .string("Translate this: \(inputText)")
+
+            case "auto-type":
+                nodeInput = .text(context.text)
+                nodeOutput = .action
+                customData["action"] = .string("typed")
+
+            case "auto-enter":
+                nodeInput = .none
+                nodeOutput = .action
+                customData["action"] = .string("enter")
+
+            default:
+                nodeInput = .text(inputText)
+                nodeOutput = .text(context.text)
+            }
+
+            let status: KoeStorage.ExecutionStatus =
+                switch metrics.status {
+                case .success: .success
+                case .skipped: .skipped
+                case .failed: .failed
+                case .cancelled: .cancelled
+                }
+
+            let nodeError: NodeError? = metrics.errorMessage.map {
+                NodeError(code: "execution_error", message: $0)
+            }
+
+            let nodeData = NodeExecutionData(
+                nodeTypeId: nodeTypeId,
+                nodeName: nodeName,
+                startTime: metrics.startTime,
+                endTime: metrics.endTime,
+                status: status,
+                input: nodeInput,
+                output: nodeOutput,
+                error: nodeError,
+                customData: customData
+            )
+
+            nodeDataList.append(nodeData)
+        }
+
+        // Sort nodes by startTime to ensure correct display order
+        nodeDataList.sort { $0.startTime < $1.startTime }
+
+        // Read sub-pipeline settings
+        let subPipelineSettings: KoeStorage.SubPipelineSettings?
+        if let aiEngine = activeAI {
+            subPipelineSettings = SubPipelineSettingsReader.readSettings(for: aiEngine)
+        } else {
+            subPipelineSettings = nil
+        }
+
+        // Build pipeline settings
+        let pipelineSettings = PipelineSettings(
+            transcriptionEngine: activeTranscription ?? "unknown",
+            aiEngine: activeAI,
+            language: context.language ?? "auto",
+            autoEnterEnabled: AppState.shared.isAutoEnterEnabled
+        )
+
+        // Determine overall status
+        let overallStatus: KoeStorage.ExecutionStatus =
+            nodeDataList.contains { $0.status == .failed }
+            ? .failed
+            : .success
+
+        // Calculate total duration including pre-pipeline time
+        let totalStartTime = prePipelineContext?.triggerStartTime ?? context.startTime
+        let totalDurationMs = Date().timeIntervalSince(totalStartTime) * 1000
+
+        // Get actual trigger type
+        let triggerType = prePipelineContext?.triggerType.rawValue ?? "hotkey-trigger"
+
+        // Create execution data
+        let executionData = PipelineExecutionData(
+            id: runId,
+            timestamp: totalStartTime,
+            completedAt: Date(),
+            pipelineName: pipeline.name,
+            triggerType: triggerType,
+            status: overallStatus,
+            totalDurationMs: totalDurationMs,
+            nodes: nodeDataList,
+            originalInput: inputText,
+            finalOutput: context.text,
+            error: nil,
+            settings: pipelineSettings,
+            subPipelineSettings: subPipelineSettings
+        )
+
+        // Save via centralized service (handles retention policy & auto-pruning)
+        do {
+            try await PipelineDataService.shared.save(executionData)
+            NSLog("[Pipeline] Saved execution data via PipelineDataService, id=%@", runId.uuidString)
+            // Notify UI to refresh history
+            await MainActor.run {
+                NotificationCenter.default.post(name: .pipelineExecutionSaved, object: nil)
+            }
+        } catch {
+            NSLog("[Pipeline] Failed to save execution data: %@", error.localizedDescription)
+        }
+    }
+
+    /// Get the active transcription engine typeId
+    private func getActiveTranscriptionEngine() -> String? {
+        if UserDefaults.standard.bool(forKey: "transcribeAppleSpeechEnabled") {
+            return "transcribe-apple"
+        }
+        if UserDefaults.standard.bool(forKey: "transcribeWhisperKitBalancedEnabled") {
+            return "transcribe-whisperkit-balanced"
+        }
+        if UserDefaults.standard.bool(forKey: "transcribeWhisperKitAccurateEnabled") {
+            return "transcribe-whisperkit-accurate"
+        }
+        return nil
+    }
+
+    /// Get the active AI engine typeId
+    private func getActiveAIEngine() -> String? {
+        if UserDefaults.standard.bool(forKey: "aiProcessingFastEnabled") {
+            return "ai-fast"
+        }
+        if UserDefaults.standard.bool(forKey: "aiProcessingBalancedEnabled") {
+            return "ai-balanced"
+        }
+        if UserDefaults.standard.bool(forKey: "aiProcessingReasoningEnabled") {
+            return "ai-reasoning"
+        }
         return nil
     }
 }

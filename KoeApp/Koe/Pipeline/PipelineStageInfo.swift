@@ -4,8 +4,9 @@ import SwiftUI
 /// Represents a stage in the visual pipeline editor
 enum PipelineStageInfo: String, CaseIterable, Identifiable {
     // Parallel triggers (only one can be active at a time)
-    case hotkeyTrigger  // Keyboard shortcut trigger
+    case hotkeyTrigger  // Keyboard shortcut trigger (press-and-hold)
     case voiceTrigger  // Voice command trigger ("koe")
+    case nativeMacTrigger  // Toggle trigger (press to start, press again to stop) like macOS dictation
 
     // Sequential pipeline stages
     case recorder  // Records audio (behavior depends on trigger type)
@@ -29,6 +30,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         switch self {
         case .hotkeyTrigger: return "On Press"
         case .voiceTrigger: return "On Voice"
+        case .nativeMacTrigger: return "On Toggle"
         case .recorder: return "Record"
         case .transcribeApple: return "Apple Speech"
         case .transcribeWhisperKitBalanced: return "Balanced"
@@ -64,7 +66,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this is a trigger stage (part of parallel trigger group)
     var isTrigger: Bool {
         switch self {
-        case .hotkeyTrigger, .voiceTrigger: return true
+        case .hotkeyTrigger, .voiceTrigger, .nativeMacTrigger: return true
         default: return false
         }
     }
@@ -91,6 +93,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         switch self {
         case .hotkeyTrigger: return nil
         case .voiceTrigger: return nil
+        case .nativeMacTrigger: return nil
         case .recorder: return nil
         case .transcribeApple: return "transcribe-apple"
         case .transcribeWhisperKitBalanced: return "transcribe-whisperkit-balanced"
@@ -105,7 +108,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
 
     /// Trigger stages shown in parallel at the start
     static var triggerStages: [PipelineStageInfo] {
-        [.hotkeyTrigger, .voiceTrigger]
+        [.hotkeyTrigger, .voiceTrigger, .nativeMacTrigger]
     }
 
     /// Transcription engine stages shown in parallel

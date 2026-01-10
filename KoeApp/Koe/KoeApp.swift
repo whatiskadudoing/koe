@@ -83,6 +83,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     // Trigger system
     private var triggerManager: TriggerManager?
     private var hotkeyTrigger: HotkeyTrigger?
+    private var toggleTrigger: ToggleHotkeyTrigger?
+    private var toggleHotkeyManager: ToggleHotkeyManager?
 
     // Use the shared coordinator
     private var coordinator: RecordingCoordinator {
@@ -428,6 +430,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             object: nil
         )
 
+        // Observe toggle trigger changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleToggleTriggerChanged),
+            name: .toggleTriggerChanged,
+            object: nil
+        )
+
         // Start with loading animation (blue waveform)
         menuBarState = .loading
         downloadProgress = 0.0
@@ -482,6 +492,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
             modifiers: AppState.shared.hotkeyModifiers
         )
         logger.notice("Hotkey updated: \(AppState.shared.hotkeyDisplayString)")
+    }
+
+    @objc func handleToggleTriggerChanged() {
+        // Update or register/unregister the toggle trigger based on enabled state
+        if AppState.shared.isNativeMacTriggerEnabled {
+            toggleTrigger?.updateShortcut(
+                keyCode: AppState.shared.toggleHotkeyKeyCode,
+                modifiers: AppState.shared.toggleHotkeyModifiers
+            )
+            // Register if not already registered
+            if toggleTrigger == nil || !(toggleTrigger?.isRegistered ?? false) {
+                Task { await setupToggleTrigger() }
+            }
+            logger.notice("Toggle trigger updated: \(AppState.shared.toggleHotkeyDisplayString)")
+        } else {
+            // Unregister the toggle trigger
+            Task { await toggleTrigger?.deactivate() }
+            logger.notice("Toggle trigger disabled")
+        }
     }
 
     @objc func quitApp() {
@@ -564,6 +593,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
         self.hotkeyTrigger = trigger
 
         logger.notice("Trigger system initialized with hotkey: \(AppState.shared.hotkeyDisplayString)")
+
+        // Also set up toggle trigger if enabled
+        if AppState.shared.isNativeMacTriggerEnabled {
+            await setupToggleTrigger()
+        }
+    }
+
+    /// Set up the toggle trigger (native Mac-style: press to start, press again to stop)
+    private func setupToggleTrigger() async {
+        let toggleManager = ToggleHotkeyManager()
+        let trigger = ToggleHotkeyTrigger(hotkeyManager: toggleManager)
+
+        // Configure shortcut from AppState
+        trigger.updateShortcut(
+            keyCode: AppState.shared.toggleHotkeyKeyCode,
+            modifiers: AppState.shared.toggleHotkeyModifiers
+        )
+
+        // Register the toggle trigger - it manages its own start/stop logic
+        do {
+            try await trigger.activate { [weak self] event in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    switch event {
+                    case .start:
+                        AppState.shared.isToggleTriggered = true
+                        await self.coordinator.startRecording(mode: .vad, language: .auto)
+                    case .stop:
+                        await self.coordinator.stopRecording(mode: .vad, language: .auto)
+                        AppState.shared.isToggleTriggered = false
+                    }
+                }
+            }
+        } catch {
+            logger.error("Failed to register toggle trigger: \(error)")
+            return
+        }
+
+        // Store references
+        self.toggleHotkeyManager = toggleManager
+        self.toggleTrigger = trigger
+
+        logger.notice("Toggle trigger initialized: \(AppState.shared.toggleHotkeyDisplayString)")
     }
 
     @objc func updateMenuBarIcon() {
@@ -763,6 +835,7 @@ extension Notification.Name {
 
     // Hotkey configuration
     static let hotkeyChanged = Notification.Name("hotkeyChanged")
+    static let toggleTriggerChanged = Notification.Name("toggleTriggerChanged")
 
     // Voice commands
     static let commandListeningChanged = Notification.Name("commandListeningChanged")

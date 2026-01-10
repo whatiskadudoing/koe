@@ -250,6 +250,7 @@ extension NodeStateController where Node == PipelineStageInfo {
                 switch node {
                 case .hotkeyTrigger: return "hotkey-trigger"
                 case .voiceTrigger: return "voice-trigger"
+                case .nativeMacTrigger: return "native-mac-trigger"
                 case .recorder: return "recorder"
                 case .transcribeApple: return "transcribe-apple"
                 case .transcribeWhisperKitBalanced: return "transcribe-whisperkit-balanced"
@@ -265,6 +266,7 @@ extension NodeStateController where Node == PipelineStageInfo {
                 switch node {
                 case .hotkeyTrigger: return true
                 case .voiceTrigger: return appState.isCommandListeningEnabled
+                case .nativeMacTrigger: return appState.isNativeMacTriggerEnabled
                 case .transcribeApple: return appState.isAppleSpeechEnabled
                 case .transcribeWhisperKitBalanced: return appState.isWhisperKitBalancedEnabled
                 case .transcribeWhisperKitAccurate: return appState.isWhisperKitAccurateEnabled
@@ -278,6 +280,7 @@ extension NodeStateController where Node == PipelineStageInfo {
             setPersistedState: { node, enabled in
                 switch node {
                 case .voiceTrigger: appState.isCommandListeningEnabled = enabled
+                case .nativeMacTrigger: appState.isNativeMacTriggerEnabled = enabled
                 case .transcribeApple: appState.isAppleSpeechEnabled = enabled
                 case .transcribeWhisperKitBalanced: appState.isWhisperKitBalancedEnabled = enabled
                 case .transcribeWhisperKitAccurate: appState.isWhisperKitAccurateEnabled = enabled
