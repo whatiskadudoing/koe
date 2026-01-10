@@ -342,11 +342,13 @@ public final class NodeRegistry: @unchecked Sendable {
                 isResourceIntensive: true
             ),
 
-            // Text Processing
+            // AI Processing Engines (mutually exclusive - only one can be active)
+
+            // Fast - Mistral 7B, quick cleanup with minimal latency
             NodeInfo(
-                typeId: "text-improve",
-                displayName: "Improve",
-                icon: "sparkles",
+                typeId: "ai-fast",
+                displayName: "Fast",
+                icon: "hare",
                 color: KoeColors.stateRefining,
                 isUserToggleable: true,
                 isAlwaysEnabled: false,
@@ -354,27 +356,60 @@ public final class NodeRegistry: @unchecked Sendable {
                 inputDescription: "Raw transcription",
                 showsComparison: true,
                 hasSettings: true,
-                persistenceKey: "isRefinementEnabled"
+                persistenceKey: "aiProcessingFastEnabled",
+                exclusiveGroup: "ai-processing",
+                requiresSetup: true,
+                setupRequirements: .aiFast,
+                isResourceIntensive: true
             ),
 
-            // Legacy text-improve variants (for backwards compatibility)
+            // Balanced - Qwen 2.5 7B, good balance of speed and quality
             NodeInfo(
-                typeId: "language-improvement",
-                displayName: "Language Improve",
-                icon: "text.badge.checkmark",
+                typeId: "ai-balanced",
+                displayName: "Balanced",
+                icon: "gauge.with.dots.needle.50percent",
+                color: KoeColors.stateRefining,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                outputType: .text,
+                inputDescription: "Raw transcription",
+                showsComparison: true,
+                hasSettings: true,
+                persistenceKey: "aiProcessingBalancedEnabled",
+                exclusiveGroup: "ai-processing",
+                requiresSetup: true,
+                setupRequirements: .aiBalanced,
+                isResourceIntensive: true
+            ),
+
+            // Reasoning - DeepSeek-R1 8B, best for complex reasoning and prompts
+            NodeInfo(
+                typeId: "ai-reasoning",
+                displayName: "Reasoning",
+                icon: "brain",
+                color: KoeColors.stateRefining,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                outputType: .text,
+                inputDescription: "Raw transcription",
+                showsComparison: true,
+                hasSettings: true,
+                persistenceKey: "aiProcessingReasoningEnabled",
+                exclusiveGroup: "ai-processing",
+                isExperimental: true,
+                requiresSetup: true,
+                setupRequirements: .aiReasoning,
+                isResourceIntensive: true
+            ),
+
+            // Legacy nodes (for backwards compatibility with old pipeline records)
+            NodeInfo(
+                typeId: "text-improve",
+                displayName: "Improve (Legacy)",
+                icon: "flask",
                 color: KoeColors.stateRefining,
                 outputType: .text,
                 inputDescription: "Raw transcription",
-                showsComparison: true
-            ),
-
-            NodeInfo(
-                typeId: "prompt-optimizer",
-                displayName: "Prompt Optimizer",
-                icon: "sparkles",
-                color: .orange,
-                outputType: .text,
-                inputDescription: "Improved text",
                 showsComparison: true
             ),
 
@@ -428,7 +463,9 @@ extension PipelineStageInfo {
         case .transcribeApple: return "transcribe-apple"
         case .transcribeWhisperKitBalanced: return "transcribe-whisperkit-balanced"
         case .transcribeWhisperKitAccurate: return "transcribe-whisperkit-accurate"
-        case .improve: return "text-improve"
+        case .aiFast: return "ai-fast"
+        case .aiBalanced: return "ai-balanced"
+        case .aiReasoning: return "ai-reasoning"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
         }

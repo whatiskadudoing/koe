@@ -25,8 +25,12 @@ struct NodeSettingsContent: View {
             WhisperKitBalancedSettings(appState: appState)
         case .transcribeWhisperKitAccurate:
             WhisperKitAccurateSettings(appState: appState)
-        case .improve:
-            ImproveSettings(appState: appState)
+        case .aiFast:
+            AIFastSettings(appState: appState)
+        case .aiBalanced:
+            AIBalancedSettings(appState: appState)
+        case .aiReasoning:
+            AIReasoningSettings(appState: appState)
         case .autoType:
             AutoTypeSettings(appState: appState)
         case .autoEnter:
@@ -1041,7 +1045,7 @@ struct ImproveSettings: View {
             HStack {
                 Toggle(isOn: $appState.isRefinementEnabled) {
                     HStack(spacing: 8) {
-                        Image(systemName: "sparkles")
+                        Image(systemName: "flask")
                             .font(.system(size: 12))
                             .foregroundColor(
                                 appState.isRefinementEnabled ? KoeColors.stateRefining : KoeColors.textLight)
@@ -1164,6 +1168,217 @@ struct ImproveSettings: View {
                     Text("(Global)")
                         .font(.system(size: 9))
                         .foregroundColor(KoeColors.textLighter)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - AI Fast Settings (Mistral 7B)
+
+struct AIFastSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Enable toggle
+            HStack {
+                Toggle(isOn: $appState.isAIFastEnabled) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "hare")
+                            .font(.system(size: 12))
+                            .foregroundColor(
+                                appState.isAIFastEnabled ? KoeColors.stateRefining : KoeColors.textLight)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Fast AI")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(KoeColors.accent)
+
+                            Text("Quick cleanup with minimal latency")
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
+            Divider()
+
+            // Model info
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("Mistral 7B")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "internaldrive")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("~4 GB download")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("~30-40 tokens/sec")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - AI Balanced Settings (Qwen 2.5 7B)
+
+struct AIBalancedSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Enable toggle
+            HStack {
+                Toggle(isOn: $appState.isAIBalancedEnabled) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "gauge.with.dots.needle.50percent")
+                            .font(.system(size: 12))
+                            .foregroundColor(
+                                appState.isAIBalancedEnabled ? KoeColors.stateRefining : KoeColors.textLight)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Balanced AI")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(KoeColors.accent)
+
+                            Text("Good balance of speed and quality")
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
+            Divider()
+
+            // Model info
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("Qwen 2.5 7B")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "internaldrive")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("~4.5 GB download")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("~25-35 tokens/sec")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - AI Reasoning Settings (DeepSeek-R1 8B)
+
+struct AIReasoningSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Enable toggle
+            HStack {
+                Toggle(isOn: $appState.isAIReasoningEnabled) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "brain")
+                            .font(.system(size: 12))
+                            .foregroundColor(
+                                appState.isAIReasoningEnabled ? KoeColors.stateRefining : KoeColors.textLight)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Reasoning AI")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(KoeColors.accent)
+
+                            Text("Complex reasoning and prompt optimization")
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
+            Divider()
+
+            // Experimental badge
+            HStack(spacing: 4) {
+                Image(systemName: "flask")
+                    .font(.system(size: 9))
+                Text("Experimental")
+                    .font(.system(size: 9, weight: .medium))
+            }
+            .foregroundColor(.orange)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(4)
+
+            // Model info
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("DeepSeek-R1 8B")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "internaldrive")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("~5 GB download")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("~15-25 tokens/sec (with reasoning)")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
                 }
             }
         }
@@ -1298,12 +1513,12 @@ struct NodeSettingsToneChip: View {
         }
 
         SettingsModal(
-            title: "Improve Settings",
-            icon: "sparkles",
+            title: "AI Fast Settings",
+            icon: "hare",
             iconColor: KoeColors.stateRefining,
             onClose: {}
         ) {
-            NodeSettingsContent(stage: .improve)
+            NodeSettingsContent(stage: .aiFast)
                 .environment(AppState.shared)
         }
     }

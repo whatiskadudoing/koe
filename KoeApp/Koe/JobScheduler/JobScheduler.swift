@@ -35,16 +35,43 @@ public final class JobScheduler: ObservableObject {
 
     /// Submit a job to the queue
     public func submit(_ job: Job) {
-        // Don't add duplicate jobs - check by name since each createXxxJob() generates new UUID
-        guard !jobs.contains(where: { $0.name == job.name && !$0.isCompleted && !$0.isFailed }) else {
-            logger.notice("Job '\(job.name)' already in queue or processing")
-            return
+        // Don't add duplicate jobs - check by name (handles pending, running, queued jobs)
+        // Only allow resubmission if the previous job completed or failed
+        let existingJob = jobs.first { $0.name == job.name }
+        if let existing = existingJob {
+            if !existing.isCompleted && !existing.isFailed {
+                logger.notice("Job '\(job.name)' already in queue or processing, skipping")
+                return
+            }
+            // Remove completed/failed job with same name before adding new one
+            jobs.removeAll { $0.name == job.name && ($0.isCompleted || $0.isFailed) }
         }
 
         jobs.append(job)
         saveState()
         logger.notice("Submitted job: \(job.name)")
         startProcessingIfNeeded()
+    }
+
+    /// Clear all jobs (useful for debugging)
+    public func clearAll() {
+        jobs.removeAll()
+        saveState()
+        logger.notice("All jobs cleared")
+    }
+
+    /// Remove duplicate jobs, keeping only the first of each name
+    public func deduplicateJobs() {
+        var seenNames = Set<String>()
+        jobs = jobs.filter { job in
+            if seenNames.contains(job.name) {
+                return false
+            }
+            seenNames.insert(job.name)
+            return true
+        }
+        saveState()
+        logger.notice("Jobs deduplicated, \(self.jobs.count) remaining")
     }
 
     /// Retry a failed job
@@ -123,6 +150,13 @@ public final class JobScheduler: ObservableObject {
             if BackgroundModelService.shared.isModelReady(.accurate) {
                 return .ready
             }
+            return .setupRequired
+        }
+
+        // AI processing nodes - always require setup (check Ollama for model availability)
+        if nodeId == NodeTypeId.aiFast || nodeId == NodeTypeId.aiBalanced || nodeId == NodeTypeId.aiReasoning {
+            // For now, always show as requiring setup
+            // TODO: Check Ollama for model availability
             return .setupRequired
         }
 
@@ -253,6 +287,12 @@ public final class JobScheduler: ObservableObject {
             return false
         }
 
+        // Check if this is an Ollama model
+        if task.metadata["isOllama"] == "true" {
+            return await executeOllamaDownload(jobIndex: jobIndex, taskIndex: taskIndex, modelName: modelName)
+        }
+
+        // WhisperKit model download
         let model = KoeModel(rawValue: modelName) ?? .balanced
         let transcriber = WhisperKitTranscriber()
 
@@ -279,6 +319,165 @@ public final class JobScheduler: ObservableObject {
             jobs[jobIndex].tasks[taskIndex].error = error.localizedDescription
             let errorDesc = error.localizedDescription
             logger.error("Download failed: \(errorDesc)")
+            return false
+        }
+    }
+
+    /// Execute Ollama model download/pull
+    private func executeOllamaDownload(jobIndex: Int, taskIndex: Int, modelName: String) async -> Bool {
+        jobs[jobIndex].tasks[taskIndex].message = "Checking Ollama..."
+        jobs[jobIndex].tasks[taskIndex].progress = 0.02
+
+        // Paths for Ollama
+        let ollamaSystemPath = "/usr/local/bin/ollama"
+        let ollamaAppPath = "/Applications/Ollama.app"
+        let ollamaLocalPath = getOllamaLocalPath()
+
+        var ollamaPath: String? = nil
+
+        // Check if Ollama is installed
+        if FileManager.default.fileExists(atPath: ollamaSystemPath) {
+            ollamaPath = ollamaSystemPath
+        } else if FileManager.default.fileExists(atPath: ollamaAppPath) {
+            ollamaPath = "\(ollamaAppPath)/Contents/Resources/ollama"
+        } else if FileManager.default.fileExists(atPath: ollamaLocalPath) {
+            ollamaPath = ollamaLocalPath
+        }
+
+        // Install Ollama if not found
+        if ollamaPath == nil {
+            jobs[jobIndex].tasks[taskIndex].message = "Installing Ollama..."
+            jobs[jobIndex].tasks[taskIndex].progress = 0.03
+
+            let installed = await installOllama(jobIndex: jobIndex, taskIndex: taskIndex)
+            if installed {
+                ollamaPath = ollamaLocalPath
+            } else {
+                return false
+            }
+        }
+
+        guard let executablePath = ollamaPath else {
+            jobs[jobIndex].tasks[taskIndex].error = "Ollama installation failed"
+            return false
+        }
+
+        // Check if Ollama is running
+        let ollamaEndpoint = AppState.shared.ollamaEndpoint
+        guard let url = URL(string: "\(ollamaEndpoint)/api/tags") else {
+            jobs[jobIndex].tasks[taskIndex].error = "Invalid Ollama endpoint"
+            return false
+        }
+
+        // Check Ollama connectivity - try to start if not running
+        var ollamaRunning = false
+        do {
+            let (_, response) = try await URLSession.shared.data(from: url)
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                ollamaRunning = true
+            }
+        } catch {
+            logger.notice("Ollama not running, attempting to start...")
+        }
+
+        // Try to start Ollama if not running
+        if !ollamaRunning {
+            jobs[jobIndex].tasks[taskIndex].message = "Starting Ollama..."
+            jobs[jobIndex].tasks[taskIndex].progress = 0.08
+
+            // Try to start Ollama
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executablePath)
+            process.arguments = ["serve"]
+            process.standardOutput = nil
+            process.standardError = nil
+
+            do {
+                try process.run()
+                // Wait a bit for Ollama to start
+                try await Task.sleep(nanoseconds: 3_000_000_000)  // 3 seconds
+
+                // Check again
+                let (_, response) = try await URLSession.shared.data(from: url)
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                    ollamaRunning = true
+                    logger.notice("Ollama started successfully")
+                }
+            } catch {
+                logger.error("Failed to start Ollama: \(error.localizedDescription)")
+            }
+        }
+
+        if !ollamaRunning {
+            jobs[jobIndex].tasks[taskIndex].error = "Failed to start Ollama"
+            return false
+        }
+
+        jobs[jobIndex].tasks[taskIndex].message = "Pulling model via Ollama..."
+        jobs[jobIndex].tasks[taskIndex].progress = 0.1
+
+        // Pull the model via Ollama API
+        guard let pullURL = URL(string: "\(ollamaEndpoint)/api/pull") else {
+            jobs[jobIndex].tasks[taskIndex].error = "Invalid Ollama endpoint"
+            return false
+        }
+
+        struct OllamaPullRequest: Encodable {
+            let name: String
+            let stream: Bool
+        }
+
+        var request = URLRequest(url: pullURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode(OllamaPullRequest(name: modelName, stream: true))
+
+        do {
+            jobs[jobIndex].tasks[taskIndex].message = "Downloading \(modelName)..."
+
+            // Use streaming to get progress updates
+            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                jobs[jobIndex].tasks[taskIndex].error = "Failed to pull model"
+                return false
+            }
+
+            // Parse streaming JSON responses for progress
+            for try await line in bytes.lines {
+                if let data = line.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                {
+                    if let status = json["status"] as? String {
+                        jobs[jobIndex].tasks[taskIndex].message = status
+
+                        // Parse progress if available
+                        if let completed = json["completed"] as? Int64,
+                           let total = json["total"] as? Int64,
+                           total > 0
+                        {
+                            let progress = Double(completed) / Double(total)
+                            jobs[jobIndex].tasks[taskIndex].progress = progress
+                            saveState()
+                        }
+                    }
+
+                    // Check for error
+                    if let error = json["error"] as? String {
+                        jobs[jobIndex].tasks[taskIndex].error = error
+                        return false
+                    }
+                }
+            }
+
+            jobs[jobIndex].tasks[taskIndex].progress = 1.0
+            jobs[jobIndex].tasks[taskIndex].message = "Model ready"
+            logger.notice("Ollama model pulled: \(modelName)")
+            return true
+
+        } catch {
+            jobs[jobIndex].tasks[taskIndex].error = error.localizedDescription
+            logger.error("Ollama pull failed: \(error.localizedDescription)")
             return false
         }
     }
@@ -392,6 +591,74 @@ public final class JobScheduler: ObservableObject {
         return true
     }
 
+    // MARK: - Ollama Installation
+
+    /// Get path where we install Ollama locally (in app support)
+    private func getOllamaLocalPath() -> String {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("Koe/bin/ollama").path
+    }
+
+    /// Install Ollama automatically by downloading the official release
+    private func installOllama(jobIndex: Int, taskIndex: Int) async -> Bool {
+        logger.notice("Installing Ollama automatically...")
+
+        // Download URL for macOS arm64 (Apple Silicon)
+        let downloadURL = "https://github.com/ollama/ollama/releases/latest/download/ollama-darwin"
+
+        guard let url = URL(string: downloadURL) else {
+            jobs[jobIndex].tasks[taskIndex].error = "Invalid download URL"
+            return false
+        }
+
+        // Create destination directory
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let binDir = appSupport.appendingPathComponent("Koe/bin")
+        let ollamaPath = binDir.appendingPathComponent("ollama")
+
+        do {
+            // Create bin directory if needed
+            try FileManager.default.createDirectory(at: binDir, withIntermediateDirectories: true)
+
+            jobs[jobIndex].tasks[taskIndex].message = "Downloading Ollama..."
+            jobs[jobIndex].tasks[taskIndex].progress = 0.04
+
+            // Download Ollama binary with progress
+            let (tempURL, response) = try await URLSession.shared.download(from: url)
+
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                jobs[jobIndex].tasks[taskIndex].error = "Failed to download Ollama (HTTP error)"
+                return false
+            }
+
+            jobs[jobIndex].tasks[taskIndex].message = "Installing Ollama..."
+            jobs[jobIndex].tasks[taskIndex].progress = 0.06
+
+            // Move to final location
+            if FileManager.default.fileExists(atPath: ollamaPath.path) {
+                try FileManager.default.removeItem(at: ollamaPath)
+            }
+            try FileManager.default.moveItem(at: tempURL, to: ollamaPath)
+
+            // Make executable
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: ollamaPath.path
+            )
+
+            logger.notice("Ollama installed to: \(ollamaPath.path)")
+            jobs[jobIndex].tasks[taskIndex].message = "Ollama installed"
+            jobs[jobIndex].tasks[taskIndex].progress = 0.07
+
+            return true
+
+        } catch {
+            jobs[jobIndex].tasks[taskIndex].error = "Ollama installation failed: \(error.localizedDescription)"
+            logger.error("Ollama installation failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // MARK: - Persistence
 
     private func saveState() {
@@ -462,6 +729,73 @@ extension JobScheduler {
                     name: "Activate",
                     icon: "checkmark.circle",
                     metadata: ["nodeId": nodeId]
+                ),
+            ]
+        )
+    }
+
+    /// AI model configuration
+    public enum AIModel: String {
+        case fast = "ai-fast"
+        case balanced = "ai-balanced"
+        case reasoning = "ai-reasoning"
+
+        var displayName: String {
+            switch self {
+            case .fast: return "Fast AI"
+            case .balanced: return "Balanced AI"
+            case .reasoning: return "Reasoning AI"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .fast: return "hare"
+            case .balanced: return "gauge.with.dots.needle.50percent"
+            case .reasoning: return "brain"
+            }
+        }
+
+        var ollamaModel: String {
+            switch self {
+            case .fast: return "mistral:7b"
+            case .balanced: return "qwen2.5:7b"
+            case .reasoning: return "deepseek-r1"
+            }
+        }
+
+        var sizeString: String {
+            switch self {
+            case .fast: return "~4 GB"
+            case .balanced: return "~4.5 GB"
+            case .reasoning: return "~5 GB"
+            }
+        }
+
+        var nodeId: String { rawValue }
+    }
+
+    /// Create AI processing setup job
+    public static func createAISetupJob(model: AIModel) -> Job {
+        return Job(
+            name: "\(model.displayName) Setup",
+            icon: model.icon,
+            tasks: [
+                JobTask(
+                    type: .downloadModel,
+                    name: "Download Model (\(model.sizeString))",
+                    icon: "arrow.down.circle",
+                    metadata: [
+                        "model": model.ollamaModel,
+                        "nodeId": model.nodeId,
+                        "isOllama": "true",
+                    ]
+                ),
+                JobTask(
+                    type: .activateNode,
+                    name: "Activate",
+                    icon: "checkmark.circle",
+                    metadata: ["nodeId": model.nodeId]
                 ),
             ]
         )

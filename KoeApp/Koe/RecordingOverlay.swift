@@ -148,7 +148,8 @@ struct OverlayContentView: View {
             // Show the icon of the active transcription engine
             return activeTranscriptionStage
         case .refining:
-            return .improve
+            // Show the icon of the active AI processing engine
+            return activeAIProcessingStage
         }
     }
 
@@ -161,6 +162,21 @@ struct OverlayContentView: View {
             return .transcribeWhisperKitAccurate
         } else {
             return .transcribeApple
+        }
+    }
+
+    /// Get the active AI processing engine stage
+    private var activeAIProcessingStage: PipelineStageInfo {
+        let appState = AppState.shared
+        if appState.isAIFastEnabled {
+            return .aiFast
+        } else if appState.isAIBalancedEnabled {
+            return .aiBalanced
+        } else if appState.isAIReasoningEnabled {
+            return .aiReasoning
+        } else {
+            // Default to fast if none enabled
+            return .aiFast
         }
     }
 

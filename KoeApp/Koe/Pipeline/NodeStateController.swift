@@ -254,7 +254,9 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .transcribeApple: return "transcribe-apple"
                 case .transcribeWhisperKitBalanced: return "transcribe-whisperkit-balanced"
                 case .transcribeWhisperKitAccurate: return "transcribe-whisperkit-accurate"
-                case .improve: return "text-improve"
+                case .aiFast: return "ai-fast"
+                case .aiBalanced: return "ai-balanced"
+                case .aiReasoning: return "ai-reasoning"
                 case .autoType: return "auto-type"
                 case .autoEnter: return "auto-enter"
                 }
@@ -266,7 +268,9 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .transcribeApple: return appState.isAppleSpeechEnabled
                 case .transcribeWhisperKitBalanced: return appState.isWhisperKitBalancedEnabled
                 case .transcribeWhisperKitAccurate: return appState.isWhisperKitAccurateEnabled
-                case .improve: return appState.isRefinementEnabled
+                case .aiFast: return appState.isAIFastEnabled
+                case .aiBalanced: return appState.isAIBalancedEnabled
+                case .aiReasoning: return appState.isAIReasoningEnabled
                 case .autoEnter: return appState.isAutoEnterEnabled
                 default: return true
                 }
@@ -277,7 +281,9 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .transcribeApple: appState.isAppleSpeechEnabled = enabled
                 case .transcribeWhisperKitBalanced: appState.isWhisperKitBalancedEnabled = enabled
                 case .transcribeWhisperKitAccurate: appState.isWhisperKitAccurateEnabled = enabled
-                case .improve: appState.isRefinementEnabled = enabled
+                case .aiFast: appState.isAIFastEnabled = enabled
+                case .aiBalanced: appState.isAIBalancedEnabled = enabled
+                case .aiReasoning: appState.isAIReasoningEnabled = enabled
                 case .autoEnter: appState.isAutoEnterEnabled = enabled
                 default: break
                 }

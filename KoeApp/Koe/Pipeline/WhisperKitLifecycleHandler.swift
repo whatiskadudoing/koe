@@ -26,9 +26,8 @@ public final class WhisperKitBalancedLifecycleHandler: NodeLifecycleHandler {
     public func load() async throws {
         logger.info("Loading WhisperKit Balanced model...")
 
-        // Update state flags
-        AppState.shared.isWhisperKitEnabled = true
-        AppState.shared.isAppleSpeechEnabled = false
+        // Update state flags - this sets the others via didSet
+        AppState.shared.isWhisperKitBalancedEnabled = true
 
         // Load the balanced model
         let model = KoeModel.balanced
@@ -40,7 +39,8 @@ public final class WhisperKitBalancedLifecycleHandler: NodeLifecycleHandler {
     public func unload() {
         logger.info("Unloading WhisperKit Balanced model...")
 
-        // Update state flag
+        // Update state flags
+        AppState.shared.isWhisperKitBalancedEnabled = false
         AppState.shared.isWhisperKitEnabled = false
 
         // Unload the model to free memory
@@ -71,9 +71,8 @@ public final class WhisperKitAccurateLifecycleHandler: NodeLifecycleHandler {
     public func load() async throws {
         logger.info("Loading WhisperKit Accurate model...")
 
-        // Update state flags
-        AppState.shared.isWhisperKitEnabled = true
-        AppState.shared.isAppleSpeechEnabled = false
+        // Update state flags - this sets the others via didSet
+        AppState.shared.isWhisperKitAccurateEnabled = true
 
         // Load the accurate model
         let model = KoeModel.accurate
@@ -85,7 +84,8 @@ public final class WhisperKitAccurateLifecycleHandler: NodeLifecycleHandler {
     public func unload() {
         logger.info("Unloading WhisperKit Accurate model...")
 
-        // Update state flag
+        // Update state flags
+        AppState.shared.isWhisperKitAccurateEnabled = false
         AppState.shared.isWhisperKitEnabled = false
 
         // Unload the model to free memory

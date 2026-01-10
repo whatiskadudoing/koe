@@ -15,7 +15,11 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     case transcribeWhisperKitBalanced  // WhisperKit Balanced - 632 MB, good speed/accuracy
     case transcribeWhisperKitAccurate  // WhisperKit Accurate - 947 MB, best accuracy
 
-    case improve  // AI text improvement (cleanup, tone, prompt)
+    // Parallel AI processing engines (mutually exclusive - only one can be active)
+    case aiFast  // Mistral 7B - quick cleanup (~4GB)
+    case aiBalanced  // Qwen 2.5 7B - balanced speed/quality (~4.5GB)
+    case aiReasoning  // DeepSeek-R1 8B - complex reasoning (~5GB)
+
     case autoType  // Types the text
     case autoEnter  // Presses enter
 
@@ -29,7 +33,9 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .transcribeApple: return "Apple Speech"
         case .transcribeWhisperKitBalanced: return "Balanced"
         case .transcribeWhisperKitAccurate: return "Accurate"
-        case .improve: return "Improve"
+        case .aiFast: return "Fast"
+        case .aiBalanced: return "Balanced"
+        case .aiReasoning: return "Reasoning"
         case .autoType: return "Type"
         case .autoEnter: return "Enter"
         }
@@ -71,6 +77,14 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Whether this is an AI processing engine stage (part of parallel AI group)
+    var isAIProcessingEngine: Bool {
+        switch self {
+        case .aiFast, .aiBalanced, .aiReasoning: return true
+        default: return false
+        }
+    }
+
     /// Pipeline element typeId for metrics lookup
     /// Returns nil for stages that aren't tracked as pipeline elements
     var pipelineTypeId: String? {
@@ -81,7 +95,9 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .transcribeApple: return "transcribe-apple"
         case .transcribeWhisperKitBalanced: return "transcribe-whisperkit-balanced"
         case .transcribeWhisperKitAccurate: return "transcribe-whisperkit-accurate"
-        case .improve: return "text-improve"
+        case .aiFast: return "ai-fast"
+        case .aiBalanced: return "ai-balanced"
+        case .aiReasoning: return "ai-reasoning"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
         }
@@ -97,20 +113,27 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         [.transcribeApple, .transcribeWhisperKitBalanced, .transcribeWhisperKitAccurate]
     }
 
+    /// AI processing engine stages shown in parallel
+    static var aiProcessingStages: [PipelineStageInfo] {
+        [.aiFast, .aiBalanced, .aiReasoning]
+    }
+
     /// Sequential stages after triggers (before transcription split)
     static var preTranscriptionStages: [PipelineStageInfo] {
         [.recorder]
     }
 
-    /// Sequential stages after transcription merge
-    static var postTranscriptionStages: [PipelineStageInfo] {
-        [.improve, .autoType, .autoEnter]
+    /// Sequential stages after AI processing merge
+    static var postAIProcessingStages: [PipelineStageInfo] {
+        [.autoType, .autoEnter]
     }
 
     /// Sequential stages after triggers (includes all)
     static var sequentialStages: [PipelineStageInfo] {
         [
-            .recorder, .transcribeApple, .transcribeWhisperKitBalanced, .transcribeWhisperKitAccurate, .improve,
+            .recorder,
+            .transcribeApple, .transcribeWhisperKitBalanced, .transcribeWhisperKitAccurate,
+            .aiFast, .aiBalanced, .aiReasoning,
             .autoType, .autoEnter,
         ]
     }

@@ -276,13 +276,13 @@ struct PipelineNodeView: View {
         )
 
         PipelineNodeView(
-            stage: .improve,
+            stage: .aiFast,
             isEnabled: .constant(true),
             isSelected: true,
             isRunning: false,
             metrics: ElementExecutionMetrics(
                 elementId: "test",
-                elementType: "language-improvement",
+                elementType: "ai-fast",
                 startTime: Date(),
                 endTime: Date().addingTimeInterval(0.45),
                 status: .success,
@@ -294,7 +294,7 @@ struct PipelineNodeView: View {
         )
 
         PipelineNodeView(
-            stage: .improve,
+            stage: .aiFast,
             isEnabled: .constant(false),
             isSelected: false,
             isRunning: false,

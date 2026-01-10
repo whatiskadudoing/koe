@@ -181,6 +181,46 @@ public final class AppState {
         }
     }
 
+    // MARK: - AI Processing Engine Flags
+
+    /// Whether AI Fast processing is enabled (Mistral 7B - ~4GB)
+    public var isAIFastEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isAIFastEnabled, forKey: "aiProcessingFastEnabled")
+            if isAIFastEnabled {
+                isAIBalancedEnabled = false
+                isAIReasoningEnabled = false
+            }
+        }
+    }
+
+    /// Whether AI Balanced processing is enabled (Qwen 2.5 7B - ~4.5GB)
+    public var isAIBalancedEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isAIBalancedEnabled, forKey: "aiProcessingBalancedEnabled")
+            if isAIBalancedEnabled {
+                isAIFastEnabled = false
+                isAIReasoningEnabled = false
+            }
+        }
+    }
+
+    /// Whether AI Reasoning processing is enabled (DeepSeek-R1 8B - ~5GB)
+    public var isAIReasoningEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isAIReasoningEnabled, forKey: "aiProcessingReasoningEnabled")
+            if isAIReasoningEnabled {
+                isAIFastEnabled = false
+                isAIBalancedEnabled = false
+            }
+        }
+    }
+
+    /// Whether any AI processing engine is enabled
+    public var isAnyAIProcessingEnabled: Bool {
+        isAIFastEnabled || isAIBalancedEnabled || isAIReasoningEnabled
+    }
+
     /// Whether to copy transcribed text to clipboard when target is lost (user switched apps)
     /// If false, text is simply discarded when target cannot be restored
     public var copyToClipboardOnTargetLost: Bool {
@@ -392,6 +432,17 @@ public final class AppState {
         }
         if UserDefaults.standard.object(forKey: "transcribeWhisperKitAccurateEnabled") != nil {
             isWhisperKitAccurateEnabled = UserDefaults.standard.bool(forKey: "transcribeWhisperKitAccurateEnabled")
+        }
+
+        // Load AI processing engine states
+        if UserDefaults.standard.object(forKey: "aiProcessingFastEnabled") != nil {
+            isAIFastEnabled = UserDefaults.standard.bool(forKey: "aiProcessingFastEnabled")
+        }
+        if UserDefaults.standard.object(forKey: "aiProcessingBalancedEnabled") != nil {
+            isAIBalancedEnabled = UserDefaults.standard.bool(forKey: "aiProcessingBalancedEnabled")
+        }
+        if UserDefaults.standard.object(forKey: "aiProcessingReasoningEnabled") != nil {
+            isAIReasoningEnabled = UserDefaults.standard.bool(forKey: "aiProcessingReasoningEnabled")
         }
 
         // Load saved refinement options

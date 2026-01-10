@@ -28,12 +28,28 @@ struct PipelineStripView: View {
         guard let nodeInfo = setupNodeInfo else { return }
 
         // Create and submit the setup job based on node type
-        if nodeInfo.typeId == NodeTypeId.whisperKitBalanced {
+        switch nodeInfo.typeId {
+        // WhisperKit transcription models
+        case NodeTypeId.whisperKitBalanced:
             let job = JobScheduler.createWhisperKitSetupJob(model: .balanced)
             JobScheduler.shared.submit(job)
-        } else if nodeInfo.typeId == NodeTypeId.whisperKitAccurate {
+        case NodeTypeId.whisperKitAccurate:
             let job = JobScheduler.createWhisperKitSetupJob(model: .accurate)
             JobScheduler.shared.submit(job)
+
+        // AI processing models
+        case NodeTypeId.aiFast:
+            let job = JobScheduler.createAISetupJob(model: .fast)
+            JobScheduler.shared.submit(job)
+        case NodeTypeId.aiBalanced:
+            let job = JobScheduler.createAISetupJob(model: .balanced)
+            JobScheduler.shared.submit(job)
+        case NodeTypeId.aiReasoning:
+            let job = JobScheduler.createAISetupJob(model: .reasoning)
+            JobScheduler.shared.submit(job)
+
+        default:
+            break
         }
     }
 
@@ -78,8 +94,17 @@ struct PipelineStripView: View {
                 onSetupRequired: handleSetupRequired
             )
 
-            // Post-transcription stages (improve, type, enter)
-            ForEach(Array(PipelineStageInfo.postTranscriptionStages.enumerated()), id: \.element.id) { index, stage in
+            // Parallel AI processing engines section
+            ParallelAIProcessingView(
+                nodeController: nodeController,
+                selectedStage: $selectedStage,
+                isRefining: appState.recordingState == .refining,
+                onOpenSettings: { stage in selectedStage = stage },
+                onSetupRequired: handleSetupRequired
+            )
+
+            // Post-AI processing stages (type, enter)
+            ForEach(Array(PipelineStageInfo.postAIProcessingStages.enumerated()), id: \.element.id) { index, stage in
                 HStack(spacing: 0) {
                     if index > 0 {
                         PipelineConnector(isActive: true, color: activeTriggerColor)
@@ -145,7 +170,8 @@ struct PipelineStripView: View {
             // All transcription engine nodes show running state when transcribing
             return stage.isTranscriptionEngine
         case .refining:
-            return stage == .improve
+            // All AI processing engine nodes show running state when refining
+            return stage.isAIProcessingEngine
         }
     }
 
@@ -320,6 +346,103 @@ struct ParallelTranscriptionView: View {
             onToggle: {
                 // Toggle with mutual exclusivity - disable other transcription nodes
                 nodeController.toggleExclusive(stage, in: PipelineStageInfo.transcriptionStages)
+            },
+            onOpenSettings: { onOpenSettings(stage) },
+            onSetupRequired: onSetupRequired
+        )
+        .opacity(isDimmed ? 0.4 : (isEnabled ? 1.0 : 0.6))
+    }
+}
+
+// MARK: - Parallel AI Processing View
+
+struct ParallelAIProcessingView: View {
+    let nodeController: NodeStateController<PipelineStageInfo>
+    @Binding var selectedStage: PipelineStageInfo?
+    let isRefining: Bool
+    let onOpenSettings: (PipelineStageInfo) -> Void
+    var onSetupRequired: ((NodeInfo) -> Void)?
+
+    private var isFastEnabled: Bool {
+        nodeController.isEnabled(.aiFast)
+    }
+
+    private var isBalancedEnabled: Bool {
+        nodeController.isEnabled(.aiBalanced)
+    }
+
+    private var isReasoningEnabled: Bool {
+        nodeController.isEnabled(.aiReasoning)
+    }
+
+    private var activeEngine: PipelineStageInfo? {
+        if isFastEnabled { return .aiFast }
+        if isBalancedEnabled { return .aiBalanced }
+        if isReasoningEnabled { return .aiReasoning }
+        return nil
+    }
+
+    private var isAnyAIEnabled: Bool {
+        activeEngine != nil
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Split connector from transcription merge to 3 AI nodes
+            TranscriptionSplitConnector(
+                isTopActive: isFastEnabled,
+                isMiddleActive: isBalancedEnabled,
+                isBottomActive: isReasoningEnabled,
+                isSplitActive: true,
+                activeColor: KoeColors.accent
+            )
+
+            // AI engines stacked vertically
+            VStack(spacing: 4) {
+                // Fast
+                aiNode(
+                    stage: .aiFast,
+                    isRunning: isRefining && isFastEnabled
+                )
+
+                // Balanced
+                aiNode(
+                    stage: .aiBalanced,
+                    isRunning: isRefining && isBalancedEnabled
+                )
+
+                // Reasoning
+                aiNode(
+                    stage: .aiReasoning,
+                    isRunning: isRefining && isReasoningEnabled
+                )
+            }
+
+            // Merge connector from 3 AI nodes to next stage
+            TranscriptionMergeConnector(
+                isTopActive: isFastEnabled,
+                isMiddleActive: isBalancedEnabled,
+                isBottomActive: isReasoningEnabled,
+                isMergeActive: isAnyAIEnabled,
+                activeColor: KoeColors.accent
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func aiNode(stage: PipelineStageInfo, isRunning: Bool) -> some View {
+        let isEnabled = nodeController.isEnabled(stage)
+        let isDimmed = isRefining && activeEngine != stage
+
+        PipelineNodeView(
+            stage: stage,
+            isEnabled: nodeController.binding(for: stage),
+            isSelected: selectedStage == stage,
+            isRunning: isRunning,
+            metrics: nil,
+            onToggle: {
+                // Toggle with mutual exclusivity - disable other AI nodes
+                nodeController.toggleExclusive(stage, in: PipelineStageInfo.aiProcessingStages)
             },
             onOpenSettings: { onOpenSettings(stage) },
             onSetupRequired: onSetupRequired

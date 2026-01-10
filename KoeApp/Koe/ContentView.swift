@@ -556,7 +556,7 @@ struct MicButton: View {
         case .transcribing:
             return "text.bubble"
         case .refining:
-            return "sparkles"
+            return "flask"
         }
     }
 
@@ -1054,7 +1054,7 @@ struct HistoryDetailView: View {
                             // Fallback for old entries without pipeline record
                             PipelineStepCard(
                                 stepName: "AI Refinement",
-                                stepIcon: "sparkles",
+                                stepIcon: "flask",
                                 stepColor: refiningColor,
                                 inputDescription: entry.originalText ?? "Transcribed text",
                                 outputText: entry.text,
@@ -1262,7 +1262,7 @@ struct HistoryDetailContent: View {
                     } else if entry.wasRefined {
                         PipelineStepCard(
                             stepName: "AI Refinement",
-                            stepIcon: "sparkles",
+                            stepIcon: "flask",
                             stepColor: refiningColor,
                             inputDescription: entry.originalText ?? "Transcribed text",
                             outputText: entry.text,
@@ -1811,7 +1811,7 @@ struct RefinementOptionsPanel: View {
 
                 OptionChip(
                     label: "Prompt",
-                    icon: "sparkles",
+                    icon: "terminal",
                     isSelected: $appState.isPromptImproverEnabled,
                     accentColor: Color.orange,
                     chipBg: chipBg
@@ -2030,7 +2030,7 @@ struct GlobalSettingsContent: View {
             }
 
             // AI section
-            GlobalSettingsGroup(title: "AI Refinement", icon: "sparkles") {
+            GlobalSettingsGroup(title: "AI Refinement", icon: "flask") {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Provider")

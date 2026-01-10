@@ -27,7 +27,7 @@ public enum AITier: String, Codable, Sendable, CaseIterable {
     /// Icon for UI
     public var icon: String {
         switch self {
-        case .best: return "sparkles"
+        case .best: return "flask"
         case .custom: return "gearshape.fill"
         }
     }

@@ -225,20 +225,32 @@ extension NodeSetupRequirements {
         ]
     )
 
-    /// AI Improve node setup (local model)
-    public static let improveLocal = NodeSetupRequirements(
-        nodeId: "text-improve",
+    // MARK: - AI Processing Models
+
+    /// AI Fast - Mistral 7B (~4GB) - Quick cleanup with minimal latency
+    public static let aiFast = NodeSetupRequirements(
+        nodeId: "ai-fast",
         stepTypes: [
-            .downloadModel(url: "local-llm", sizeBytes: 2_000_000_000),
+            .downloadModel(url: "ollama/mistral:7b", sizeBytes: 4_000_000_000),
             .loadIntoMemory,
         ]
     )
 
-    /// AI Improve node setup (cloud API)
-    public static let improveCloud = NodeSetupRequirements(
-        nodeId: "text-improve",
+    /// AI Balanced - Qwen 2.5 7B (~4.5GB) - Good balance of speed and quality
+    public static let aiBalanced = NodeSetupRequirements(
+        nodeId: "ai-balanced",
         stepTypes: [
-            .checkAPIKey(provider: "OpenAI")
+            .downloadModel(url: "ollama/qwen2.5:7b", sizeBytes: 4_500_000_000),
+            .loadIntoMemory,
+        ]
+    )
+
+    /// AI Reasoning - DeepSeek-R1 8B (~5GB) - Best for complex reasoning and prompts
+    public static let aiReasoning = NodeSetupRequirements(
+        nodeId: "ai-reasoning",
+        stepTypes: [
+            .downloadModel(url: "ollama/deepseek-r1", sizeBytes: 5_000_000_000),
+            .loadIntoMemory,
         ]
     )
 }

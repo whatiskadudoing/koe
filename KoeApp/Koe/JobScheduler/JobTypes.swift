@@ -9,13 +9,20 @@ public enum NodeTypeId {
     public static let whisperKitBalanced = "transcribe-whisperkit-balanced"
     public static let whisperKitAccurate = "transcribe-whisperkit-accurate"
 
+    // AI processing engines
+    public static let aiFast = "ai-fast"
+    public static let aiBalanced = "ai-balanced"
+    public static let aiReasoning = "ai-reasoning"
+
     // Pipeline stages
     public static let hotkeyTrigger = "hotkey-trigger"
     public static let voiceTrigger = "voice-trigger"
     public static let recorder = "recorder"
-    public static let improve = "text-improve"
     public static let autoType = "auto-type"
     public static let autoEnter = "auto-enter"
+
+    // Legacy (for backwards compatibility)
+    public static let improve = "text-improve"
 }
 
 // MARK: - Task Status
