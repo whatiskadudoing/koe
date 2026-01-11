@@ -13,6 +13,7 @@ public enum NodeTypeId {
     public static let aiFast = "ai-fast"
     public static let aiBalanced = "ai-balanced"
     public static let aiReasoning = "ai-reasoning"
+    public static let aiPromptEnhancer = "ai-prompt-enhancer"
 
     // Pipeline stages
     public static let hotkeyTrigger = "hotkey-trigger"

@@ -507,6 +507,27 @@ public final class NodeRegistry: @unchecked Sendable {
                 isResourceIntensive: true
             ),
 
+            // Prompt Enhancer - Transforms dictated ideas into well-structured AI prompts
+            // Uses Claude best practices: explicit instructions, context, positive framing
+            // Uses Qwen 2.5 7B for best speed/quality balance in prompt transformation
+            NodeInfo(
+                typeId: "ai-prompt-enhancer",
+                displayName: "Prompt",
+                icon: "sparkles",
+                color: KoeColors.stateRefining,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                outputType: .text,
+                inputDescription: "Raw dictation",
+                showsComparison: true,
+                hasSettings: true,
+                persistenceKey: "aiPromptEnhancerEnabled",
+                exclusiveGroup: "ai-processing",
+                requiresSetup: true,
+                setupRequirements: .aiBalanced,
+                isResourceIntensive: true
+            ),
+
             // Legacy nodes (for backwards compatibility with old pipeline records)
             NodeInfo(
                 typeId: "text-improve",
@@ -572,6 +593,7 @@ extension PipelineStageInfo {
         case .aiFast: return "ai-fast"
         case .aiBalanced: return "ai-balanced"
         case .aiReasoning: return "ai-reasoning"
+        case .aiPromptEnhancer: return "ai-prompt-enhancer"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
         }

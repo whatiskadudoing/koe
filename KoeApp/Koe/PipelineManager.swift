@@ -251,14 +251,29 @@ public final class PipelineManager {
             if let stage = element as? TextImproveStage {
                 stage.processHandler = { [weak self] text, config in
                     guard let self = self else { return text }
-                    // Translation mode - get target language from AI Model sub-nodes
-                    let targetLang = self.getSelectedLanguageFromSubNodes() ?? "Spanish"
-                    // Pass instruction as system prompt, user text as prompt
-                    let systemInstruction =
-                        "You are a translator. Translate the user's text to \(targetLang). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
-                    let userPrompt = "Translate this: \(text)"
+
+                    // Check if prompt enhancer mode is enabled
+                    if AppState.shared.isAIPromptEnhancerEnabled {
+                        // Use the promptImprover refinement mode
+                        return try await self.aiService.refine(
+                            text: text, mode: .promptImprover, customPrompt: nil)
+                    }
+
+                    // Check if translation is enabled from sub-nodes
+                    let subSettings = SubPipelineSettingsReader.readSettings(
+                        for: self.getActiveAIEngine() ?? "")
+                    if subSettings.translateEnabled {
+                        let targetLang = self.getSelectedLanguageFromSubNodes() ?? "Spanish"
+                        let systemInstruction =
+                            "You are a translator. Translate the user's text to \(targetLang). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
+                        let userPrompt = "Translate this: \(text)"
+                        return try await self.aiService.refine(
+                            text: userPrompt, mode: .custom, customPrompt: systemInstruction)
+                    }
+
+                    // Default: use cleanup mode
                     return try await self.aiService.refine(
-                        text: userPrompt, mode: .custom, customPrompt: systemInstruction)
+                        text: text, mode: .cleanup, customPrompt: nil)
                 }
             }
 
@@ -718,6 +733,9 @@ public final class PipelineManager {
         }
         if UserDefaults.standard.bool(forKey: "aiProcessingReasoningEnabled") {
             return "ai-reasoning"
+        }
+        if UserDefaults.standard.bool(forKey: "aiPromptEnhancerEnabled") {
+            return "ai-prompt-enhancer"
         }
         return nil
     }

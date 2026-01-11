@@ -48,6 +48,9 @@ struct PipelineStripView: View {
         case NodeTypeId.aiReasoning:
             let job = JobScheduler.createAISetupJob(model: .reasoning)
             JobScheduler.shared.submit(job)
+        case NodeTypeId.aiPromptEnhancer:
+            let job = JobScheduler.createAISetupJob(model: .promptEnhancer)
+            JobScheduler.shared.submit(job)
 
         default:
             break
@@ -398,10 +401,15 @@ struct ParallelAIProcessingView: View {
         nodeController.isEnabled(.aiReasoning)
     }
 
+    private var isPromptEnhancerEnabled: Bool {
+        nodeController.isEnabled(.aiPromptEnhancer)
+    }
+
     private var activeEngine: PipelineStageInfo? {
         if isFastEnabled { return .aiFast }
         if isBalancedEnabled { return .aiBalanced }
         if isReasoningEnabled { return .aiReasoning }
+        if isPromptEnhancerEnabled { return .aiPromptEnhancer }
         return nil
     }
 
@@ -413,7 +421,7 @@ struct ParallelAIProcessingView: View {
         HStack(spacing: 0) {
             // Split connector from transcription merge to AI nodes
             SplitConnector(
-                nodeStates: [isFastEnabled, isBalancedEnabled, isReasoningEnabled],
+                nodeStates: [isFastEnabled, isBalancedEnabled, isReasoningEnabled, isPromptEnhancerEnabled],
                 activeColor: PipelineLayout.activeColor
             )
 
@@ -436,12 +444,18 @@ struct ParallelAIProcessingView: View {
                     stage: .aiReasoning,
                     isRunning: isRefining && isReasoningEnabled
                 )
+
+                // Prompt Enhancer
+                aiNode(
+                    stage: .aiPromptEnhancer,
+                    isRunning: isRefining && isPromptEnhancerEnabled
+                )
             }
-            .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: 3))
+            .frame(height: PipelineLayout.parallelSectionHeight(nodeCount: 4))
 
             // Merge connector from AI nodes to next stage
             MergeConnector(
-                nodeStates: [isFastEnabled, isBalancedEnabled, isReasoningEnabled],
+                nodeStates: [isFastEnabled, isBalancedEnabled, isReasoningEnabled, isPromptEnhancerEnabled],
                 activeColor: PipelineLayout.activeColor
             )
         }

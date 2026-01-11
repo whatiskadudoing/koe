@@ -741,12 +741,14 @@ extension JobScheduler {
         case fast = "ai-fast"
         case balanced = "ai-balanced"
         case reasoning = "ai-reasoning"
+        case promptEnhancer = "ai-prompt-enhancer"
 
         var displayName: String {
             switch self {
             case .fast: return "Translate"
             case .balanced: return "Balanced AI"
             case .reasoning: return "Reasoning AI"
+            case .promptEnhancer: return "Prompt Enhancer"
             }
         }
 
@@ -755,6 +757,7 @@ extension JobScheduler {
             case .fast: return "character.bubble"
             case .balanced: return "gauge.with.dots.needle.50percent"
             case .reasoning: return "brain"
+            case .promptEnhancer: return "sparkles"
             }
         }
 
@@ -763,6 +766,7 @@ extension JobScheduler {
             case .fast: return "mistral:7b"
             case .balanced: return "qwen2.5:7b"
             case .reasoning: return "deepseek-r1"
+            case .promptEnhancer: return "qwen2.5:7b"
             }
         }
 
@@ -771,6 +775,7 @@ extension JobScheduler {
             case .fast: return "~4 GB"
             case .balanced: return "~4.5 GB"
             case .reasoning: return "~5 GB"
+            case .promptEnhancer: return "~4.5 GB"
             }
         }
 

@@ -20,6 +20,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     case aiFast  // Mistral 7B - translation (~4GB)
     case aiBalanced  // Qwen 2.5 7B - balanced speed/quality (~4.5GB)
     case aiReasoning  // DeepSeek-R1 8B - complex reasoning (~5GB)
+    case aiPromptEnhancer  // Prompt enhancement using Claude best practices
 
     case autoType  // Types the text
     case autoEnter  // Presses enter
@@ -38,6 +39,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .aiFast: return "Translate"
         case .aiBalanced: return "Balanced"
         case .aiReasoning: return "Reasoning"
+        case .aiPromptEnhancer: return "Prompt"
         case .autoType: return "Type"
         case .autoEnter: return "Enter"
         }
@@ -82,7 +84,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this is an AI processing engine stage (part of parallel AI group)
     var isAIProcessingEngine: Bool {
         switch self {
-        case .aiFast, .aiBalanced, .aiReasoning: return true
+        case .aiFast, .aiBalanced, .aiReasoning, .aiPromptEnhancer: return true
         default: return false
         }
     }
@@ -101,6 +103,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .aiFast: return "ai-fast"
         case .aiBalanced: return "ai-balanced"
         case .aiReasoning: return "ai-reasoning"
+        case .aiPromptEnhancer: return "ai-prompt-enhancer"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
         }
@@ -118,7 +121,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
 
     /// AI processing engine stages shown in parallel
     static var aiProcessingStages: [PipelineStageInfo] {
-        [.aiFast, .aiBalanced, .aiReasoning]
+        [.aiFast, .aiBalanced, .aiReasoning, .aiPromptEnhancer]
     }
 
     /// Sequential stages after triggers (before transcription split)
@@ -136,7 +139,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         [
             .recorder,
             .transcribeApple, .transcribeWhisperKitBalanced, .transcribeWhisperKitAccurate,
-            .aiFast, .aiBalanced, .aiReasoning,
+            .aiFast, .aiBalanced, .aiReasoning, .aiPromptEnhancer,
             .autoType, .autoEnter,
         ]
     }

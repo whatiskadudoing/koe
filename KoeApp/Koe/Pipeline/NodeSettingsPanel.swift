@@ -34,6 +34,8 @@ struct NodeSettingsContent: View {
             AIBalancedSettings(appState: appState)
         case .aiReasoning:
             AIReasoningSettings(appState: appState)
+        case .aiPromptEnhancer:
+            AIPromptEnhancerSettings(appState: appState)
         case .autoType:
             AutoTypeSettings(appState: appState)
         case .autoEnter:
@@ -1609,6 +1611,108 @@ struct AIReasoningSettings: View {
                         .font(.system(size: 10))
                         .foregroundColor(KoeColors.textLight)
                     Text("~15-25 tokens/sec (with reasoning)")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - AI Prompt Enhancer Settings
+
+struct AIPromptEnhancerSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Enable toggle
+            HStack {
+                Toggle(isOn: $appState.isAIPromptEnhancerEnabled) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12))
+                            .foregroundColor(
+                                appState.isAIPromptEnhancerEnabled ? KoeColors.stateRefining : KoeColors.textLight)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Prompt Enhancer")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(KoeColors.accent)
+
+                            Text("Transform ideas into structured AI prompts")
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
+            Divider()
+
+            // Description
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Applies Claude best practices:")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(KoeColors.textSecondary)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.green)
+                        Text("Makes instructions specific and explicit")
+                            .font(.system(size: 9))
+                            .foregroundColor(KoeColors.textTertiary)
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.green)
+                        Text("Uses positive framing (what TO DO)")
+                            .font(.system(size: 9))
+                            .foregroundColor(KoeColors.textTertiary)
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.green)
+                        Text("Replaces aggressive language with calm directives")
+                            .font(.system(size: 9))
+                            .foregroundColor(KoeColors.textTertiary)
+                    }
+                }
+            }
+
+            Divider()
+
+            // Model info
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("Qwen 2.5 7B")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "internaldrive")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("~4.5 GB download")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textTertiary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "bolt")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                    Text("~25-35 tokens/sec")
                         .font(.system(size: 10))
                         .foregroundColor(KoeColors.textTertiary)
                 }

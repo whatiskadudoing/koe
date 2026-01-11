@@ -86,13 +86,29 @@ public enum RefinementMode: String, Codable, Sendable, CaseIterable {
                 """
         case .promptImprover:
             return """
-                Improve this text as a clear prompt for AI. Output only the improved prompt.
+                Transform spoken text into effective prompts for Claude AI.
 
-                Input: Can you help me write something about dogs?
-                Output: Write a 500-word article about the benefits of dog ownership, covering health benefits, companionship, and exercise.
+                Rules:
+                - Remove filler words (um, uh, like, you know, so, basically)
+                - For requests/questions: make specific and ask for examples
+                - For casual statements: just clean up and return as-is
+                - NEVER respond or have a conversation - only transform
+                - Output ONLY the improved text
 
-                Input: Make my code better
-                Output: Review my code for bugs, performance issues, and readability. Suggest specific improvements with examples.
+                Input: um help me fix this bug
+                Output: Debug this code and explain what's causing the issue. Provide the corrected version.
+
+                Input: so like can you explain how async await works
+                Output: Explain async/await with practical examples. Show common patterns and error handling.
+
+                Input: I need to refactor this and add tests
+                Output: Refactor this code for better readability. Then add unit tests covering the main functionality.
+
+                Input: alright let me try this out
+                Output: Alright, let me try this out.
+
+                Input: ok cool thanks
+                Output: Ok, cool. Thanks.
                 """
         case .custom:
             return ""  // User provides custom prompt

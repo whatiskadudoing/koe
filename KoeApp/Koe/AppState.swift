@@ -203,6 +203,7 @@ public final class AppState {
             if isAIFastEnabled {
                 isAIBalancedEnabled = false
                 isAIReasoningEnabled = false
+                isAIPromptEnhancerEnabled = false
                 // Configure Ollama for this model
                 configureOllamaForAINode(model: "mistral:7b")
             }
@@ -217,6 +218,7 @@ public final class AppState {
             if isAIBalancedEnabled {
                 isAIFastEnabled = false
                 isAIReasoningEnabled = false
+                isAIPromptEnhancerEnabled = false
                 // Configure Ollama for this model
                 configureOllamaForAINode(model: "qwen2.5:7b")
             }
@@ -231,6 +233,7 @@ public final class AppState {
             if isAIReasoningEnabled {
                 isAIFastEnabled = false
                 isAIBalancedEnabled = false
+                isAIPromptEnhancerEnabled = false
                 // Configure Ollama for this model
                 configureOllamaForAINode(model: "deepseek-r1")
             }
@@ -238,9 +241,25 @@ public final class AppState {
         }
     }
 
+    /// Whether AI Prompt Enhancer is enabled (Qwen 2.5 7B - optimizes prompts for Claude)
+    public var isAIPromptEnhancerEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isAIPromptEnhancerEnabled, forKey: "aiPromptEnhancerEnabled")
+            if isAIPromptEnhancerEnabled {
+                isAIFastEnabled = false
+                isAIBalancedEnabled = false
+                isAIReasoningEnabled = false
+                // Configure Ollama with Qwen 2.5 7B and enable prompt improver mode
+                configureOllamaForAINode(model: "qwen2.5:7b")
+                isPromptImproverEnabled = true
+            }
+            updateRefinementFromAINodes()
+        }
+    }
+
     /// Whether any AI processing engine is enabled
     public var isAnyAIProcessingEnabled: Bool {
-        isAIFastEnabled || isAIBalancedEnabled || isAIReasoningEnabled
+        isAIFastEnabled || isAIBalancedEnabled || isAIReasoningEnabled || isAIPromptEnhancerEnabled
     }
 
     /// Configure Ollama with the specified model for AI node
@@ -563,6 +582,9 @@ public final class AppState {
         }
         if UserDefaults.standard.object(forKey: "aiProcessingReasoningEnabled") != nil {
             isAIReasoningEnabled = UserDefaults.standard.bool(forKey: "aiProcessingReasoningEnabled")
+        }
+        if UserDefaults.standard.object(forKey: "aiPromptEnhancerEnabled") != nil {
+            isAIPromptEnhancerEnabled = UserDefaults.standard.bool(forKey: "aiPromptEnhancerEnabled")
         }
 
         // Load saved refinement options
