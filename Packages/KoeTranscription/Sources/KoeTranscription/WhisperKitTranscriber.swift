@@ -435,6 +435,167 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
         }
     }
 
+    // MARK: - Eager Mode Streaming
+
+    /// Transcribe audio samples using eager mode for streaming
+    /// This method uses clipTimestamps and prefixTokens to optimize streaming transcription
+    ///
+    /// - Parameters:
+    ///   - samples: Audio samples at 16kHz
+    ///   - state: The streaming state that tracks confirmed vs hypothesis words
+    ///   - language: Optional language code (nil for auto-detect)
+    /// - Returns: EagerStreamingResult with confirmed and hypothesis text
+    public func transcribeEager(
+        samples: [Float],
+        state: EagerStreamingState,
+        language: Language?
+    ) async throws -> EagerStreamingResult {
+        lock.lock()
+        let kit = whisperKit
+        lock.unlock()
+
+        guard let whisperKit = kit else {
+            throw TranscriptionError.modelNotLoaded
+        }
+
+        // Check if model supports word timestamps (required for eager mode)
+        guard whisperKit.textDecoder.supportsWordTimestamps else {
+            throw TranscriptionError.transcriptionFailed(
+                underlying: NSError(
+                    domain: "KoeTranscription",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "Eager mode requires word timestamps support"]
+                )
+            )
+        }
+
+        let isAutoDetect = language?.isAuto ?? true
+        let langCode = isAutoDetect ? nil : language?.code
+
+        // Build options optimized for eager streaming
+        var options = DecodingOptions(
+            verbose: false,
+            task: .transcribe,
+            language: langCode,
+            temperature: 0.0,
+            temperatureFallbackCount: 3,
+            sampleLength: 224,
+            topK: 5,
+            usePrefillPrompt: true,
+            usePrefillCache: true,
+            detectLanguage: isAutoDetect,
+            skipSpecialTokens: true,
+            withoutTimestamps: false,  // Need timestamps for word alignment
+            wordTimestamps: true,      // Required for eager mode
+            firstTokenLogProbThreshold: -1.5,  // Higher threshold to prevent fallbacks
+            chunkingStrategy: .none    // We handle chunking ourselves
+        )
+
+        // Apply streaming context from state
+        options.clipTimestamps = state.getClipTimestamps()
+        options.prefixTokens = state.getPrefixTokens()
+
+        // Transcribe
+        let results = try await whisperKit.transcribe(
+            audioArray: samples,
+            decodeOptions: options
+        )
+
+        guard let result = results.first else {
+            return EagerStreamingResult(
+                confirmedText: state.confirmedText,
+                hypothesisText: "",
+                wasUpdated: false,
+                lastAgreedSeconds: state.lastAgreedSeconds,
+                timings: nil
+            )
+        }
+
+        // Process result through state
+        let (confirmed, hypothesis, wasUpdated) = state.processResult(result)
+
+        return EagerStreamingResult(
+            confirmedText: confirmed,
+            hypothesisText: hypothesis,
+            wasUpdated: wasUpdated,
+            lastAgreedSeconds: state.lastAgreedSeconds,
+            timings: result.timings
+        )
+    }
+
+    /// Finalize eager streaming and get the complete transcription
+    /// Call this when recording ends to include any remaining hypothesis text
+    /// Truncates audio to only process unconfirmed portion for faster finalization
+    public func finalizeEagerStreaming(
+        samples: [Float],
+        state: EagerStreamingState,
+        language: Language?
+    ) async throws -> String {
+        lock.lock()
+        let kit = whisperKit
+        lock.unlock()
+
+        guard let whisperKit = kit else {
+            throw TranscriptionError.modelNotLoaded
+        }
+
+        let isAutoDetect = language?.isAuto ?? true
+        let langCode = isAutoDetect ? nil : language?.code
+
+        let lastAgreedSeconds = state.lastAgreedSeconds
+
+        // Calculate sample offset to skip confirmed audio
+        let sampleRate: Float = 16000.0
+        let skipSamples = Int(lastAgreedSeconds * sampleRate)
+
+        // Truncate audio to only unconfirmed portion (with 0.5s overlap for context)
+        let overlapSamples = Int(0.5 * sampleRate)  // 0.5s overlap
+        let startSample = max(0, skipSamples - overlapSamples)
+        let truncatedSamples: [Float]
+
+        // Track the offset for timestamp adjustment in finalize
+        let audioOffsetSeconds: Float
+
+        if startSample > 0 && startSample < samples.count {
+            truncatedSamples = Array(samples[startSample...])
+            audioOffsetSeconds = Float(startSample) / sampleRate
+        } else {
+            truncatedSamples = samples
+            audioOffsetSeconds = 0
+        }
+
+        // Final transcription of remaining audio
+        let options = DecodingOptions(
+            verbose: false,
+            task: .transcribe,
+            language: langCode,
+            temperature: 0.0,
+            temperatureFallbackCount: 5,
+            sampleLength: 224,
+            topK: 5,
+            usePrefillPrompt: true,
+            usePrefillCache: true,
+            detectLanguage: isAutoDetect,
+            skipSpecialTokens: true,
+            withoutTimestamps: false,
+            wordTimestamps: true,
+            clipTimestamps: [0],  // Start from beginning of truncated audio
+            suppressBlank: true
+        )
+
+        let results = try await whisperKit.transcribe(
+            audioArray: truncatedSamples,
+            decodeOptions: options
+        )
+
+        // Finalize the state with the result (adds remaining words to confirmed)
+        // Pass the audio offset so timestamps can be properly adjusted
+        state.finalize(with: results.first, audioOffsetSeconds: audioOffsetSeconds)
+
+        // Return the full confirmed text
+        return state.confirmedText
+    }
+
     // MARK: - Private Helpers
 
     private func getBundledModelPath(for name: String) -> String? {

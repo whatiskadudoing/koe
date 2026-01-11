@@ -81,6 +81,10 @@ public final class RecordingCoordinator {
     private var accumulatedTranscription = ""
     private var lastTypedText = ""
 
+    // Eager streaming state for optimized real-time transcription
+    private var eagerStreamingState: EagerStreamingState?
+    private var lastBufferSize: Int = 0
+
     private let logger = KoeLogger.audio
 
     // MARK: - Initialization
@@ -368,8 +372,12 @@ public final class RecordingCoordinator {
             // Start audio level monitoring
             startLevelMonitoring()
 
-            // Start streaming timer for realtime mode
-            if mode == .realtime {
+            // Start eager streaming for WhisperKit (both VAD and realtime modes)
+            // This processes audio chunks during recording so finalization is faster
+            if AppState.shared.isWhisperKitEnabled {
+                startStreamingTimer(language: language)
+            } else if mode == .realtime {
+                // Apple Speech only streams in realtime mode
                 startStreamingTimer(language: language)
             }
 
@@ -431,6 +439,14 @@ public final class RecordingCoordinator {
         accumulatedTranscription = ""
         lastTypedText = ""
         currentTranscription = ""
+        lastBufferSize = 0
+
+        // Reset or create eager streaming state
+        if eagerStreamingState == nil {
+            eagerStreamingState = EagerStreamingState(tokenConfirmationsNeeded: 2)
+        } else {
+            eagerStreamingState?.reset()
+        }
     }
 
     private func startLevelMonitoring() {
@@ -537,7 +553,9 @@ public final class RecordingCoordinator {
     }
 
     private func startStreamingTimer(language: Language) {
-        streamingTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+        // Use shorter interval for eager mode (more responsive)
+        let interval: TimeInterval = AppState.shared.isWhisperKitEnabled ? 1.0 : 1.5
+        streamingTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.transcribeStreamingBuffer(language: language)
             }
@@ -545,19 +563,78 @@ public final class RecordingCoordinator {
     }
 
     private func transcribeStreamingBuffer(language: Language) async {
-        guard !isTranscribing,
-            let startTime = recordingStartTime,
-            Date().timeIntervalSince(startTime) > 1.0
-        else {
-            return
-        }
+        guard !isTranscribing else { return }
+        guard let startTime = recordingStartTime else { return }
+        guard Date().timeIntervalSince(startTime) > 1.0 else { return }
 
         let samples = audioRecorder.getAudioSamples()
-        guard samples.count > Int(16000 / 2) else { return }  // At least 0.5s
+
+        // Calculate new audio since last transcription
+        let newSampleCount = samples.count - lastBufferSize
+        let newAudioSeconds = Float(newSampleCount) / 16000.0
+
+        // Need at least 0.5s of new audio to transcribe
+        guard newAudioSeconds > 0.5 else { return }
 
         isTranscribing = true
         defer { isTranscribing = false }
 
+        // Use eager mode for WhisperKit, fallback for Apple Speech
+        if AppState.shared.isWhisperKitEnabled, let state = eagerStreamingState {
+            await transcribeWithEagerMode(samples: samples, language: language, state: state)
+        } else {
+            await transcribeWithLegacyMode(samples: samples, language: language)
+        }
+
+        // Track buffer size for next iteration
+        lastBufferSize = samples.count
+    }
+
+    /// Eager mode streaming - uses word-level deduplication for accuracy
+    /// In VAD mode: builds confirmed words in background (no typing during recording)
+    /// In realtime mode: types confirmed words as they're recognized
+    private func transcribeWithEagerMode(
+        samples: [Float],
+        language: Language,
+        state: EagerStreamingState,
+        shouldTypeWhileRecording: Bool = false
+    ) async {
+        do {
+            let lang = language.isAuto ? nil : language
+            let result = try await whisperKitTranscriber.transcribeEager(
+                samples: samples,
+                state: state,
+                language: lang
+            )
+
+            // Update current transcription display (confirmed + hypothesis)
+            let fullText = result.fullText
+            currentTranscription = fullText
+
+            // Only type during recording if in realtime mode
+            if shouldTypeWhileRecording && result.wasUpdated {
+                let newConfirmedText = getNewText(previous: lastTypedText, current: result.confirmedText)
+                if !newConfirmedText.isEmpty {
+                    do {
+                        try await textInserter.insertText(newConfirmedText)
+                        lastTypedText = result.confirmedText
+                        logger.info("Eager mode: typed \(newConfirmedText.count) chars (confirmed)")
+                    } catch {
+                        logger.error("Text insertion failed", error: error)
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(newConfirmedText, forType: .string)
+                        AppState.shared.errorMessage = "Text copied to clipboard (insertion failed)"
+                    }
+                }
+            }
+
+        } catch {
+            logger.error("Eager streaming transcription failed", error: error)
+        }
+    }
+
+    /// Legacy streaming mode - retranscribes full buffer each time
+    private func transcribeWithLegacyMode(samples: [Float], language: Language) async {
         do {
             let lang = language.isAuto ? nil : language
             let text = try await activeTranscriber.transcribe(
@@ -575,7 +652,6 @@ public final class RecordingCoordinator {
                         currentTranscription = text
                     } catch {
                         logger.error("Text insertion failed", error: error)
-                        // Fallback: copy to clipboard
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(newText, forType: .string)
                         AppState.shared.errorMessage = "Text copied to clipboard (insertion failed)"
@@ -583,7 +659,7 @@ public final class RecordingCoordinator {
                 }
             }
         } catch {
-            logger.error("Streaming transcription failed", error: error)
+            logger.error("Legacy streaming transcription failed", error: error)
         }
     }
 
@@ -609,11 +685,28 @@ public final class RecordingCoordinator {
             _ = try await audioRecorder.stopRecording()
 
             let lang = language.isAuto ? nil : language
-            let rawText = try await activeTranscriber.transcribe(
-                samples: samples,
-                sampleRate: 16000,
-                language: lang
-            )
+            var rawText: String
+
+            // For WhisperKit with eager streaming, finalize to get complete transcription
+            // Most transcription work already done during streaming
+            if AppState.shared.isWhisperKitEnabled,
+               let state = eagerStreamingState,
+               state.confirmedWords.count > 0
+            {
+                // Finalize and get complete transcription (only processes remaining audio)
+                rawText = try await whisperKitTranscriber.finalizeEagerStreaming(
+                    samples: samples,
+                    state: state,
+                    language: lang
+                )
+            } else {
+                // Standard transcription (no eager state or Apple Speech)
+                rawText = try await activeTranscriber.transcribe(
+                    samples: samples,
+                    sampleRate: 16000,
+                    language: lang
+                )
+            }
 
             let transcriptionEndTime = Date()
             let transcribedText = rawText.trimmingCharacters(in: .whitespaces)
