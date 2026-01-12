@@ -84,6 +84,8 @@ public final class RecordingCoordinator {
     // Eager streaming state for optimized real-time transcription
     private var eagerStreamingState: EagerStreamingState?
     private var lastBufferSize: Int = 0
+    private var lastStreamingTranscribeTime: Date?
+    private var wasRecentlySpeaking: Bool = false
 
     private let logger = KoeLogger.audio
 
@@ -440,6 +442,8 @@ public final class RecordingCoordinator {
         lastTypedText = ""
         currentTranscription = ""
         lastBufferSize = 0
+        lastStreamingTranscribeTime = nil
+        wasRecentlySpeaking = false
 
         // Reset or create eager streaming state
         if eagerStreamingState == nil {
@@ -554,7 +558,8 @@ public final class RecordingCoordinator {
 
     private func startStreamingTimer(language: Language) {
         // Use shorter interval for eager mode (more responsive)
-        let interval: TimeInterval = AppState.shared.isWhisperKitEnabled ? 1.0 : 1.5
+        // Phase 2: Reduced from 1.0s to 0.5s for faster updates
+        let interval: TimeInterval = AppState.shared.isWhisperKitEnabled ? 0.5 : 1.5
         streamingTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.transcribeStreamingBuffer(language: language)
@@ -565,7 +570,7 @@ public final class RecordingCoordinator {
     private func transcribeStreamingBuffer(language: Language) async {
         guard !isTranscribing else { return }
         guard let startTime = recordingStartTime else { return }
-        guard Date().timeIntervalSince(startTime) > 1.0 else { return }
+        guard Date().timeIntervalSince(startTime) > 0.8 else { return }
 
         let samples = audioRecorder.getAudioSamples()
 
@@ -573,11 +578,38 @@ public final class RecordingCoordinator {
         let newSampleCount = samples.count - lastBufferSize
         let newAudioSeconds = Float(newSampleCount) / 16000.0
 
-        // Need at least 0.5s of new audio to transcribe
-        guard newAudioSeconds > 0.5 else { return }
+        // Phase 3: VAD-triggered streaming
+        // Check if there's speech activity in recent audio
+        let recentSampleCount = min(samples.count, Int(16000 * 0.3))  // Last 0.3s
+        let recentSamples = Array(samples.suffix(recentSampleCount))
+        let isSpeakingNow = vadProcessor.containsSpeech(recentSamples)
+
+        // Determine if we should transcribe based on VAD
+        let shouldTranscribe: Bool
+        if AppState.shared.isWhisperKitEnabled {
+            // For WhisperKit eager mode:
+            // - Transcribe on speech pause (was speaking, now silent) - captures complete phrases
+            // - Or when we have enough new audio (fallback for continuous speech)
+            let speechPauseDetected = wasRecentlySpeaking && !isSpeakingNow
+            let hasEnoughNewAudio = newAudioSeconds >= 0.4
+
+            // Minimum time between transcriptions to avoid thrashing
+            let minInterval: TimeInterval = 0.3
+            let timeSinceLastTranscribe = lastStreamingTranscribeTime.map { Date().timeIntervalSince($0) } ?? 999
+
+            shouldTranscribe = timeSinceLastTranscribe >= minInterval && (speechPauseDetected || hasEnoughNewAudio)
+        } else {
+            // For Apple Speech: need at least 0.5s of new audio
+            shouldTranscribe = newAudioSeconds > 0.5
+        }
+
+        wasRecentlySpeaking = isSpeakingNow
+
+        guard shouldTranscribe else { return }
 
         isTranscribing = true
         defer { isTranscribing = false }
+        lastStreamingTranscribeTime = Date()
 
         // Use eager mode for WhisperKit, fallback for Apple Speech
         if AppState.shared.isWhisperKitEnabled, let state = eagerStreamingState {
@@ -601,10 +633,33 @@ public final class RecordingCoordinator {
     ) async {
         do {
             let lang = language.isAuto ? nil : language
+
+            // Phase 1: Audio truncation during streaming
+            // Only process audio from lastAgreedSeconds onwards (with overlap for context)
+            let sampleRate: Float = 16000.0
+            let lastAgreedSeconds = state.lastAgreedSeconds
+            let overlapSeconds: Float = 0.5  // Keep 0.5s overlap for context
+            let skipSeconds = max(0, lastAgreedSeconds - overlapSeconds)
+            let skipSamples = Int(skipSeconds * sampleRate)
+
+            let truncatedSamples: [Float]
+            let audioOffsetSeconds: Float
+
+            if skipSamples > 0 && skipSamples < samples.count {
+                // Truncate audio to only unconfirmed portion + overlap
+                truncatedSamples = Array(samples[skipSamples...])
+                audioOffsetSeconds = Float(skipSamples) / sampleRate
+            } else {
+                // Use full audio (not enough confirmed yet)
+                truncatedSamples = samples
+                audioOffsetSeconds = 0
+            }
+
             let result = try await whisperKitTranscriber.transcribeEager(
-                samples: samples,
+                samples: truncatedSamples,
                 state: state,
-                language: lang
+                language: lang,
+                audioOffsetSeconds: audioOffsetSeconds
             )
 
             // Update current transcription display (confirmed + hypothesis)

@@ -441,14 +441,16 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
     /// This method uses clipTimestamps and prefixTokens to optimize streaming transcription
     ///
     /// - Parameters:
-    ///   - samples: Audio samples at 16kHz
+    ///   - samples: Audio samples at 16kHz (can be truncated)
     ///   - state: The streaming state that tracks confirmed vs hypothesis words
     ///   - language: Optional language code (nil for auto-detect)
+    ///   - audioOffsetSeconds: If samples are truncated, the offset from original audio start
     /// - Returns: EagerStreamingResult with confirmed and hypothesis text
     public func transcribeEager(
         samples: [Float],
         state: EagerStreamingState,
-        language: Language?
+        language: Language?,
+        audioOffsetSeconds: Float = 0
     ) async throws -> EagerStreamingResult {
         lock.lock()
         let kit = whisperKit
@@ -511,8 +513,8 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
             )
         }
 
-        // Process result through state
-        let (confirmed, hypothesis, wasUpdated) = state.processResult(result)
+        // Process result through state (pass offset for timestamp adjustment)
+        let (confirmed, hypothesis, wasUpdated) = state.processResult(result, audioOffsetSeconds: audioOffsetSeconds)
 
         return EagerStreamingResult(
             confirmedText: confirmed,

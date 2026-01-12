@@ -20,6 +20,9 @@ public final class EagerStreamingState: @unchecked Sendable {
     /// The previous transcription result for comparison
     private var _prevResult: TranscriptionResult?
 
+    /// The previous adjusted words (with offset applied) for comparison
+    private var _prevAdjustedWords: [WordTiming]?
+
     /// Number of token confirmations needed before a word is considered "confirmed"
     /// Higher = more accurate but slower to confirm
     public var tokenConfirmationsNeeded: Int = 2
@@ -80,26 +83,48 @@ public final class EagerStreamingState: @unchecked Sendable {
         _lastAgreedWords = []
         _lastAgreedSeconds = 0
         _prevResult = nil
+        _prevAdjustedWords = nil
     }
 
     /// Process a new transcription result and update state
     /// Returns tuple of (confirmedText, hypothesisText, wasUpdated)
+    /// - Parameters:
+    ///   - result: The transcription result from WhisperKit
+    ///   - audioOffsetSeconds: If audio was truncated, the offset from original start (adjusts timestamps)
     @discardableResult
-    public func processResult(_ result: TranscriptionResult) -> (confirmed: String, hypothesis: String, updated: Bool) {
+    public func processResult(_ result: TranscriptionResult, audioOffsetSeconds: Float = 0) -> (confirmed: String, hypothesis: String, updated: Bool) {
         lock.lock()
         defer { lock.unlock() }
 
+        // Adjust word timestamps if audio was truncated
+        // When audio is truncated, WhisperKit returns timestamps relative to truncated audio (starting at 0)
+        // We need to add the offset to get absolute timestamps
+        let adjustedWords: [WordTiming]
+        if audioOffsetSeconds > 0 {
+            adjustedWords = result.allWords.map { word in
+                WordTiming(
+                    word: word.word,
+                    tokens: word.tokens,
+                    start: word.start + audioOffsetSeconds,
+                    end: word.end + audioOffsetSeconds,
+                    probability: word.probability
+                )
+            }
+        } else {
+            adjustedWords = result.allWords
+        }
+
         // Get words from this result that are after our last agreed point
-        let hypothesisWords = result.allWords.filter { $0.start >= _lastAgreedSeconds }
+        let hypothesisWords = adjustedWords.filter { $0.start >= _lastAgreedSeconds }
 
         var wasUpdated = false
 
-        if let prevResult = _prevResult {
+        if let prevWords = _prevAdjustedWords {
             // Get previous words after last agreed point
-            let prevWords = prevResult.allWords.filter { $0.start >= _lastAgreedSeconds }
+            let prevWordsFiltered = prevWords.filter { $0.start >= _lastAgreedSeconds }
 
             // Find longest common prefix between previous and current
-            let commonPrefix = findLongestCommonPrefix(prevWords, hypothesisWords)
+            let commonPrefix = findLongestCommonPrefix(prevWordsFiltered, hypothesisWords)
 
             // If we have enough matching words, confirm them
             if commonPrefix.count >= tokenConfirmationsNeeded {
@@ -114,10 +139,12 @@ public final class EagerStreamingState: @unchecked Sendable {
             }
         }
 
+        // Store adjusted words for next comparison (not the full result)
+        _prevAdjustedWords = adjustedWords
         _prevResult = result
 
         let confirmedText = _confirmedWords.map { $0.word }.joined()
-        let currentHypothesisWords = result.allWords.filter { $0.start >= _lastAgreedSeconds }
+        let currentHypothesisWords = adjustedWords.filter { $0.start >= _lastAgreedSeconds }
         let hypothesisText = currentHypothesisWords.map { $0.word }.joined()
 
         return (confirmedText, hypothesisText, wasUpdated)
