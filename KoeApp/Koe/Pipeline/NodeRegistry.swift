@@ -510,6 +510,7 @@ public final class NodeRegistry: @unchecked Sendable {
             // Prompt Enhancer - Transforms dictated ideas into well-structured AI prompts
             // Uses Claude best practices: explicit instructions, context, positive framing
             // Uses Qwen 2.5 7B for best speed/quality balance in prompt transformation
+            // Toggleable in pipeline view, no separate settings needed
             NodeInfo(
                 typeId: "ai-prompt-enhancer",
                 displayName: "Prompt",
@@ -520,7 +521,7 @@ public final class NodeRegistry: @unchecked Sendable {
                 outputType: .text,
                 inputDescription: "Raw dictation",
                 showsComparison: true,
-                hasSettings: true,
+                hasSettings: false,  // No separate settings - toggle in pipeline is enough
                 persistenceKey: "aiPromptEnhancerEnabled",
                 exclusiveGroup: "ai-processing",
                 requiresSetup: true,
@@ -567,6 +568,24 @@ public final class NodeRegistry: @unchecked Sendable {
                 persistenceKey: "isAutoEnterEnabled",
                 isExperimental: true
             ),
+
+            // Output Branches (parallel outputs that don't merge back into main flow)
+
+            // Live Preview - Shows real-time transcription overlay near cursor
+            // Branches off after transcription, displays confirmed/hypothesis text
+            NodeInfo(
+                typeId: "live-preview",
+                displayName: "Live Preview",
+                icon: "text.bubble",
+                color: KoeColors.accent,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                outputType: .none,
+                inputDescription: "Transcription text",
+                isAction: true,
+                actionDescription: "Shows live transcription overlay",
+                persistenceKey: "isLivePreviewEnabled"
+            ),
         ])
     }
 }
@@ -596,6 +615,7 @@ extension PipelineStageInfo {
         case .aiPromptEnhancer: return "ai-prompt-enhancer"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
+        case .livePreview: return "live-preview"
         }
     }
 }

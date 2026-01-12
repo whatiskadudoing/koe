@@ -40,6 +40,8 @@ struct NodeSettingsContent: View {
             AutoTypeSettings(appState: appState)
         case .autoEnter:
             AutoEnterSettings(appState: appState)
+        case .livePreview:
+            LivePreviewSettings(appState: appState)
         }
     }
 }
@@ -1801,6 +1803,50 @@ struct AutoEnterSettings: View {
             // Future settings:
             // - Number of enters (1, 2, 3)
             // - Delay after typing
+        }
+    }
+}
+
+// MARK: - Live Preview Settings
+
+struct LivePreviewSettings: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Enable toggle
+            HStack {
+                Toggle(isOn: $appState.isLivePreviewEnabled) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "text.bubble")
+                            .font(.system(size: 12))
+                            .foregroundColor(appState.isLivePreviewEnabled ? KoeColors.accent : KoeColors.textLight)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Live Preview")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(KoeColors.accent)
+
+                            Text("Show transcription overlay")
+                                .font(.system(size: 10))
+                                .foregroundColor(KoeColors.textLight)
+                        }
+                    }
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            }
+
+            Divider()
+
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 10))
+                    .foregroundColor(KoeColors.textLight)
+                Text("Floating overlay near cursor shows real-time transcription")
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textTertiary)
+            }
         }
     }
 }

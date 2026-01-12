@@ -94,8 +94,8 @@ struct PipelineStripView: View {
                     }
                 }
 
-                // Parallel transcription engines section
-                ParallelTranscriptionView(
+                // Parallel transcription engines section with output branches
+                TranscriptionWithBranchesView(
                     nodeController: nodeController,
                     selectedStage: $selectedStage,
                     isTranscribing: appState.recordingState == .transcribing,
@@ -481,6 +481,117 @@ struct ParallelAIProcessingView: View {
             onOpenComposite: onOpenComposite
         )
         .opacity(isDimmed ? 0.4 : (isEnabled ? 1.0 : 0.6))
+    }
+}
+
+// MARK: - Transcription With Output Branches View
+
+/// Wraps ParallelTranscriptionView and adds output branches below
+/// Output branches split off from transcription but don't merge back to main pipeline
+struct TranscriptionWithBranchesView: View {
+    let nodeController: NodeStateController<PipelineStageInfo>
+    @Binding var selectedStage: PipelineStageInfo?
+    let isTranscribing: Bool
+    let onOpenSettings: (PipelineStageInfo) -> Void
+    var onSetupRequired: ((NodeInfo) -> Void)?
+    var onOpenComposite: ((NodeInfo) -> Void)?
+
+    private var isLivePreviewEnabled: Bool {
+        nodeController.isEnabled(.livePreview)
+    }
+
+    private var isAppleEnabled: Bool {
+        nodeController.isEnabled(.transcribeApple)
+    }
+
+    private var isBalancedEnabled: Bool {
+        nodeController.isEnabled(.transcribeWhisperKitBalanced)
+    }
+
+    private var isAccurateEnabled: Bool {
+        nodeController.isEnabled(.transcribeWhisperKitAccurate)
+    }
+
+    private var isAnyTranscriptionEnabled: Bool {
+        isAppleEnabled || isBalancedEnabled || isAccurateEnabled
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Main transcription section
+            ParallelTranscriptionView(
+                nodeController: nodeController,
+                selectedStage: $selectedStage,
+                isTranscribing: isTranscribing,
+                onOpenSettings: onOpenSettings,
+                onSetupRequired: onSetupRequired,
+                onOpenComposite: onOpenComposite
+            )
+
+            // Output branch section (below transcription)
+            HStack(alignment: .top, spacing: 0) {
+                // Spacer to align with merge point
+                // Width = splitConnector + nodeWidth + part of mergeConnector
+                Spacer()
+                    .frame(width: PipelineLayout.splitConnectorWidth + PipelineLayout.nodeWidth)
+
+                // Branch connector going down from merge line
+                BranchDownConnector(
+                    isActive: isLivePreviewEnabled && isAnyTranscriptionEnabled
+                )
+
+                // Live Preview node
+                PipelineNodeView(
+                    stage: .livePreview,
+                    isEnabled: nodeController.binding(for: .livePreview),
+                    isSelected: selectedStage == .livePreview,
+                    isRunning: isTranscribing && isLivePreviewEnabled,
+                    metrics: nil,
+                    onToggle: { nodeController.toggle(.livePreview) },
+                    onOpenSettings: { onOpenSettings(.livePreview) },
+                    onSetupRequired: onSetupRequired,
+                    onOpenComposite: onOpenComposite
+                )
+                .opacity(isLivePreviewEnabled ? 1.0 : 0.6)
+            }
+            .padding(.top, 4)
+        }
+    }
+}
+
+// MARK: - Branch Down Connector
+
+/// Draws a line that branches down from the transcription merge point
+struct BranchDownConnector: View {
+    let isActive: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            let color = isActive ? PipelineLayout.activeColor : PipelineLayout.inactiveColor
+            let lineWidth = PipelineLayout.connectorLineWidth
+            let nodeCenter = PipelineLayout.nodeSize / 2
+
+            // Vertical line going down from top
+            var vPath = Path()
+            vPath.move(to: CGPoint(x: lineWidth / 2, y: 0))
+            vPath.addLine(to: CGPoint(x: lineWidth / 2, y: nodeCenter))
+            context.stroke(
+                vPath,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+            )
+
+            // Horizontal line to node
+            var hPath = Path()
+            hPath.move(to: CGPoint(x: lineWidth / 2, y: nodeCenter))
+            hPath.addLine(to: CGPoint(x: size.width, y: nodeCenter))
+            context.stroke(
+                hPath,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+            )
+        }
+        .frame(width: PipelineLayout.simpleConnectorWidth, height: PipelineLayout.nodeSize)
     }
 }
 

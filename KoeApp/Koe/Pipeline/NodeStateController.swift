@@ -261,6 +261,7 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .aiPromptEnhancer: return "ai-prompt-enhancer"
                 case .autoType: return "auto-type"
                 case .autoEnter: return "auto-enter"
+                case .livePreview: return "live-preview"
                 }
             },
             getPersistedState: { node in
@@ -276,6 +277,7 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .aiReasoning: return appState.isAIReasoningEnabled
                 case .aiPromptEnhancer: return appState.isAIPromptEnhancerEnabled
                 case .autoEnter: return appState.isAutoEnterEnabled
+                case .livePreview: return appState.isLivePreviewEnabled
                 default: return true
                 }
             },
@@ -291,6 +293,7 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .aiReasoning: appState.isAIReasoningEnabled = enabled
                 case .aiPromptEnhancer: appState.isAIPromptEnhancerEnabled = enabled
                 case .autoEnter: appState.isAutoEnterEnabled = enabled
+                case .livePreview: appState.isLivePreviewEnabled = enabled
                 default: break
                 }
             },

@@ -134,6 +134,12 @@ public final class AppState {
         }
     }
 
+    public var isLivePreviewEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isLivePreviewEnabled, forKey: "isLivePreviewEnabled")
+        }
+    }
+
     // MARK: - Transcription Engine Selection (mutually exclusive)
 
     /// Whether WhisperKit transcription is enabled
@@ -557,6 +563,9 @@ public final class AppState {
         }
         if UserDefaults.standard.object(forKey: "isAutoEnterEnabled") != nil {
             isAutoEnterEnabled = UserDefaults.standard.bool(forKey: "isAutoEnterEnabled")
+        }
+        if UserDefaults.standard.object(forKey: "isLivePreviewEnabled") != nil {
+            isLivePreviewEnabled = UserDefaults.standard.bool(forKey: "isLivePreviewEnabled")
         }
 
         // Load transcription engine states (default: Apple Speech enabled)

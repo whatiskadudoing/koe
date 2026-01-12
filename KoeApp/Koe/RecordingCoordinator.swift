@@ -371,6 +371,11 @@ public final class RecordingCoordinator {
             // Update overlay
             RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .recording)
 
+            // Show live preview overlay if enabled
+            if AppState.shared.isLivePreviewEnabled {
+                TranscriptionOverlayController.shared.show()
+            }
+
             // Start audio level monitoring
             startLevelMonitoring()
 
@@ -433,6 +438,9 @@ public final class RecordingCoordinator {
         // Update AppState to idle
         AppState.shared.recordingState = .idle
         RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .idle)
+
+        // Hide live preview overlay
+        TranscriptionOverlayController.shared.hide()
     }
 
     // MARK: - Private Methods
@@ -560,6 +568,9 @@ public final class RecordingCoordinator {
         // Use shorter interval for eager mode (more responsive)
         // Phase 2: Reduced from 1.0s to 0.5s for faster updates
         let interval: TimeInterval = AppState.shared.isWhisperKitEnabled ? 0.5 : 1.5
+        NSLog(
+            "[EagerOpt] Starting streaming timer with interval=%.1fs, whisperKitEnabled=%d", interval,
+            AppState.shared.isWhisperKitEnabled ? 1 : 0)
         streamingTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.transcribeStreamingBuffer(language: language)
@@ -584,6 +595,15 @@ public final class RecordingCoordinator {
         let recentSamples = Array(samples.suffix(recentSampleCount))
         let isSpeakingNow = vadProcessor.containsSpeech(recentSamples)
 
+        // Debug: calculate VAD score to understand behavior
+        let vadScore = vadProcessor.detectVoiceActivity(in: recentSamples)
+        let rms = vadProcessor.calculateRMS(recentSamples)
+        if rms > 0.001 {  // Only log if there's any audio
+            NSLog(
+                "[EagerOpt] VAD score=%.3f (threshold=%.2f), RMS=%.4f, speaking=%d", vadScore,
+                vadProcessor.silenceThreshold, rms, isSpeakingNow ? 1 : 0)
+        }
+
         // Determine if we should transcribe based on VAD
         let shouldTranscribe: Bool
         if AppState.shared.isWhisperKitEnabled {
@@ -598,6 +618,17 @@ public final class RecordingCoordinator {
             let timeSinceLastTranscribe = lastStreamingTranscribeTime.map { Date().timeIntervalSince($0) } ?? 999
 
             shouldTranscribe = timeSinceLastTranscribe >= minInterval && (speechPauseDetected || hasEnoughNewAudio)
+
+            NSLog(
+                "[EagerOpt] VAD: speaking=%d, wasSpeaking=%d, newAudio=%.2fs, timeSince=%.2fs, shouldTranscribe=%d",
+                isSpeakingNow ? 1 : 0, wasRecentlySpeaking ? 1 : 0, newAudioSeconds, timeSinceLastTranscribe,
+                shouldTranscribe ? 1 : 0)
+
+            if shouldTranscribe {
+                let reason =
+                    speechPauseDetected ? "speech pause" : "enough audio (\(String(format: "%.1f", newAudioSeconds))s)"
+                logger.info("[EagerOpt] Triggering transcription: \(reason)")
+            }
         } else {
             // For Apple Speech: need at least 0.5s of new audio
             shouldTranscribe = newAudioSeconds > 0.5
@@ -649,10 +680,17 @@ public final class RecordingCoordinator {
                 // Truncate audio to only unconfirmed portion + overlap
                 truncatedSamples = Array(samples[skipSamples...])
                 audioOffsetSeconds = Float(skipSamples) / sampleRate
+                let fullDuration = Float(samples.count) / sampleRate
+                let truncatedDuration = Float(truncatedSamples.count) / sampleRate
+                NSLog(
+                    "[EagerOpt] Audio TRUNCATED: %.1fs -> %.1fs (skipped %.1fs)", fullDuration, truncatedDuration,
+                    audioOffsetSeconds)
             } else {
                 // Use full audio (not enough confirmed yet)
                 truncatedSamples = samples
                 audioOffsetSeconds = 0
+                let fullDuration = Float(samples.count) / sampleRate
+                NSLog("[EagerOpt] Full audio: %.1fs (no truncation yet)", fullDuration)
             }
 
             let result = try await whisperKitTranscriber.transcribeEager(
@@ -665,6 +703,20 @@ public final class RecordingCoordinator {
             // Update current transcription display (confirmed + hypothesis)
             let fullText = result.fullText
             currentTranscription = fullText
+
+            // Update live preview overlay with styled text
+            if AppState.shared.isLivePreviewEnabled {
+                TranscriptionOverlayController.shared.updateText(
+                    confirmed: result.confirmedText,
+                    hypothesis: result.hypothesisText
+                )
+            }
+
+            // Log streaming progress
+            let confirmedCount = state.confirmedWords.count
+            NSLog(
+                "[EagerOpt] Result: %d confirmed words, lastAgreed=%.1fs, updated=%d", confirmedCount,
+                state.lastAgreedSeconds, result.wasUpdated ? 1 : 0)
 
             // Only type during recording if in realtime mode
             if shouldTypeWhileRecording && result.wasUpdated {
@@ -699,6 +751,14 @@ public final class RecordingCoordinator {
             )
 
             if !text.isEmpty && text != lastTypedText {
+                // Update live preview overlay (all as confirmed since no hypothesis)
+                if AppState.shared.isLivePreviewEnabled {
+                    TranscriptionOverlayController.shared.updateText(
+                        confirmed: text,
+                        hypothesis: ""
+                    )
+                }
+
                 let newText = getNewText(previous: lastTypedText, current: text)
                 if !newText.isEmpty {
                     do {
@@ -745,16 +805,24 @@ public final class RecordingCoordinator {
             // For WhisperKit with eager streaming, finalize to get complete transcription
             // Most transcription work already done during streaming
             if AppState.shared.isWhisperKitEnabled,
-               let state = eagerStreamingState,
-               state.confirmedWords.count > 0
+                let state = eagerStreamingState,
+                state.confirmedWords.count > 0
             {
+                NSLog(
+                    "[EagerOpt] FINALIZING with %d confirmed words, lastAgreed=%.1fs", state.confirmedWords.count,
+                    state.lastAgreedSeconds)
                 // Finalize and get complete transcription (only processes remaining audio)
                 rawText = try await whisperKitTranscriber.finalizeEagerStreaming(
                     samples: samples,
                     state: state,
                     language: lang
                 )
+                NSLog("[EagerOpt] Final text: %d chars", rawText.count)
             } else {
+                let confirmedCount = eagerStreamingState?.confirmedWords.count ?? 0
+                NSLog(
+                    "[EagerOpt] Using STANDARD transcription (confirmedWords=%d, whisperKitEnabled=%d)", confirmedCount,
+                    AppState.shared.isWhisperKitEnabled ? 1 : 0)
                 // Standard transcription (no eager state or Apple Speech)
                 rawText = try await activeTranscriber.transcribe(
                     samples: samples,

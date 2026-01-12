@@ -25,6 +25,9 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     case autoType  // Types the text
     case autoEnter  // Presses enter
 
+    // Output branches (parallel outputs that don't merge back)
+    case livePreview  // Shows real-time transcription overlay near cursor
+
     var id: String { rawValue }
 
     var displayName: String {
@@ -42,6 +45,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .aiPromptEnhancer: return "Prompt"
         case .autoType: return "Type"
         case .autoEnter: return "Enter"
+        case .livePreview: return "Live Preview"
         }
     }
 
@@ -89,6 +93,14 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Whether this is an output branch (parallel output that doesn't merge back)
+    var isOutputBranch: Bool {
+        switch self {
+        case .livePreview: return true
+        default: return false
+        }
+    }
+
     /// Pipeline element typeId for metrics lookup
     /// Returns nil for stages that aren't tracked as pipeline elements
     var pipelineTypeId: String? {
@@ -106,6 +118,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .aiPromptEnhancer: return "ai-prompt-enhancer"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
+        case .livePreview: return "live-preview"
         }
     }
 
@@ -132,6 +145,11 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Sequential stages after AI processing merge
     static var postAIProcessingStages: [PipelineStageInfo] {
         [.autoType, .autoEnter]
+    }
+
+    /// Output branch stages (parallel outputs that branch off but don't merge back)
+    static var outputBranchStages: [PipelineStageInfo] {
+        [.livePreview]
     }
 
     /// Sequential stages after triggers (includes all)
