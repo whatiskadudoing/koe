@@ -92,7 +92,9 @@ public final class EagerStreamingState: @unchecked Sendable {
     ///   - result: The transcription result from WhisperKit
     ///   - audioOffsetSeconds: If audio was truncated, the offset from original start (adjusts timestamps)
     @discardableResult
-    public func processResult(_ result: TranscriptionResult, audioOffsetSeconds: Float = 0) -> (confirmed: String, hypothesis: String, updated: Bool) {
+    public func processResult(
+        _ result: TranscriptionResult, audioOffsetSeconds: Float = 0
+    ) -> (confirmed: String, hypothesis: String, updated: Bool) {
         lock.lock()
         defer { lock.unlock() }
 

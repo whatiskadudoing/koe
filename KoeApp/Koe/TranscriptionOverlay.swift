@@ -46,7 +46,8 @@ class TranscriptionOverlayController {
 
     private func repositionWindow() {
         guard let window = window,
-              let cursorPos = initialCursorPosition else { return }
+            let cursorPos = initialCursorPosition
+        else { return }
 
         // Find screen containing cursor
         let screen = NSScreen.screens.first { NSMouseInRect(cursorPos, $0.frame, false) } ?? NSScreen.main

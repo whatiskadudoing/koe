@@ -89,8 +89,18 @@ Key parameters in `EagerStreamingState`:
 |-----------|---------|-------------|
 | `tokenConfirmationsNeeded` | 2 | Runs needed to confirm a word |
 | Streaming interval | 0.5s | Timer interval for streaming |
-| VAD silence threshold | 0.012 | RMS threshold for speech detection |
+| VAD score threshold | 0.15 | Multi-feature VAD score threshold (0-1) |
 | Audio overlap | 0.5s | Context kept when truncating |
+
+### Multi-Feature VAD
+
+The VAD (Voice Activity Detection) uses multiple audio features for robust speech detection:
+
+1. **Energy Score (50%)** - Normalized RMS energy, sensitive to quiet microphones
+2. **Zero-Crossing Rate (25%)** - Optimal around 0.08 for voiced speech
+3. **Spectral Flatness (25%)** - Lower flatness indicates tonal/speech content
+
+Combined score is compared against threshold (0.15) to detect speech, making it more robust than simple RMS thresholding.
 
 ## Performance Benchmarks
 

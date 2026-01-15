@@ -488,9 +488,9 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
             detectLanguage: isAutoDetect,
             skipSpecialTokens: true,
             withoutTimestamps: false,  // Need timestamps for word alignment
-            wordTimestamps: true,      // Required for eager mode
+            wordTimestamps: true,  // Required for eager mode
             firstTokenLogProbThreshold: -1.5,  // Higher threshold to prevent fallbacks
-            chunkingStrategy: .none    // We handle chunking ourselves
+            chunkingStrategy: .none  // We handle chunking ourselves
         )
 
         // Apply streaming context from state

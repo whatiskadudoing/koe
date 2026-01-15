@@ -163,6 +163,7 @@ public final class PipelineManager {
     public func processText(
         _ text: String, prePipelineContext: PrePipelineContext? = nil
     ) async throws -> PipelineResult {
+        NSLog("[Pipeline] processText called with %d chars", text.count)
         let (pipeline, context) = createPipeline(forTranscription: text)
 
         // Create orchestrator
@@ -250,30 +251,68 @@ public final class PipelineManager {
         case "text-improve":
             if let stage = element as? TextImproveStage {
                 stage.processHandler = { [weak self] text, config in
-                    guard let self = self else { return text }
+                    NSLog(
+                        "[TextImprove] Handler called with %d chars, config.isActive=%d", text.count,
+                        config.isActive ? 1 : 0)
+                    guard let self = self else {
+                        NSLog("[TextImprove] self is nil, returning original text")
+                        return text
+                    }
+
+                    // Check if any AI engine is actually enabled
+                    let activeAI = self.getActiveAIEngine()
+                    NSLog(
+                        "[TextImprove] activeAI=%@, aiService.isReady=%d", activeAI ?? "none",
+                        self.aiService.isReady ? 1 : 0)
+
+                    // If no AI engine is enabled, skip AI processing
+                    guard activeAI != nil else {
+                        NSLog("[TextImprove] No AI engine enabled, returning original text")
+                        return text
+                    }
+
+                    // Check if AI service is ready, if not return original text
+                    // This prevents hanging when Ollama isn't running
+                    if !self.aiService.isReady {
+                        NSLog("[TextImprove] AI service not ready, preparing...")
+                        await self.aiService.prepare()
+                        if !self.aiService.isReady {
+                            NSLog("[TextImprove] AI service still not ready after prepare, returning original text")
+                            return text
+                        }
+                    }
 
                     // Check if prompt enhancer mode is enabled
                     if AppState.shared.isAIPromptEnhancerEnabled {
+                        NSLog("[TextImprove] Using prompt enhancer mode")
                         // Use the promptImprover refinement mode
-                        return try await self.aiService.refine(
+                        let result = try await self.aiService.refine(
                             text: text, mode: .promptImprover, customPrompt: nil)
+                        NSLog("[TextImprove] Prompt enhancer completed with %d chars", result.count)
+                        return result
                     }
 
                     // Check if translation is enabled from sub-nodes
-                    let subSettings = SubPipelineSettingsReader.readSettings(
-                        for: self.getActiveAIEngine() ?? "")
+                    let subSettings = SubPipelineSettingsReader.readSettings(for: activeAI!)
+                    NSLog("[TextImprove] translateEnabled=%d", subSettings.translateEnabled ? 1 : 0)
                     if subSettings.translateEnabled {
                         let targetLang = self.getSelectedLanguageFromSubNodes() ?? "Spanish"
+                        NSLog("[TextImprove] Using translation to %@", targetLang)
                         let systemInstruction =
                             "You are a translator. Translate the user's text to \(targetLang). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
                         let userPrompt = "Translate this: \(text)"
-                        return try await self.aiService.refine(
+                        let result = try await self.aiService.refine(
                             text: userPrompt, mode: .custom, customPrompt: systemInstruction)
+                        NSLog("[TextImprove] Translation completed")
+                        return result
                     }
 
                     // Default: use cleanup mode
-                    return try await self.aiService.refine(
+                    NSLog("[TextImprove] Using cleanup mode, calling aiService.refine...")
+                    let result = try await self.aiService.refine(
                         text: text, mode: .cleanup, customPrompt: nil)
+                    NSLog("[TextImprove] Cleanup completed with %d chars", result.count)
+                    return result
                 }
             }
 
@@ -552,8 +591,9 @@ public final class PipelineManager {
                 // Add AI engine info
                 if let aiEngine = activeAI {
                     customData["aiEngine"] = .string(aiEngine)
-                    let aiInfo = NodeRegistry.shared.nodeOrDefault(for: aiEngine)
-                    customData["modelName"] = .string(aiInfo.displayName)
+                    // Use actual model name from settings, not node display name
+                    let actualModelName = self.getActualAIModelName()
+                    customData["modelName"] = .string(actualModelName)
                 }
 
                 // Capture sub-pipeline settings for AI nodes
@@ -582,8 +622,9 @@ public final class PipelineManager {
                 // Add AI engine info
                 if let aiEngine = activeAI {
                     customData["aiEngine"] = .string(aiEngine)
-                    let aiInfo = NodeRegistry.shared.nodeOrDefault(for: aiEngine)
-                    customData["modelName"] = .string(aiInfo.displayName)
+                    // Use actual model name from settings, not node display name
+                    let actualModelName = self.getActualAIModelName()
+                    customData["modelName"] = .string(actualModelName)
                 }
 
                 // Capture sub-pipeline settings for AI nodes
@@ -698,8 +739,9 @@ public final class PipelineManager {
 
         // Save via centralized service (handles retention policy & auto-pruning)
         do {
+            NSLog("[Pipeline] ABOUT TO SAVE execution data id=%@", runId.uuidString)
             try await PipelineDataService.shared.save(executionData)
-            NSLog("[Pipeline] Saved execution data via PipelineDataService, id=%@", runId.uuidString)
+            NSLog("[Pipeline] SAVED execution data via PipelineDataService, id=%@", runId.uuidString)
             // Notify UI to refresh history
             await MainActor.run {
                 NotificationCenter.default.post(name: .pipelineExecutionSaved, object: nil)
@@ -738,6 +780,19 @@ public final class PipelineManager {
             return "ai-prompt-enhancer"
         }
         return nil
+    }
+
+    /// Get the actual AI model name being used (e.g., "qwen2.5:7b" for Ollama)
+    private func getActualAIModelName() -> String {
+        let tier = AppState.shared.currentAITier
+        switch tier {
+        case .custom:
+            // For Ollama/custom tier, use the configured model name
+            let model = AppState.shared.ollamaModel
+            return model.isEmpty ? "ollama" : model
+        case .best:
+            return "qwen-3b"
+        }
     }
 }
 

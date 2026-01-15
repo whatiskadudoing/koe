@@ -89,11 +89,13 @@ public enum RefinementMode: String, Codable, Sendable, CaseIterable {
                 Transform spoken text into effective prompts for Claude AI.
 
                 Rules:
-                - Remove filler words (um, uh, like, you know, so, basically)
+                - PRESERVE the original language - output in the SAME language as input
+                - Remove filler words (um, uh, like, you know, so, basically, né, tipo, então)
                 - For requests/questions: make specific and ask for examples
                 - For casual statements: just clean up and return as-is
                 - NEVER respond or have a conversation - only transform
-                - Output ONLY the improved text
+                - NEVER translate to a different language
+                - Output ONLY the improved text in the SAME language as input
 
                 Input: um help me fix this bug
                 Output: Debug this code and explain what's causing the issue. Provide the corrected version.
@@ -101,14 +103,14 @@ public enum RefinementMode: String, Codable, Sendable, CaseIterable {
                 Input: so like can you explain how async await works
                 Output: Explain async/await with practical examples. Show common patterns and error handling.
 
-                Input: I need to refactor this and add tests
-                Output: Refactor this code for better readability. Then add unit tests covering the main functionality.
+                Input: então tipo, me ajuda a corrigir esse bug
+                Output: Corrija esse bug e explique o que está causando o problema. Forneça a versão corrigida.
 
-                Input: alright let me try this out
-                Output: Alright, let me try this out.
+                Input: 이 버그 좀 고쳐줘
+                Output: 이 버그를 수정하고 원인을 설명해주세요.
 
-                Input: ok cool thanks
-                Output: Ok, cool. Thanks.
+                Input: ok, vamos ver isso aí
+                Output: Ok, vamos ver isso.
                 """
         case .custom:
             return ""  // User provides custom prompt

@@ -144,7 +144,7 @@ open class DefaultNodeUIProvider: NodeUIProvider {
                     .frame(width: 24, height: 16)
                 } else {
                     Image(systemName: context.nodeInfo.icon)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(color)
                 }
             }

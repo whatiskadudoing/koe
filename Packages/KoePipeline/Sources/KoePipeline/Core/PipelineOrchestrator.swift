@@ -155,16 +155,20 @@ public actor PipelineOrchestrator {
 
     /// Run a pipeline
     public func run(_ pipeline: Pipeline, initialContext: PipelineContext? = nil) async throws -> PipelineContext {
+        NSLog("[Orchestrator] run() called with %d elements", pipeline.elements.count)
         guard !isRunning else {
+            NSLog("[Orchestrator] ERROR: already running")
             throw PipelineError.alreadyRunning
         }
 
         // Validate first
         let validation = validate(pipeline)
         guard validation.isValid else {
+            NSLog("[Orchestrator] ERROR: validation failed")
             throw PipelineError.validationFailed(validation.errors)
         }
 
+        NSLog("[Orchestrator] Validation passed, starting execution")
         isRunning = true
         defer { isRunning = false }
 
@@ -202,7 +206,9 @@ public actor PipelineOrchestrator {
         let totalElements = Double(elements.count)
         let enabledElementTypes = enabledElements.map { $0.typeId }
 
+        NSLog("[Orchestrator] Starting element loop with %d elements", elements.count)
         for (index, element) in elements.enumerated() {
+            NSLog("[Orchestrator] Processing element %d: %@", index, element.displayName)
             // Check for cancellation
             if context.isCancelled {
                 // Record cancelled metrics
@@ -286,8 +292,10 @@ public actor PipelineOrchestrator {
             context.recordMetrics(metrics)
 
             onElementCompleted?(element.id, duration)
+            NSLog("[Orchestrator] Element %d completed: %@", index, element.displayName)
         }
 
+        NSLog("[Orchestrator] All elements completed, starting cleanup")
         // Cleanup
         for element in elements {
             await element.cleanup()

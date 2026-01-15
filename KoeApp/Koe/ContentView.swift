@@ -11,6 +11,9 @@ struct ContentView: View {
     @Environment(MeetingCoordinator.self) private var meetingCoordinator
     @ObservedObject private var backgroundService = BackgroundModelService.shared
 
+    /// Feature flag: disable meeting mode (keep code, but don't run it)
+    private let meetingFeatureEnabled = false
+
     @State private var selectedTab: AppTab = .dictation
 
     /// Track if we auto-switched to meetings (to know if we should auto-return)
@@ -107,31 +110,34 @@ struct ContentView: View {
     // MARK: - Tab Switch Observers
 
     private func setupTabSwitchObservers() {
-        // Observe meeting detected - switch to meetings tab
-        NotificationCenter.default.addObserver(
-            forName: .meetingDetectedSwitchTab,
-            object: nil,
-            queue: .main
-        ) { _ in
-            // Only auto-switch if we're on dictation and not recording
-            if selectedTab == .dictation && appState.recordingState == .idle {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    selectedTab = .meetings
-                    didAutoSwitchToMeetings = true
+        // Meeting observers (only if feature enabled)
+        if meetingFeatureEnabled {
+            // Observe meeting detected - switch to meetings tab
+            NotificationCenter.default.addObserver(
+                forName: .meetingDetectedSwitchTab,
+                object: nil,
+                queue: .main
+            ) { _ in
+                // Only auto-switch if we're on dictation and not recording
+                if selectedTab == .dictation && appState.recordingState == .idle {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        selectedTab = .meetings
+                        didAutoSwitchToMeetings = true
+                    }
                 }
             }
-        }
 
-        // Observe meeting ended - return to dictation if we auto-switched
-        NotificationCenter.default.addObserver(
-            forName: .meetingEndedSwitchTab,
-            object: nil,
-            queue: .main
-        ) { _ in
-            if didAutoSwitchToMeetings {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    selectedTab = .dictation
-                    didAutoSwitchToMeetings = false
+            // Observe meeting ended - return to dictation if we auto-switched
+            NotificationCenter.default.addObserver(
+                forName: .meetingEndedSwitchTab,
+                object: nil,
+                queue: .main
+            ) { _ in
+                if didAutoSwitchToMeetings {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        selectedTab = .dictation
+                        didAutoSwitchToMeetings = false
+                    }
                 }
             }
         }
@@ -167,7 +173,7 @@ struct ContentView: View {
                 Spacer()
 
                 // Tab toggle
-                TabToggle(selectedTab: $selectedTab, onManualSwitch: handleManualTabSwitch)
+                TabToggle(selectedTab: $selectedTab, onManualSwitch: handleManualTabSwitch, meetingFeatureEnabled: meetingFeatureEnabled)
 
                 Spacer()
             }
@@ -275,6 +281,8 @@ struct TabToggle: View {
     @Binding var selectedTab: ContentView.AppTab
     /// Binding to clear auto-switch flag when user manually switches
     var onManualSwitch: ((ContentView.AppTab) -> Void)?
+    /// Feature flag for meeting mode
+    var meetingFeatureEnabled: Bool = false
 
     /// Observe JobScheduler for reactive badge updates
     @ObservedObject private var scheduler = JobScheduler.shared
@@ -297,16 +305,18 @@ struct TabToggle: View {
                 }
             }
 
-            // Meetings tab - video icon
-            TabIconButton(
-                icon: "video.fill",
-                isSelected: selectedTab == .meetings,
-                selectedColor: accentColor,
-                unselectedColor: lightGray
-            ) {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    selectedTab = .meetings
-                    onManualSwitch?(.meetings)
+            // Meetings tab - video icon (feature flagged)
+            if meetingFeatureEnabled {
+                TabIconButton(
+                    icon: "video.fill",
+                    isSelected: selectedTab == .meetings,
+                    selectedColor: accentColor,
+                    unselectedColor: lightGray
+                ) {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        selectedTab = .meetings
+                        onManualSwitch?(.meetings)
+                    }
                 }
             }
 

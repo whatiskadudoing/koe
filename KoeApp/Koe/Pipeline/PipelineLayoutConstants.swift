@@ -70,6 +70,32 @@ enum PipelineLayout {
     /// Inactive connector color
     static var inactiveColor: Color { KoeColors.textLighter.opacity(0.4) }
 
+    // MARK: - Vertical Layout (Stage Containers)
+
+    /// Width of compact nodes in accordions
+    static let compactNodeSize: CGFloat = 48
+
+    /// Spacing between stage containers
+    static let stageContainerSpacing: CGFloat = 8
+
+    /// Height of vertical connector between containers
+    static let verticalConnectorHeight: CGFloat = 20
+
+    /// Horizontal spacing between nodes in a row
+    static let nodeRowSpacing: CGFloat = 12
+
+    /// Vertical spacing between rows in a multi-row container
+    static let rowSpacing: CGFloat = 12
+
+    /// Container header height
+    static let stageHeaderHeight: CGFloat = 20
+
+    /// Accordion indent from container edge
+    static let accordionIndent: CGFloat = 16
+
+    /// Accordion vertical padding
+    static let accordionPaddingV: CGFloat = 12
+
     // MARK: - Calculations
 
     /// Calculate total height for a parallel section with N nodes

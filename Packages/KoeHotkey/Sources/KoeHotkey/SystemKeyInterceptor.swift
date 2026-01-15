@@ -180,9 +180,9 @@ private func systemKeyCallback(
 
 // MARK: - Key Codes Reference
 
-public extension SystemKeyInterceptor {
+extension SystemKeyInterceptor {
     /// Common key codes for reference
-    enum KeyCode: Int64 {
+    public enum KeyCode: Int64 {
         case f1 = 122
         case f2 = 120
         case f3 = 99
