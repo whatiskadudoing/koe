@@ -1,5 +1,6 @@
 import KoeDomain
 import KoeHotkey
+import KoeRefinement
 import KoeUI
 import SwiftUI
 
@@ -36,6 +37,8 @@ struct NodeSettingsContent: View {
             AIReasoningSettings(appState: appState)
         case .aiPromptEnhancer:
             AIPromptEnhancerSettings(appState: appState)
+        case .gemini:
+            GeminiSettings(appState: appState)
         case .autoType:
             AutoTypeSettings(appState: appState)
         case .autoEnter:
@@ -51,63 +54,105 @@ struct NodeSettingsContent: View {
 struct HotkeyTriggerSettings: View {
     @Bindable var appState: AppState
 
-    private let presets: [(name: String, keyCode: UInt32, modifiers: Int, display: String)] = [
-        ("Option + Space", 49, 2, "⌥ Space"),
-        ("Right Option", 61, 0, "R-⌥"),
-        ("Ctrl + Space", 49, 4, "⌃ Space"),
-        ("F5", 96, 0, "F5"),
-    ]
+    private var isFnAlone: Bool {
+        appState.hotkeyKeyCode == 63
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Press and hold to record")
-                .font(.system(size: 12))
+            Text("Push-to-Talk Trigger")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(KoeColors.accent)
+
+            Text("Hold to record, release to stop")
+                .font(.system(size: 11))
                 .foregroundColor(KoeColors.textSecondary)
 
-            // Current hotkey display
-            HStack {
-                Text("Current:")
-                    .font(.system(size: 11))
-                    .foregroundColor(KoeColors.textLight)
+            Divider()
 
-                Text(appState.hotkeyDisplayString)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(KoeColors.accent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(KoeColors.surface)
-                    .cornerRadius(6)
+            // fn alone option
+            TriggerOption(
+                title: "fn (Globe key)",
+                description: "Hold fn for 0.3s to start recording",
+                isSelected: isFnAlone
+            ) {
+                appState.hotkeyKeyCode = 63
+                appState.hotkeyModifiers = 0
             }
 
-            // Preset shortcuts
+            // fn + Space option
+            TriggerOption(
+                title: "fn + Space",
+                description: "Toggle mode: press to start/stop",
+                isSelected: !isFnAlone
+            ) {
+                appState.hotkeyKeyCode = 49
+                appState.hotkeyModifiers = 16
+            }
+
+            Divider()
+
+            // How it works explanation
             VStack(alignment: .leading, spacing: 6) {
-                Text("Presets")
+                Text("How it works")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(KoeColors.textTertiary)
 
-                HStack(spacing: 6) {
-                    ForEach(presets, id: \.name) { preset in
-                        Button(action: {
-                            appState.hotkeyKeyCode = preset.keyCode
-                            appState.hotkeyModifiers = preset.modifiers
-                        }) {
-                            Text(preset.display)
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundColor(isSelected(preset) ? .white : KoeColors.accent)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 5)
-                                .background(isSelected(preset) ? KoeColors.accent : KoeColors.surface)
-                                .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                if isFnAlone {
+                    Text("Quick tap opens emoji picker (normal behavior). Hold for 0.3s+ to record.")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("fn+Space to start recording. fn+Space again to stop. Any other key cancels.")
+                        .font(.system(size: 10))
+                        .foregroundColor(KoeColors.textLight)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
     }
+}
 
-    private func isSelected(_ preset: (name: String, keyCode: UInt32, modifiers: Int, display: String)) -> Bool {
-        appState.hotkeyKeyCode == preset.keyCode && appState.hotkeyModifiers == preset.modifiers
+// MARK: - Trigger Option Row
+
+private struct TriggerOption: View {
+    let title: String
+    let description: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                // Radio indicator
+                Circle()
+                    .stroke(isSelected ? KoeColors.accent : KoeColors.textLight, lineWidth: 1.5)
+                    .background(
+                        Circle()
+                            .fill(isSelected ? KoeColors.accent : Color.clear)
+                            .padding(3)
+                    )
+                    .frame(width: 16, height: 16)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                        .foregroundColor(isSelected ? KoeColors.accent : KoeColors.textPrimary)
+
+                    Text(description)
+                        .font(.system(size: 9))
+                        .foregroundColor(KoeColors.textLight)
+                }
+
+                Spacer()
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .background(isSelected ? KoeColors.accent.opacity(0.1) : Color.clear)
+            .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1719,6 +1764,125 @@ struct AIPromptEnhancerSettings: View {
                         .foregroundColor(KoeColors.textTertiary)
                 }
             }
+        }
+    }
+}
+
+// MARK: - Gemini Settings (Google Cloud AI)
+
+struct GeminiSettings: View {
+    @Bindable var appState: AppState
+    @State private var apiKey: String = GeminiService.shared.apiKey ?? ""
+    @State private var isKeyVisible: Bool = false
+
+    private var hasApiKey: Bool {
+        !apiKey.isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // API Key input
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(hasApiKey ? Color.green : Color.orange)
+                        .frame(width: 8, height: 8)
+                    Text(hasApiKey ? "API Key configured" : "API Key required")
+                        .font(.system(size: 11))
+                        .foregroundColor(hasApiKey ? KoeColors.textSecondary : .orange)
+                }
+
+                HStack(spacing: 6) {
+                    if isKeyVisible {
+                        TextField("Enter API Key", text: $apiKey)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 11, design: .monospaced))
+                    } else {
+                        SecureField("Enter API Key", text: $apiKey)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 11, design: .monospaced))
+                    }
+
+                    Button(action: { isKeyVisible.toggle() }) {
+                        Image(systemName: isKeyVisible ? "eye.slash" : "eye")
+                            .font(.system(size: 10))
+                            .foregroundColor(KoeColors.textLight)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(KoeColors.surface)
+                .cornerRadius(6)
+                .onChange(of: apiKey) { _, newValue in
+                    GeminiService.shared.apiKey = newValue.isEmpty ? nil : newValue
+                }
+
+                Button(action: {
+                    if let url = URL(string: "https://aistudio.google.com/apikey") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "key")
+                            .font(.system(size: 9))
+                        Text("Get free API key from Google AI Studio")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(KoeColors.accent)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Divider()
+
+            // Description
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Powered by Gemini 2.5 Flash:")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(KoeColors.textSecondary)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.green)
+                        Text("Optimizes prompts for Claude")
+                            .font(.system(size: 9))
+                            .foregroundColor(KoeColors.textTertiary)
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.green)
+                        Text("Removes filler words")
+                            .font(.system(size: 9))
+                            .foregroundColor(KoeColors.textTertiary)
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.green)
+                        Text("Structures text with XML tags")
+                            .font(.system(size: 9))
+                            .foregroundColor(KoeColors.textTertiary)
+                    }
+                }
+            }
+
+            Divider()
+
+            // Cloud badge
+            HStack(spacing: 4) {
+                Image(systemName: "cloud")
+                    .font(.system(size: 9))
+                Text("Cloud Processing")
+                    .font(.system(size: 9, weight: .medium))
+            }
+            .foregroundColor(KoeColors.accent)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(KoeColors.accent.opacity(0.1))
+            .cornerRadius(4)
         }
     }
 }

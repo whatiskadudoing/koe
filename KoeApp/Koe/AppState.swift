@@ -4,6 +4,7 @@ import CoreGraphics
 import KoeCommands
 import KoeDomain
 import KoePipeline
+import KoeRefinement
 import KoeStorage
 import SwiftUI
 import UserNotifications
@@ -104,11 +105,12 @@ public final class AppState {
     }
 
     // Hotkey settings - stored properties for proper observation
-    private var _hotkeyKeyCode: UInt32 = 49 {
+    // Default: fn alone (hold to record, like Wispr Flow)
+    private var _hotkeyKeyCode: UInt32 = 63 {  // fn/Globe key
         didSet { UserDefaults.standard.set(Int(_hotkeyKeyCode), forKey: "hotkeyKeyCode") }
     }
 
-    private var _hotkeyModifiers: Int = 2 {
+    private var _hotkeyModifiers: Int = 0 {  // No modifiers (fn alone)
         didSet { UserDefaults.standard.set(_hotkeyModifiers, forKey: "hotkeyModifiers") }
     }
 
@@ -137,6 +139,13 @@ public final class AppState {
     public var isLivePreviewEnabled: Bool = false {
         didSet {
             UserDefaults.standard.set(isLivePreviewEnabled, forKey: "isLivePreviewEnabled")
+        }
+    }
+
+    /// Whether to mute system audio while recording
+    public var isAudioDuckingEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(isAudioDuckingEnabled, forKey: "isAudioDuckingEnabled")
         }
     }
 
@@ -210,6 +219,7 @@ public final class AppState {
                 isAIBalancedEnabled = false
                 isAIReasoningEnabled = false
                 isAIPromptEnhancerEnabled = false
+                isGeminiEnabled = false
                 // Configure Ollama for this model
                 configureOllamaForAINode(model: "mistral:7b")
             }
@@ -225,6 +235,7 @@ public final class AppState {
                 isAIFastEnabled = false
                 isAIReasoningEnabled = false
                 isAIPromptEnhancerEnabled = false
+                isGeminiEnabled = false
                 // Configure Ollama for this model
                 configureOllamaForAINode(model: "qwen2.5:7b")
             }
@@ -240,6 +251,7 @@ public final class AppState {
                 isAIFastEnabled = false
                 isAIBalancedEnabled = false
                 isAIPromptEnhancerEnabled = false
+                isGeminiEnabled = false
                 // Configure Ollama for this model
                 configureOllamaForAINode(model: "deepseek-r1")
             }
@@ -255,6 +267,7 @@ public final class AppState {
                 isAIFastEnabled = false
                 isAIBalancedEnabled = false
                 isAIReasoningEnabled = false
+                isGeminiEnabled = false
                 // Configure Ollama with Qwen 2.5 7B and enable prompt improver mode
                 configureOllamaForAINode(model: "qwen2.5:7b")
                 isPromptImproverEnabled = true
@@ -263,9 +276,42 @@ public final class AppState {
         }
     }
 
+    /// Whether Gemini cloud processing is enabled (Google's Gemini API)
+    /// Uses API key authentication (user provides key in settings)
+    private var _isGeminiEnabled: Bool = false
+    public var isGeminiEnabled: Bool {
+        get { _isGeminiEnabled }
+        set {
+            NSLog("[Gemini] isGeminiEnabled setter called with newValue=%d, current=%d", newValue ? 1 : 0, _isGeminiEnabled ? 1 : 0)
+            guard newValue != _isGeminiEnabled else {
+                NSLog("[Gemini] No change, skipping")
+                return
+            }
+
+            if newValue {
+                // Enable Gemini - API key is entered separately in settings
+                _isGeminiEnabled = true
+                // Disable other AI engines (mutual exclusion)
+                isAIFastEnabled = false
+                isAIBalancedEnabled = false
+                isAIReasoningEnabled = false
+                isAIPromptEnhancerEnabled = false
+                isRefinementEnabled = true
+                UserDefaults.standard.set(true, forKey: "geminiEnabled")
+                NSLog("[Gemini] Enabled: isRefinementEnabled=%d", isRefinementEnabled ? 1 : 0)
+                updateRefinementFromAINodes()
+            } else {
+                _isGeminiEnabled = false
+                UserDefaults.standard.set(false, forKey: "geminiEnabled")
+                updateRefinementFromAINodes()
+            }
+        }
+    }
+
     /// Whether any AI processing engine is enabled
     public var isAnyAIProcessingEnabled: Bool {
         isAIFastEnabled || isAIBalancedEnabled || isAIReasoningEnabled || isAIPromptEnhancerEnabled
+            || isGeminiEnabled
     }
 
     /// Configure Ollama with the specified model for AI node
@@ -334,27 +380,13 @@ public final class AppState {
         }
     }
 
-    /// Display string for current hotkey
+    /// Display string for current hotkey (fn alone or fn+Space)
     public var hotkeyDisplayString: String {
-        var parts: [String] = []
-
-        if hotkeyModifiers & 4 != 0 { parts.append("⌃") }  // control
-        if hotkeyModifiers & 2 != 0 { parts.append("⌥") }  // option
-        if hotkeyModifiers & 8 != 0 { parts.append("⇧") }  // shift
-        if hotkeyModifiers & 1 != 0 { parts.append("⌘") }  // command
-
-        // Key name
-        switch hotkeyKeyCode {
-        case 49: parts.append("Space")
-        case 36: parts.append("Return")
-        case 61: parts.append("R-⌥")  // Right Option key
-        case 96: parts.append("F5")
-        case 97: parts.append("F6")
-        case 98: parts.append("F7")
-        default: parts.append("Key\(hotkeyKeyCode)")
+        if hotkeyKeyCode == 63 {
+            return "fn"
+        } else {
+            return "fn Space"
         }
-
-        return parts.joined()
     }
 
     // New combinable refinement options - use stored properties for observation to work
@@ -567,6 +599,9 @@ public final class AppState {
         if UserDefaults.standard.object(forKey: "isLivePreviewEnabled") != nil {
             isLivePreviewEnabled = UserDefaults.standard.bool(forKey: "isLivePreviewEnabled")
         }
+        if UserDefaults.standard.object(forKey: "isAudioDuckingEnabled") != nil {
+            isAudioDuckingEnabled = UserDefaults.standard.bool(forKey: "isAudioDuckingEnabled")
+        }
 
         // Load transcription engine states (default: Apple Speech enabled)
         if UserDefaults.standard.object(forKey: "isWhisperKitEnabled") != nil {
@@ -594,6 +629,14 @@ public final class AppState {
         }
         if UserDefaults.standard.object(forKey: "aiPromptEnhancerEnabled") != nil {
             isAIPromptEnhancerEnabled = UserDefaults.standard.bool(forKey: "aiPromptEnhancerEnabled")
+        }
+        if UserDefaults.standard.object(forKey: "geminiEnabled") != nil {
+            let savedValue = UserDefaults.standard.bool(forKey: "geminiEnabled")
+            // Only restore if user has API key configured
+            if savedValue && GeminiService.shared.isReady {
+                _isGeminiEnabled = true
+                isRefinementEnabled = true
+            }
         }
 
         // Load saved refinement options

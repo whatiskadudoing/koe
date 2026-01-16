@@ -4,6 +4,7 @@ import Foundation
 public enum TriggerEvent: Sendable {
     case start(context: TriggerContext)
     case stop(context: TriggerContext)
+    case cancel(context: TriggerContext)
 }
 
 /// Context passed with trigger events

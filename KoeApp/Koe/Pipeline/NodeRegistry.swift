@@ -529,6 +529,25 @@ public final class NodeRegistry: @unchecked Sendable {
                 isResourceIntensive: true
             ),
 
+            // Gemini - Cloud-based text improvement using Google's Gemini API
+            // Requires Google OAuth login, improves English text
+            NodeInfo(
+                typeId: "gemini",
+                displayName: "Gemini",
+                icon: "wand.and.stars",
+                color: KoeColors.stateRefining,
+                isUserToggleable: true,
+                isAlwaysEnabled: false,
+                outputType: .text,
+                inputDescription: "Raw transcription",
+                showsComparison: true,
+                hasSettings: true,  // Settings for Google login
+                persistenceKey: "geminiEnabled",
+                exclusiveGroup: "ai-processing",
+                requiresSetup: false,  // No download needed, just OAuth
+                isResourceIntensive: false  // Cloud-based, no local resources
+            ),
+
             // Legacy nodes (for backwards compatibility with old pipeline records)
             NodeInfo(
                 typeId: "text-improve",
@@ -613,6 +632,7 @@ extension PipelineStageInfo {
         case .aiBalanced: return "ai-balanced"
         case .aiReasoning: return "ai-reasoning"
         case .aiPromptEnhancer: return "ai-prompt-enhancer"
+        case .gemini: return "gemini"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
         case .livePreview: return "live-preview"

@@ -21,6 +21,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     case aiBalanced  // Qwen 2.5 7B - balanced speed/quality (~4.5GB)
     case aiReasoning  // DeepSeek-R1 8B - complex reasoning (~5GB)
     case aiPromptEnhancer  // Prompt enhancement using Claude best practices
+    case gemini  // Google Gemini API - cloud-based text improvement
 
     case autoType  // Types the text
     case autoEnter  // Presses enter
@@ -43,6 +44,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .aiBalanced: return "Balanced"
         case .aiReasoning: return "Reasoning"
         case .aiPromptEnhancer: return "Prompt"
+        case .gemini: return "Gemini"
         case .autoType: return "Type"
         case .autoEnter: return "Enter"
         case .livePreview: return "Live Preview"
@@ -88,7 +90,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
     /// Whether this is an AI processing engine stage (part of parallel AI group)
     var isAIProcessingEngine: Bool {
         switch self {
-        case .aiFast, .aiBalanced, .aiReasoning, .aiPromptEnhancer: return true
+        case .aiFast, .aiBalanced, .aiReasoning, .aiPromptEnhancer, .gemini: return true
         default: return false
         }
     }
@@ -116,6 +118,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         case .aiBalanced: return "ai-balanced"
         case .aiReasoning: return "ai-reasoning"
         case .aiPromptEnhancer: return "ai-prompt-enhancer"
+        case .gemini: return "gemini"
         case .autoType: return "auto-type"
         case .autoEnter: return "auto-enter"
         case .livePreview: return "live-preview"
@@ -134,7 +137,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
 
     /// AI processing engine stages shown in parallel
     static var aiProcessingStages: [PipelineStageInfo] {
-        [.aiFast, .aiBalanced, .aiReasoning, .aiPromptEnhancer]
+        [.aiFast, .aiBalanced, .aiReasoning, .aiPromptEnhancer, .gemini]
     }
 
     /// Sequential stages after triggers (before transcription split)
@@ -157,7 +160,7 @@ enum PipelineStageInfo: String, CaseIterable, Identifiable {
         [
             .recorder,
             .transcribeApple, .transcribeWhisperKitBalanced, .transcribeWhisperKitAccurate,
-            .aiFast, .aiBalanced, .aiReasoning, .aiPromptEnhancer,
+            .aiFast, .aiBalanced, .aiReasoning, .aiPromptEnhancer, .gemini,
             .autoType, .autoEnter,
         ]
     }

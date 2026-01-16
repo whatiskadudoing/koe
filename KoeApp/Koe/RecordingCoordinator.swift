@@ -124,7 +124,6 @@ public final class RecordingCoordinator {
             onKeyDown: { [weak self] in
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
-                    // Hotkey uses push-to-talk (records while held)
                     await self.startRecording(mode: .vad, language: .auto)
                 }
             },
@@ -132,6 +131,12 @@ public final class RecordingCoordinator {
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
                     await self.stopRecording(mode: .vad, language: .auto)
+                }
+            },
+            onCancel: { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    await self.cancelRecording()
                 }
             }
         )
@@ -226,6 +231,8 @@ public final class RecordingCoordinator {
                     await self.startRecording(mode: .vad, language: .auto)
                 case .stop:
                     await self.stopRecording(mode: .vad, language: .auto)
+                case .cancel:
+                    await self.cancelRecording()
                 }
             }
         }
@@ -345,6 +352,11 @@ public final class RecordingCoordinator {
 
         logger.info("Starting recording - mode: \(mode.rawValue), language: \(language.code)")
 
+        // Duck system audio if enabled
+        if AppState.shared.isAudioDuckingEnabled {
+            AudioDucker.shared.duck()
+        }
+
         // Lock the current text field as our insertion target
         let targetLocked = targetLockService.lockCurrentTarget()
         if targetLocked {
@@ -404,6 +416,10 @@ public final class RecordingCoordinator {
 
         logger.info("Stopping recording")
 
+        // Restore system audio immediately when recording stops
+        // (don't wait for transcription/pipeline to complete)
+        AudioDucker.shared.unduck()
+
         // Stop timers
         levelTimer?.invalidate()
         levelTimer = nil
@@ -441,6 +457,49 @@ public final class RecordingCoordinator {
 
         // Hide live preview overlay
         TranscriptionOverlayController.shared.hide()
+    }
+
+    /// Cancel recording without processing (discard audio)
+    public func cancelRecording() async {
+        guard isRecording else { return }
+
+        logger.info("Cancelling recording (discarding audio)")
+
+        // Restore system audio
+        AudioDucker.shared.unduck()
+
+        // Stop timers
+        levelTimer?.invalidate()
+        levelTimer = nil
+        vadMonitorTimer?.invalidate()
+        vadMonitorTimer = nil
+        streamingTimer?.invalidate()
+        streamingTimer = nil
+
+        isRecording = false
+        audioLevel = 0
+
+        // Stop audio recorder without processing
+        do {
+            _ = try await audioRecorder.stopRecording()
+        } catch {
+            logger.error("Failed to stop audio recorder", error: error)
+        }
+
+        // Reset state without transcription
+        resetRecordingState()
+
+        // Notify mode manager that dictation ended
+        NotificationCenter.default.post(name: .dictationEnded, object: nil)
+
+        // Update AppState to idle
+        AppState.shared.recordingState = .idle
+        RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .idle)
+
+        // Hide live preview overlay
+        TranscriptionOverlayController.shared.hide()
+
+        logger.info("Recording cancelled")
     }
 
     // MARK: - Private Methods

@@ -623,6 +623,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
                     case .stop:
                         await self.coordinator.stopRecording(mode: .vad, language: .auto)
                         AppState.shared.isToggleTriggered = false
+                    case .cancel:
+                        await self.coordinator.cancelRecording()
+                        AppState.shared.isToggleTriggered = false
                     }
                 }
             }

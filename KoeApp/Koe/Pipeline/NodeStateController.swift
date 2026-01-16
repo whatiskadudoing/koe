@@ -259,6 +259,7 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .aiBalanced: return "ai-balanced"
                 case .aiReasoning: return "ai-reasoning"
                 case .aiPromptEnhancer: return "ai-prompt-enhancer"
+                case .gemini: return "gemini"
                 case .autoType: return "auto-type"
                 case .autoEnter: return "auto-enter"
                 case .livePreview: return "live-preview"
@@ -276,6 +277,7 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .aiBalanced: return appState.isAIBalancedEnabled
                 case .aiReasoning: return appState.isAIReasoningEnabled
                 case .aiPromptEnhancer: return appState.isAIPromptEnhancerEnabled
+                case .gemini: return appState.isGeminiEnabled
                 case .autoEnter: return appState.isAutoEnterEnabled
                 case .livePreview: return appState.isLivePreviewEnabled
                 default: return true
@@ -292,6 +294,7 @@ extension NodeStateController where Node == PipelineStageInfo {
                 case .aiBalanced: appState.isAIBalancedEnabled = enabled
                 case .aiReasoning: appState.isAIReasoningEnabled = enabled
                 case .aiPromptEnhancer: appState.isAIPromptEnhancerEnabled = enabled
+                case .gemini: appState.isGeminiEnabled = enabled
                 case .autoEnter: appState.isAutoEnterEnabled = enabled
                 case .livePreview: appState.isLivePreviewEnabled = enabled
                 default: break

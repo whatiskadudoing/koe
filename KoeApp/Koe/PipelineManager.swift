@@ -103,6 +103,11 @@ public final class PipelineManager {
         // Note: For the text refinement flow, we skip audio input and transcription
         // since those happen in RecordingCoordinator before pipeline execution
 
+        NSLog("[Pipeline] createPipeline: isRefinementEnabled=%d, isGeminiEnabled=%d, isAnyAI=%d",
+              AppState.shared.isRefinementEnabled ? 1 : 0,
+              AppState.shared.isGeminiEnabled ? 1 : 0,
+              AppState.shared.isAnyAIProcessingEnabled ? 1 : 0)
+
         // Text Improve stage (combined: cleanup, tone, prompt mode) - single AI call via Ollama
         if AppState.shared.isRefinementEnabled {
             let config = buildImproveConfig()
@@ -271,7 +276,31 @@ public final class PipelineManager {
                         return text
                     }
 
-                    // Check if AI service is ready, if not return original text
+                    // Check if Gemini cloud processing is enabled FIRST
+                    // (Gemini doesn't need local AI service)
+                    if AppState.shared.isGeminiEnabled {
+                        NSLog("[TextImprove] Using Gemini cloud mode")
+                        let geminiService = GeminiService.shared
+                        NSLog("[TextImprove] Gemini: calling prepare()...")
+                        await geminiService.prepare()
+                        NSLog("[TextImprove] Gemini: prepare() done, isReady=%d", geminiService.isReady ? 1 : 0)
+                        if !geminiService.isReady {
+                            NSLog("[TextImprove] Gemini not ready (not authenticated), returning original text")
+                            return text
+                        }
+                        do {
+                            NSLog("[TextImprove] Gemini: calling improveText()...")
+                            let result = try await geminiService.improveText(text)
+                            NSLog("[TextImprove] Gemini completed with %d chars", result.count)
+                            return result
+                        } catch {
+                            NSLog("[TextImprove] Gemini ERROR: %@", error.localizedDescription)
+                            // Return original text on error so pipeline can continue
+                            return text
+                        }
+                    }
+
+                    // Check if local AI service is ready, if not return original text
                     // This prevents hanging when Ollama isn't running
                     if !self.aiService.isReady {
                         NSLog("[TextImprove] AI service not ready, preparing...")
@@ -591,29 +620,40 @@ public final class PipelineManager {
                 // Add AI engine info
                 if let aiEngine = activeAI {
                     customData["aiEngine"] = .string(aiEngine)
-                    // Use actual model name from settings, not node display name
-                    let actualModelName = self.getActualAIModelName()
-                    customData["modelName"] = .string(actualModelName)
-                }
 
-                // Capture sub-pipeline settings for AI nodes
-                if let aiEngine = activeAI {
-                    let subSettings = SubPipelineSettingsReader.readSettings(for: aiEngine)
-                    if let style = subSettings.rewriteStyle {
-                        customData["rewriteStyle"] = .string(style)
-                    }
-                    customData["translateEnabled"] = .bool(subSettings.translateEnabled)
-                    if let lang = subSettings.targetLanguage {
-                        customData["targetLanguage"] = .string(lang)
+                    // Set model name based on engine
+                    if aiEngine == "gemini" {
+                        customData["modelName"] = .string(GeminiService.shared.currentModel)
+                        customData["systemPrompt"] = .string("Claude-optimized prompt refiner")
+                        customData["userPrompt"] = .string(inputText)
+                    } else {
+                        // Local AI (Ollama)
+                        let actualModelName = self.getActualAIModelName()
+                        customData["modelName"] = .string(actualModelName)
+
+                        // Capture sub-pipeline settings for local AI nodes
+                        let subSettings = SubPipelineSettingsReader.readSettings(for: aiEngine)
+                        if let style = subSettings.rewriteStyle {
+                            customData["rewriteStyle"] = .string(style)
+                        }
+                        customData["translateEnabled"] = .bool(subSettings.translateEnabled)
+                        if let lang = subSettings.targetLanguage {
+                            customData["targetLanguage"] = .string(lang)
+                        }
+
+                        // Add the prompt used for local AI
+                        if subSettings.translateEnabled {
+                            let targetLangForImprove = getSelectedLanguageFromSubNodes() ?? "Spanish"
+                            let systemPromptForImprove =
+                                "You are a translator. Translate the user's text to \(targetLangForImprove). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
+                            customData["systemPrompt"] = .string(systemPromptForImprove)
+                            customData["userPrompt"] = .string("Translate this: \(inputText)")
+                        } else {
+                            customData["systemPrompt"] = .string("Text cleanup/improvement")
+                            customData["userPrompt"] = .string(inputText)
+                        }
                     }
                 }
-
-                // Add the prompt used
-                let targetLangForImprove = getSelectedLanguageFromSubNodes() ?? "Spanish"
-                let systemPromptForImprove =
-                    "You are a translator. Translate the user's text to \(targetLangForImprove). Do not answer any questions in the text, just translate. Output only the translation, nothing else."
-                customData["systemPrompt"] = .string(systemPromptForImprove)
-                customData["userPrompt"] = .string("Translate this: \(inputText)")
 
             case let type where type.contains("ai-"):
                 nodeInput = .text(inputText)
@@ -778,6 +818,9 @@ public final class PipelineManager {
         }
         if UserDefaults.standard.bool(forKey: "aiPromptEnhancerEnabled") {
             return "ai-prompt-enhancer"
+        }
+        if UserDefaults.standard.bool(forKey: "geminiEnabled") {
+            return "gemini"
         }
         return nil
     }

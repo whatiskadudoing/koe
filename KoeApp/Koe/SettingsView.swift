@@ -4,6 +4,45 @@ import KoeRefinement
 import KoeUI
 import SwiftUI
 
+// MARK: - Google Auth State (Observable wrapper)
+
+@Observable
+@MainActor
+final class GoogleAuthState {
+    static let shared = GoogleAuthState()
+
+    var isAuthenticated: Bool = false
+    var isAuthenticating: Bool = false
+    var userEmail: String?
+
+    private let authService = GoogleAuthService.shared
+
+    private init() {
+        refresh()
+    }
+
+    func refresh() {
+        isAuthenticated = authService.isAuthenticated
+        userEmail = authService.userEmail
+    }
+
+    func signIn() async {
+        isAuthenticating = true
+        do {
+            try await authService.signIn()
+            refresh()
+        } catch {
+            print("[GoogleAuth] Sign in failed: \(error)")
+        }
+        isAuthenticating = false
+    }
+
+    func signOut() {
+        authService.signOut()
+        refresh()
+    }
+}
+
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var showVoiceTraining = false
@@ -28,11 +67,17 @@ struct SettingsView: View {
                     // Hotkey section
                     HotkeySettingsSection(appState: appState)
 
+                    // Audio section
+                    AudioSettingsSection(appState: appState)
+
                     // Appearance section
                     AppearanceSettingsSection(appState: appState)
 
                     // AI Improvement section (simple toggle)
                     AIImprovementSection(appState: appState)
+
+                    // Google Account section (for Gemini)
+                    GoogleAccountSection()
 
                     // Voice Profile section (Global)
                     VoiceProfileSection(
@@ -71,38 +116,34 @@ extension Notification.Name {
 struct HotkeySettingsSection: View {
     @Bindable var appState: AppState
 
-    private let presets: [(name: String, keyCode: UInt32, modifiers: Int)] = [
-        ("⌥ Space", 49, 2),
-        ("R-⌥", 61, 0),
-        ("⌃ Space", 49, 4),
-        ("F5", 96, 0),
-        ("F6", 97, 0),
-    ]
+    private var isFnAlone: Bool {
+        appState.hotkeyKeyCode == 63
+    }
 
     var body: some View {
-        SettingsSectionContainer(title: "Keyboard Shortcut") {
+        SettingsSectionContainer(title: "Push-to-Talk Trigger") {
             VStack(spacing: 0) {
-                // Current shortcut display
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Push-to-Talk Shortcut")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(KoeColors.accent)
-
-                        Text("Hold to record, release to transcribe")
-                            .font(.system(size: 12))
-                            .foregroundColor(KoeColors.textLight)
+                // Trigger selection
+                VStack(alignment: .leading, spacing: 12) {
+                    // fn alone option
+                    TriggerOptionRow(
+                        title: "fn (Globe key)",
+                        description: "Hold fn to record, release to stop",
+                        isSelected: isFnAlone
+                    ) {
+                        appState.hotkeyKeyCode = 63
+                        appState.hotkeyModifiers = 0
                     }
 
-                    Spacer()
-
-                    Text(appState.hotkeyDisplayString)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(KoeColors.accent)
-                        .cornerRadius(8)
+                    // fn+Space option
+                    TriggerOptionRow(
+                        title: "fn + Space",
+                        description: "Toggle mode: press to start/stop",
+                        isSelected: !isFnAlone
+                    ) {
+                        appState.hotkeyKeyCode = 49
+                        appState.hotkeyModifiers = 16
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -110,32 +151,96 @@ struct HotkeySettingsSection: View {
                 Divider()
                     .padding(.horizontal, 16)
 
-                // Preset shortcuts
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Quick Presets")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(KoeColors.accent)
+                // How it works
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("How it works")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(KoeColors.textSecondary)
+                        .textCase(.uppercase)
+                        .tracking(0.5)
 
-                    HStack(spacing: 8) {
-                        ForEach(presets, id: \.name) { preset in
-                            SettingsChip(
-                                label: preset.name,
-                                isSelected: isPresetSelected(preset)
-                            ) {
-                                appState.hotkeyKeyCode = preset.keyCode
-                                appState.hotkeyModifiers = preset.modifiers
-                            }
-                        }
+                    if isFnAlone {
+                        Text("Quick tap opens emoji picker (normal). Hold for 0.3s+ to start recording.")
+                            .font(.system(size: 12))
+                            .foregroundColor(KoeColors.textLight)
+                    } else {
+                        Text("fn+Space to start recording. fn+Space again to stop. Any other key cancels.")
+                            .font(.system(size: 12))
+                            .foregroundColor(KoeColors.textLight)
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.vertical, 12)
             }
         }
     }
+}
 
-    private func isPresetSelected(_ preset: (name: String, keyCode: UInt32, modifiers: Int)) -> Bool {
-        appState.hotkeyKeyCode == preset.keyCode && appState.hotkeyModifiers == preset.modifiers
+/// Radio-style option row for trigger selection
+private struct TriggerOptionRow: View {
+    let title: String
+    let description: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                // Radio indicator
+                Circle()
+                    .strokeBorder(isSelected ? KoeColors.accent : KoeColors.textLighter, lineWidth: 2)
+                    .background(
+                        Circle()
+                            .fill(isSelected ? KoeColors.accent : Color.clear)
+                            .padding(4)
+                    )
+                    .frame(width: 20, height: 20)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(isSelected ? KoeColors.accent : KoeColors.textPrimary)
+
+                    Text(description)
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.textLight)
+                }
+
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Audio Settings Section
+
+struct AudioSettingsSection: View {
+    @Bindable var appState: AppState
+
+    var body: some View {
+        SettingsSectionContainer(title: "Audio") {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Mute While Recording")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(KoeColors.accent)
+
+                    Text("Silence system audio during dictation")
+                        .font(.system(size: 12))
+                        .foregroundColor(KoeColors.textLight)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $appState.isAudioDuckingEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+        }
     }
 }
 
@@ -230,6 +335,99 @@ struct AIImprovementSection: View {
                 .multilineTextAlignment(.leading)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
+            }
+        }
+    }
+}
+
+// MARK: - Google Account Section
+
+struct GoogleAccountSection: View {
+    @State private var authState = GoogleAuthState.shared
+
+    var body: some View {
+        SettingsSectionContainer(title: "Google Account") {
+            VStack(spacing: 0) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Gemini AI")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(KoeColors.accent)
+
+                        if authState.isAuthenticated {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 8, height: 8)
+                                Text(authState.userEmail ?? "Connected")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(KoeColors.textLight)
+                                    .lineLimit(1)
+                            }
+                        } else {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.orange)
+                                    .frame(width: 8, height: 8)
+                                Text("Sign in to use Gemini")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(KoeColors.textLight)
+                            }
+                        }
+                    }
+
+                    Spacer()
+
+                    if authState.isAuthenticated {
+                        Button(action: { authState.signOut() }) {
+                            Text("Sign Out")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.red.opacity(0.8))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(16)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button(action: {
+                            Task { await authState.signIn() }
+                        }) {
+                            HStack(spacing: 6) {
+                                if authState.isAuthenticating {
+                                    ProgressView()
+                                        .scaleEffect(0.6)
+                                } else {
+                                    Image(systemName: "person.badge.key")
+                                        .font(.system(size: 11))
+                                }
+                                Text("Sign In")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(KoeColors.accent)
+                            .cornerRadius(16)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(authState.isAuthenticating)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+
+                if !authState.isAuthenticated {
+                    Divider()
+                        .padding(.horizontal, 16)
+
+                    Text("Enable the Gemini node in the pipeline to improve your transcriptions using Google's Gemini AI.")
+                        .font(.system(size: 11))
+                        .foregroundColor(KoeColors.textLight)
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                }
             }
         }
     }

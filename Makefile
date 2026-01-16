@@ -94,6 +94,7 @@ docs-preview:
 ## Create app bundle (release)
 bundle: build-release
 	@cd KoeApp && \
+	rm -rf dist/Koe.app && \
 	EXECUTABLE=$$(find .build -name "Koe" -type f -path "*release*" | grep -v dSYM | head -1) && \
 	mkdir -p dist/Koe.app/Contents/MacOS && \
 	mkdir -p dist/Koe.app/Contents/Resources && \

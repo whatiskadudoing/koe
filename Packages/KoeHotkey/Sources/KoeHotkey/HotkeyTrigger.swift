@@ -29,6 +29,11 @@ public final class HotkeyTrigger: RecordingTrigger, @unchecked Sendable {
                 guard let self = self else { return }
                 let context = TriggerContext(triggerId: self.id, triggerType: self.typeId)
                 handler(.stop(context: context))
+            },
+            onCancel: { [weak self] in
+                guard let self = self else { return }
+                let context = TriggerContext(triggerId: self.id, triggerType: self.typeId)
+                handler(.cancel(context: context))
             }
         )
     }
