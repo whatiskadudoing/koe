@@ -78,6 +78,13 @@ public final class PipelineManager {
     // MARK: - Pipeline State
 
     private var orchestrator: PipelineOrchestrator?
+    private var currentContext: PipelineContext?
+
+    /// Check if the current pipeline execution is cancelled
+    /// Handlers should check this before and during long operations
+    public var isCancelled: Bool {
+        currentContext?.isCancelled ?? false
+    }
 
     // MARK: - Initialization
 
@@ -103,10 +110,11 @@ public final class PipelineManager {
         // Note: For the text refinement flow, we skip audio input and transcription
         // since those happen in RecordingCoordinator before pipeline execution
 
-        NSLog("[Pipeline] createPipeline: isRefinementEnabled=%d, isGeminiEnabled=%d, isAnyAI=%d",
-              AppState.shared.isRefinementEnabled ? 1 : 0,
-              AppState.shared.isGeminiEnabled ? 1 : 0,
-              AppState.shared.isAnyAIProcessingEnabled ? 1 : 0)
+        NSLog(
+            "[Pipeline] createPipeline: isRefinementEnabled=%d, isGeminiEnabled=%d, isAnyAI=%d",
+            AppState.shared.isRefinementEnabled ? 1 : 0,
+            AppState.shared.isGeminiEnabled ? 1 : 0,
+            AppState.shared.isAnyAIProcessingEnabled ? 1 : 0)
 
         // Text Improve stage (combined: cleanup, tone, prompt mode) - single AI call via Ollama
         if AppState.shared.isRefinementEnabled {
@@ -171,6 +179,9 @@ public final class PipelineManager {
         NSLog("[Pipeline] processText called with %d chars", text.count)
         let (pipeline, context) = createPipeline(forTranscription: text)
 
+        // Store context for cancellation checking
+        self.currentContext = context
+
         // Create orchestrator
         let orchestrator = PipelineOrchestrator()
         self.orchestrator = orchestrator
@@ -182,10 +193,18 @@ public final class PipelineManager {
 
         // Run pipeline
         NSLog("[Pipeline] Starting pipeline with %d elements...", pipeline.elements.count)
-        let resultContext = try await orchestrator.run(pipeline, initialContext: context)
-        NSLog("[Pipeline] Pipeline completed in %@", resultContext.summary.formattedElapsedTime)
+        let resultContext: PipelineContext
+        do {
+            resultContext = try await orchestrator.run(pipeline, initialContext: context)
+            NSLog("[Pipeline] Pipeline completed in %@", resultContext.summary.formattedElapsedTime)
+        } catch {
+            self.orchestrator = nil
+            self.currentContext = nil
+            throw error
+        }
 
         self.orchestrator = nil
+        self.currentContext = nil
 
         // Store execution record in AppState
         let status: ElementExecutionMetrics.ExecutionStatus = .success
@@ -243,8 +262,11 @@ public final class PipelineManager {
         )
     }
 
-    /// Cancel current pipeline execution
+    /// Cancel current pipeline execution immediately
     public func cancel() async {
+        // Set cancellation flag immediately on the context
+        currentContext?.isCancelled = true
+        // Also notify the orchestrator
         await orchestrator?.cancel()
     }
 
@@ -261,6 +283,12 @@ public final class PipelineManager {
                         config.isActive ? 1 : 0)
                     guard let self = self else {
                         NSLog("[TextImprove] self is nil, returning original text")
+                        return text
+                    }
+
+                    // Check for cancellation before starting
+                    if self.isCancelled {
+                        NSLog("[TextImprove] Cancelled before start, returning original text")
                         return text
                     }
 
@@ -283,6 +311,13 @@ public final class PipelineManager {
                         let geminiService = GeminiService.shared
                         NSLog("[TextImprove] Gemini: calling prepare()...")
                         await geminiService.prepare()
+
+                        // Check for cancellation after prepare
+                        if self.isCancelled {
+                            NSLog("[TextImprove] Cancelled after Gemini prepare, returning original text")
+                            return text
+                        }
+
                         NSLog("[TextImprove] Gemini: prepare() done, isReady=%d", geminiService.isReady ? 1 : 0)
                         if !geminiService.isReady {
                             NSLog("[TextImprove] Gemini not ready (not authenticated), returning original text")
@@ -291,6 +326,13 @@ public final class PipelineManager {
                         do {
                             NSLog("[TextImprove] Gemini: calling improveText()...")
                             let result = try await geminiService.improveText(text)
+
+                            // Check for cancellation after API call
+                            if self.isCancelled {
+                                NSLog("[TextImprove] Cancelled after Gemini call, returning original text")
+                                return text
+                            }
+
                             NSLog("[TextImprove] Gemini completed with %d chars", result.count)
                             return result
                         } catch {
@@ -300,11 +342,24 @@ public final class PipelineManager {
                         }
                     }
 
+                    // Check for cancellation before local AI
+                    if self.isCancelled {
+                        NSLog("[TextImprove] Cancelled before local AI, returning original text")
+                        return text
+                    }
+
                     // Check if local AI service is ready, if not return original text
                     // This prevents hanging when Ollama isn't running
                     if !self.aiService.isReady {
                         NSLog("[TextImprove] AI service not ready, preparing...")
                         await self.aiService.prepare()
+
+                        // Check for cancellation after prepare
+                        if self.isCancelled {
+                            NSLog("[TextImprove] Cancelled after AI prepare, returning original text")
+                            return text
+                        }
+
                         if !self.aiService.isReady {
                             NSLog("[TextImprove] AI service still not ready after prepare, returning original text")
                             return text
@@ -314,9 +369,23 @@ public final class PipelineManager {
                     // Check if prompt enhancer mode is enabled
                     if AppState.shared.isAIPromptEnhancerEnabled {
                         NSLog("[TextImprove] Using prompt enhancer mode")
+
+                        // Check for cancellation before AI call
+                        if self.isCancelled {
+                            NSLog("[TextImprove] Cancelled before prompt enhancer, returning original text")
+                            return text
+                        }
+
                         // Use the promptImprover refinement mode
                         let result = try await self.aiService.refine(
                             text: text, mode: .promptImprover, customPrompt: nil)
+
+                        // Check for cancellation after AI call
+                        if self.isCancelled {
+                            NSLog("[TextImprove] Cancelled after prompt enhancer, returning original text")
+                            return text
+                        }
+
                         NSLog("[TextImprove] Prompt enhancer completed with %d chars", result.count)
                         return result
                     }
@@ -325,6 +394,12 @@ public final class PipelineManager {
                     let subSettings = SubPipelineSettingsReader.readSettings(for: activeAI!)
                     NSLog("[TextImprove] translateEnabled=%d", subSettings.translateEnabled ? 1 : 0)
                     if subSettings.translateEnabled {
+                        // Check for cancellation before translation
+                        if self.isCancelled {
+                            NSLog("[TextImprove] Cancelled before translation, returning original text")
+                            return text
+                        }
+
                         let targetLang = self.getSelectedLanguageFromSubNodes() ?? "Spanish"
                         NSLog("[TextImprove] Using translation to %@", targetLang)
                         let systemInstruction =
@@ -332,14 +407,34 @@ public final class PipelineManager {
                         let userPrompt = "Translate this: \(text)"
                         let result = try await self.aiService.refine(
                             text: userPrompt, mode: .custom, customPrompt: systemInstruction)
+
+                        // Check for cancellation after translation
+                        if self.isCancelled {
+                            NSLog("[TextImprove] Cancelled after translation, returning original text")
+                            return text
+                        }
+
                         NSLog("[TextImprove] Translation completed")
                         return result
+                    }
+
+                    // Check for cancellation before cleanup
+                    if self.isCancelled {
+                        NSLog("[TextImprove] Cancelled before cleanup, returning original text")
+                        return text
                     }
 
                     // Default: use cleanup mode
                     NSLog("[TextImprove] Using cleanup mode, calling aiService.refine...")
                     let result = try await self.aiService.refine(
                         text: text, mode: .cleanup, customPrompt: nil)
+
+                    // Check for cancellation after cleanup
+                    if self.isCancelled {
+                        NSLog("[TextImprove] Cancelled after cleanup, returning original text")
+                        return text
+                    }
+
                     NSLog("[TextImprove] Cleanup completed with %d chars", result.count)
                     return result
                 }
@@ -349,10 +444,20 @@ public final class PipelineManager {
             if let action = element as? AutoTypeAction {
                 action.instantInsertHandler = { [weak self] text in
                     guard let self = self else { return }
+                    // Check for cancellation before typing
+                    if self.isCancelled {
+                        NSLog("[AutoType] Cancelled, skipping text insertion")
+                        return
+                    }
                     try await self.insertWithTargetLock(text)
                 }
                 action.typeHandler = { [weak self] text, _, _ in
                     guard let self = self else { return }
+                    // Check for cancellation before typing
+                    if self.isCancelled {
+                        NSLog("[AutoType] Cancelled, skipping text insertion")
+                        return
+                    }
                     try await self.insertWithTargetLock(text)
                 }
             }
@@ -360,6 +465,11 @@ public final class PipelineManager {
         case "auto-enter":
             if let action = element as? AutoEnterAction {
                 action.enterHandler = { [weak self] in
+                    // Check for cancellation before pressing enter
+                    if self?.isCancelled == true {
+                        NSLog("[AutoEnter] Cancelled, skipping enter key")
+                        return
+                    }
                     try await self?.textInserter.pressEnter()
                 }
             }
