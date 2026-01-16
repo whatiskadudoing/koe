@@ -21,15 +21,22 @@ public final class ToggleHotkeyTrigger: RecordingTrigger, @unchecked Sendable {
     public func activate(handler: @escaping @Sendable (TriggerEvent) -> Void) async throws {
         self.eventHandler = handler
 
-        hotkeyManager.register { [weak self] isRecording in
-            guard let self = self else { return }
-            let context = TriggerContext(triggerId: self.id, triggerType: self.typeId)
-            if isRecording {
-                handler(.start(context: context))
-            } else {
-                handler(.stop(context: context))
+        hotkeyManager.register(
+            onToggle: { [weak self] isRecording in
+                guard let self = self else { return }
+                let context = TriggerContext(triggerId: self.id, triggerType: self.typeId)
+                if isRecording {
+                    handler(.start(context: context))
+                } else {
+                    handler(.stop(context: context))
+                }
+            },
+            onCancel: { [weak self] in
+                guard let self = self else { return }
+                let context = TriggerContext(triggerId: self.id, triggerType: self.typeId)
+                handler(.cancel(context: context))
             }
-        }
+        )
     }
 
     public func deactivate() async {

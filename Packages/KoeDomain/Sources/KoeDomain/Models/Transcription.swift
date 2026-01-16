@@ -61,6 +61,8 @@ public struct Transcription: Identifiable, Codable, Sendable, Equatable {
     public let pipelineRunId: UUID?
     /// Whether this transcription used experimental features
     public let isExperimental: Bool
+    /// Whether this transcription was canceled via Escape key
+    public let wasCanceled: Bool
 
     public init(
         id: UUID = UUID(),
@@ -73,7 +75,8 @@ public struct Transcription: Identifiable, Codable, Sendable, Equatable {
         originalText: String? = nil,
         refinementSettings: RefinementSettings? = nil,
         pipelineRunId: UUID? = nil,
-        isExperimental: Bool = false
+        isExperimental: Bool = false,
+        wasCanceled: Bool = false
     ) {
         self.id = id
         self.text = text
@@ -86,6 +89,7 @@ public struct Transcription: Identifiable, Codable, Sendable, Equatable {
         self.refinementSettings = refinementSettings
         self.pipelineRunId = pipelineRunId
         self.isExperimental = isExperimental
+        self.wasCanceled = wasCanceled
     }
 
     // Custom decoder for backward compatibility with existing data
@@ -101,7 +105,8 @@ public struct Transcription: Identifiable, Codable, Sendable, Equatable {
         originalText = try container.decodeIfPresent(String.self, forKey: .originalText)
         refinementSettings = try container.decodeIfPresent(RefinementSettings.self, forKey: .refinementSettings)
         pipelineRunId = try container.decodeIfPresent(UUID.self, forKey: .pipelineRunId)
-        // Default to false for old transcriptions without this field
+        // Default to false for old transcriptions without these fields
         isExperimental = try container.decodeIfPresent(Bool.self, forKey: .isExperimental) ?? false
+        wasCanceled = try container.decodeIfPresent(Bool.self, forKey: .wasCanceled) ?? false
     }
 }

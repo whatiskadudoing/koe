@@ -87,6 +87,10 @@ public final class RecordingCoordinator {
     private var lastStreamingTranscribeTime: Date?
     private var wasRecentlySpeaking: Bool = false
 
+    // Cancellation state for history recording
+    private var isCanceling = false
+    private var partialTranscriptionForHistory: String = ""
+
     private let logger = KoeLogger.audio
 
     // MARK: - Initialization
@@ -400,6 +404,14 @@ public final class RecordingCoordinator {
                 startStreamingTimer(language: language)
             }
 
+            // Enable Escape key to cancel at any pipeline stage (recording, transcribing, refining)
+            // This works for ALL recording types (hotkey, toggle, voice command)
+            EscapeCancelInterceptor.shared.start { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.cancelPipeline()
+                }
+            }
+
             // If triggered by voice command, start VAD monitoring with voice verification
             if AppState.shared.isVoiceCommandTriggered {
                 startVoiceAwareVADMonitoring(language: language)
@@ -459,6 +471,56 @@ public final class RecordingCoordinator {
         TranscriptionOverlayController.shared.hide()
     }
 
+    /// Cancel the entire pipeline at any stage (recording, transcribing, or refining)
+    /// This is the main entry point for Escape key cancellation
+    public func cancelPipeline() async {
+        let currentState = AppState.shared.recordingState
+
+        switch currentState {
+        case .recording:
+            // Cancel during recording - discard audio
+            await cancelRecording()
+
+        case .transcribing, .refining:
+            // Cancel during processing - stop pipeline and record to history
+            logger.info("Cancelling pipeline during \(currentState)")
+            isCanceling = true
+
+            // Stop escape interceptor
+            EscapeCancelInterceptor.shared.stop()
+
+            // Cancel the pipeline
+            await PipelineManager.shared.cancel()
+
+            // Record cancellation to history
+            let duration = Date().timeIntervalSince(recordingStartTime ?? Date())
+            let partialText = currentTranscription.isEmpty ? nil : currentTranscription
+            AppState.shared.addCanceledTranscription(partialText: partialText, duration: duration)
+
+            // Reset state
+            isPipelineProcessing = false
+            isCanceling = false
+            resetRecordingState()
+
+            // Reset toggle trigger state
+            toggleHotkeyManager.resetState()
+
+            // Notify and update UI
+            NotificationCenter.default.post(name: .dictationEnded, object: nil)
+            AppState.shared.recordingState = .idle
+            AppState.shared.isVoiceCommandTriggered = false
+            AppState.shared.isToggleTriggered = false
+            RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .idle)
+            TranscriptionOverlayController.shared.hide()
+
+            logger.info("Pipeline cancelled during \(currentState)")
+
+        case .idle:
+            // Nothing to cancel
+            break
+        }
+    }
+
     /// Cancel recording without processing (discard audio)
     public func cancelRecording() async {
         guard isRecording else { return }
@@ -467,6 +529,9 @@ public final class RecordingCoordinator {
 
         // Restore system audio
         AudioDucker.shared.unduck()
+
+        // Stop escape cancel interceptor
+        EscapeCancelInterceptor.shared.stop()
 
         // Stop timers
         levelTimer?.invalidate()
@@ -486,14 +551,24 @@ public final class RecordingCoordinator {
             logger.error("Failed to stop audio recorder", error: error)
         }
 
+        // Record cancellation to history
+        let duration = Date().timeIntervalSince(recordingStartTime ?? Date())
+        let partialText = currentTranscription.isEmpty ? nil : currentTranscription
+        AppState.shared.addCanceledTranscription(partialText: partialText, duration: duration)
+
         // Reset state without transcription
         resetRecordingState()
+
+        // Reset toggle trigger state if it was used
+        toggleHotkeyManager.resetState()
 
         // Notify mode manager that dictation ended
         NotificationCenter.default.post(name: .dictationEnded, object: nil)
 
         // Update AppState to idle
         AppState.shared.recordingState = .idle
+        AppState.shared.isVoiceCommandTriggered = false
+        AppState.shared.isToggleTriggered = false
         RecordingOverlayController.shared.updateFromService(audioLevel: 0, state: .idle)
 
         // Hide live preview overlay
@@ -615,6 +690,9 @@ public final class RecordingCoordinator {
         // Stop the VAD monitor timer
         vadMonitorTimer?.invalidate()
         vadMonitorTimer = nil
+
+        // Note: Don't stop EscapeCancelInterceptor here - keep it active during
+        // transcription/refining so user can still cancel with Escape key
 
         // Stop recording
         await stopRecording(mode: .vad, language: language)
@@ -844,6 +922,7 @@ public final class RecordingCoordinator {
         // Need at least 0.3 seconds of audio
         guard samples.count > Int(16000 * 0.3) else {
             logger.info("Audio too short: \(samples.count) samples")
+            EscapeCancelInterceptor.shared.stop()
             return
         }
 
@@ -894,6 +973,7 @@ public final class RecordingCoordinator {
             let transcribedText = rawText.trimmingCharacters(in: .whitespaces)
 
             guard !transcribedText.isEmpty else {
+                EscapeCancelInterceptor.shared.stop()
                 return
             }
 
@@ -1017,9 +1097,15 @@ public final class RecordingCoordinator {
                 refinementSettings: settings,
                 pipelineRunId: pipelineRunId
             )
+
+            // Pipeline completed successfully - stop escape interceptor
+            EscapeCancelInterceptor.shared.stop()
         } catch {
             logger.error("Final transcription failed", error: error)
             AppState.shared.errorMessage = "Transcription failed: \(error.localizedDescription)"
+
+            // Pipeline failed - stop escape interceptor
+            EscapeCancelInterceptor.shared.stop()
         }
     }
 

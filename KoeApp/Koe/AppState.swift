@@ -282,7 +282,9 @@ public final class AppState {
     public var isGeminiEnabled: Bool {
         get { _isGeminiEnabled }
         set {
-            NSLog("[Gemini] isGeminiEnabled setter called with newValue=%d, current=%d", newValue ? 1 : 0, _isGeminiEnabled ? 1 : 0)
+            NSLog(
+                "[Gemini] isGeminiEnabled setter called with newValue=%d, current=%d", newValue ? 1 : 0,
+                _isGeminiEnabled ? 1 : 0)
             guard newValue != _isGeminiEnabled else {
                 NSLog("[Gemini] No change, skipping")
                 return
@@ -777,7 +779,7 @@ public final class AppState {
 
     public func addTranscription(
         _ text: String, duration: TimeInterval, wasRefined: Bool = false, originalText: String? = nil,
-        refinementSettings: RefinementSettings? = nil, pipelineRunId: UUID? = nil
+        refinementSettings: RefinementSettings? = nil, pipelineRunId: UUID? = nil, wasCanceled: Bool = false
     ) {
         // Check if any experimental features were used
         let usedExperimental = isWhisperKitEnabled || isCommandListeningEnabled || isAutoEnterEnabled
@@ -792,7 +794,8 @@ public final class AppState {
             originalText: originalText,
             refinementSettings: refinementSettings,
             pipelineRunId: pipelineRunId,
-            isExperimental: usedExperimental
+            isExperimental: usedExperimental,
+            wasCanceled: wasCanceled
         )
         transcriptionHistory.insert(entry, at: 0)
 
@@ -802,6 +805,15 @@ public final class AppState {
         }
 
         saveHistory()
+    }
+
+    /// Add a canceled transcription to history
+    /// - Parameters:
+    ///   - partialText: Any partial transcription text captured before cancellation
+    ///   - duration: How long the recording lasted before cancellation
+    public func addCanceledTranscription(partialText: String?, duration: TimeInterval) {
+        let text = partialText ?? "[Canceled]"
+        addTranscription(text, duration: duration, wasCanceled: true)
     }
 
     public func clearHistory() {

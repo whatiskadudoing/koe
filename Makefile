@@ -3,7 +3,7 @@
 
 .PHONY: all build build-release clean test format format-check lint lint-fix docs bundle
 .PHONY: installer-build installer-lint installer-fmt installer-fmt-check
-.PHONY: check ci setup help clean-install
+.PHONY: check ci setup help clean-install run restart dev
 
 # Default target
 all: help
@@ -34,6 +34,39 @@ clean:
 ## Run tests (all packages)
 test:
 	cd KoeApp && swift test
+
+#------------------------------------------------------------------------------
+# Development Workflow Commands
+#------------------------------------------------------------------------------
+
+## Run the app (requires bundle due to UNUserNotificationCenter)
+run: bundle
+	@echo "Starting Koe..."
+	@open KoeApp/dist/Koe.app
+
+## Restart: kill running app, rebuild bundle, and start (main dev workflow)
+restart:
+	@echo "=== Restarting Koe ==="
+	@-pkill -f "Koe" 2>/dev/null || true
+	@sleep 0.5
+	@$(MAKE) bundle --no-print-directory 2>&1 | grep -E "(Building|Build complete|App bundle)"
+	@echo "Starting Koe..."
+	@open KoeApp/dist/Koe.app
+	@sleep 2
+	@pgrep -l Koe && echo "=== Koe restarted ===" || echo "Warning: Koe may not have started"
+
+## Dev workflow: format, rebuild bundle, and restart
+dev:
+	@echo "=== Dev Workflow ==="
+	@-pkill -f "Koe" 2>/dev/null || true
+	@sleep 0.5
+	@echo "Formatting..."
+	@swift-format format --in-place --recursive KoeApp/Koe Packages 2>/dev/null || true
+	@$(MAKE) bundle --no-print-directory 2>&1 | grep -E "(Building|Build complete|App bundle)"
+	@echo "Starting Koe..."
+	@open KoeApp/dist/Koe.app
+	@sleep 2
+	@pgrep -l Koe && echo "=== Dev cycle complete ===" || echo "Warning: Koe may not have started"
 
 #------------------------------------------------------------------------------
 # Code Quality Commands
@@ -197,6 +230,11 @@ clean-install:
 help:
 	@echo "Koe Development Commands"
 	@echo "========================"
+	@echo ""
+	@echo "Development Workflow:"
+	@echo "  make run            Build and run the app"
+	@echo "  make restart        Kill, rebuild, and restart (fast iteration)"
+	@echo "  make dev            Format, rebuild, and restart"
 	@echo ""
 	@echo "Swift:"
 	@echo "  make build          Build debug version"

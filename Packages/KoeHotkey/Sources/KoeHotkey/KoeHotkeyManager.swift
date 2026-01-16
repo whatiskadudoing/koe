@@ -59,9 +59,9 @@ public final class KoeHotkeyManager: HotkeyService {
         }
 
         // Create event tap for flagsChanged (fn key) and keyDown/keyUp (space and other keys)
-        let eventMask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue) |
-            (1 << CGEventType.keyDown.rawValue) |
-            (1 << CGEventType.keyUp.rawValue)
+        let eventMask: CGEventMask =
+            (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
+            | (1 << CGEventType.keyUp.rawValue)
 
         let refcon = Unmanaged.passUnretained(self).toOpaque()
 
@@ -124,7 +124,7 @@ public final class KoeHotkeyManager: HotkeyService {
                 let fnInEvent = event.flags.contains(.maskSecondaryFn)
 
                 // fn+Space pressed
-                if key == 49, (isFnHeld || fnInEvent) {
+                if key == 49, isFnHeld || fnInEvent {
                     if !isRecording {
                         // Start recording
                         startRecording()
@@ -136,7 +136,8 @@ public final class KoeHotkeyManager: HotkeyService {
                 }
 
                 // Any other key while recording = cancel
-                if isRecording {
+                // Note: Escape key is handled by EscapeCancelInterceptor, not here
+                if isRecording && key != 53 {
                     cancelRecording()
                     // Don't swallow the key - let it through
                 }

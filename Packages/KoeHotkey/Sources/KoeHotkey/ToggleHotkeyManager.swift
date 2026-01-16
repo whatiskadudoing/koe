@@ -6,11 +6,15 @@ import HotKey
 /// Press once to start recording, press again to stop
 /// Similar to native macOS dictation (F5/microphone key behavior)
 ///
-/// Uses SystemKeyInterceptor (CGEventTap) for system keys like F5,
-/// falls back to HotKey library for regular shortcuts
+/// Supports multiple trigger modes:
+/// - F5 (microphone key): Uses SystemKeyInterceptor
+/// - fn alone: Uses CGEventTap to detect fn key
+/// - fn+Space: Uses CGEventTap to detect fn modifier + Space
+/// - Regular hotkeys: Uses HotKey library
 public final class ToggleHotkeyManager: @unchecked Sendable {
     private var hotKey: HotKey?
     private var onToggle: (@Sendable (_ isRecording: Bool) -> Void)?
+    private var onCancel: (@Sendable () -> Void)?
 
     // Toggle state - tracks whether we're currently recording
     private var isCurrentlyRecording = false
@@ -20,8 +24,14 @@ public final class ToggleHotkeyManager: @unchecked Sendable {
     private var keyCode: UInt32 = 96  // F5
     private var modifierFlags: Int = 0  // No modifiers
 
-    // Whether we're using the system interceptor (for F5) or HotKey
+    // Registration mode tracking
     private var usingSystemInterceptor = false
+    private var usingFnEventTap = false
+
+    // CGEventTap for fn-based shortcuts
+    private var fnEventTap: CFMachPort?
+    private var fnRunLoopSource: CFRunLoopSource?
+    private var isFnHeld = false
 
     public init() {}
 
@@ -47,22 +57,124 @@ public final class ToggleHotkeyManager: @unchecked Sendable {
         return code == 96 && modifierFlags == 0
     }
 
+    /// Check if this key code requires fn-based event tap
+    /// fn alone (63) and fn+Space (49 with fn modifier flag 16) need CGEventTap
+    private func requiresFnEventTap(_ code: UInt32) -> Bool {
+        // fn alone (Globe key)
+        if code == 63 { return true }
+        // fn+Space (Space key with fn modifier)
+        if code == 49 && modifierFlags == 16 { return true }
+        return false
+    }
+
     /// Register toggle handler
-    /// - Parameter onToggle: Called with true when recording should start, false when it should stop
-    public func register(onToggle: @escaping @Sendable (_ isRecording: Bool) -> Void) {
+    /// - Parameters:
+    ///   - onToggle: Called with true when recording should start, false when it should stop
+    ///   - onCancel: Called when recording is cancelled (via Escape key)
+    public func register(
+        onToggle: @escaping @Sendable (_ isRecording: Bool) -> Void,
+        onCancel: @escaping @Sendable () -> Void = {}
+    ) {
         self.onToggle = onToggle
+        self.onCancel = onCancel
         self.isCurrentlyRecording = false
 
         if requiresSystemInterceptor(keyCode) {
             registerWithSystemInterceptor()
+        } else if requiresFnEventTap(keyCode) {
+            registerWithFnEventTap()
         } else {
             registerRegularHotkey()
         }
     }
 
+    /// Register using CGEventTap for fn-based shortcuts (fn alone or fn+Space)
+    private func registerWithFnEventTap() {
+        usingFnEventTap = true
+        usingSystemInterceptor = false
+
+        guard AXIsProcessTrusted() else {
+            print("ToggleHotkeyManager: Accessibility permission required for fn key")
+            return
+        }
+
+        // Create event tap for flagsChanged (fn key) and keyDown (Space key)
+        let eventMask: CGEventMask =
+            (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
+
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
+
+        guard
+            let tap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .headInsertEventTap,
+                options: .defaultTap,
+                eventsOfInterest: eventMask,
+                callback: { _, type, event, refcon -> Unmanaged<CGEvent>? in
+                    guard let refcon = refcon else { return Unmanaged.passRetained(event) }
+                    let manager = Unmanaged<ToggleHotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
+                    return manager.handleFnEvent(type: type, event: event)
+                },
+                userInfo: refcon
+            )
+        else {
+            print("ToggleHotkeyManager: Failed to create fn event tap")
+            return
+        }
+
+        fnEventTap = tap
+        fnRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+
+        if let source = fnRunLoopSource {
+            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+            CGEvent.tapEnable(tap: tap, enable: true)
+        }
+
+        print("ToggleHotkeyManager: Registered with fn event tap for key \(keyCode)")
+    }
+
+    /// Handle fn-based events
+    private func handleFnEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        // Re-enable tap if system disabled it
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let tap = fnEventTap {
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+            return Unmanaged.passRetained(event)
+        }
+
+        // Track fn key state
+        if type == .flagsChanged {
+            let fnHeld = event.flags.contains(.maskSecondaryFn)
+            if fnHeld != isFnHeld {
+                isFnHeld = fnHeld
+
+                // fn alone mode: toggle on fn press
+                if keyCode == 63 && fnHeld {
+                    toggle()
+                    return nil  // Consume the event
+                }
+            }
+        }
+
+        // fn+Space mode: toggle on Space press while fn is held
+        if keyCode == 49 && type == .keyDown {
+            let key = event.getIntegerValueField(.keyboardEventKeycode)
+            let fnInEvent = event.flags.contains(.maskSecondaryFn)
+
+            if key == 49 && (isFnHeld || fnInEvent) {
+                toggle()
+                return nil  // Consume the Space key
+            }
+        }
+
+        return Unmanaged.passRetained(event)
+    }
+
     /// Register using SystemKeyInterceptor (CGEventTap) for system keys
     private func registerWithSystemInterceptor() {
         usingSystemInterceptor = true
+        usingFnEventTap = false
 
         let success = SystemKeyInterceptor.shared.start(
             intercepting: [Int64(keyCode)]
@@ -109,21 +221,43 @@ public final class ToggleHotkeyManager: @unchecked Sendable {
     /// Toggle recording state and notify handler
     private func toggle() {
         isCurrentlyRecording.toggle()
+
+        // Start/stop escape cancel interceptor based on recording state
+        if isCurrentlyRecording {
+            EscapeCancelInterceptor.shared.start { [weak self] in
+                self?.cancel()
+            }
+        } else {
+            EscapeCancelInterceptor.shared.stop()
+        }
+
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.onToggle?(self.isCurrentlyRecording)
         }
     }
 
+    /// Cancel recording and reset state
+    private func cancel() {
+        guard isCurrentlyRecording else { return }
+        isCurrentlyRecording = false
+        EscapeCancelInterceptor.shared.stop()
+        DispatchQueue.main.async { [weak self] in
+            self?.onCancel?()
+        }
+    }
+
     /// Reset recording state (call when recording is stopped externally)
     public func resetState() {
         isCurrentlyRecording = false
+        EscapeCancelInterceptor.shared.stop()
     }
 
     /// Force stop recording (useful when cancelling)
     public func forceStop() {
         if isCurrentlyRecording {
             isCurrentlyRecording = false
+            EscapeCancelInterceptor.shared.stop()
             onToggle?(false)
         }
     }
@@ -134,9 +268,25 @@ public final class ToggleHotkeyManager: @unchecked Sendable {
             SystemKeyInterceptor.shared.stop()
         }
 
+        // Clean up fn event tap if used
+        if usingFnEventTap {
+            if let tap = fnEventTap {
+                CGEvent.tapEnable(tap: tap, enable: false)
+                if let source = fnRunLoopSource {
+                    CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+                }
+            }
+            fnEventTap = nil
+            fnRunLoopSource = nil
+            isFnHeld = false
+            usingFnEventTap = false
+        }
+
+        EscapeCancelInterceptor.shared.stop()
         hotKey = nil
         isCurrentlyRecording = false
         onToggle = nil
+        onCancel = nil
 
         print("ToggleHotkeyManager: Unregistered")
     }
@@ -145,6 +295,9 @@ public final class ToggleHotkeyManager: @unchecked Sendable {
     public var isRegistered: Bool {
         if usingSystemInterceptor {
             return true  // SystemKeyInterceptor is singleton, always "registered" if started
+        }
+        if usingFnEventTap {
+            return fnEventTap != nil
         }
         return hotKey != nil
     }
