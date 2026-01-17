@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.17.0-beta.1](https://github.com/whatiskadudoing/koe/compare/v1.16.0-beta.1...v1.17.0-beta.1) (2026-01-17)
+
+
+### Features
+
+* add AI prompt enhancer node for Claude-optimized dictation ([db02bbd](https://github.com/whatiskadudoing/koe/commit/db02bbd9d54b6ce0d19dbaa7a114a26d844031e7))
+* add AppleScript-based text insertion for terminal compatibility ([21afc28](https://github.com/whatiskadudoing/koe/commit/21afc288dc3262dda24b239209ed9fd5d101cdd9))
+* add eager streaming for faster WhisperKit transcription ([e46ca8b](https://github.com/whatiskadudoing/koe/commit/e46ca8b23d19fafa044081592228def01a2fd136))
+* add Escape key cancellation for recording and pipeline ([3b42188](https://github.com/whatiskadudoing/koe/commit/3b42188f3180fb687bffcc8265533771171235ce))
+* add live preview overlay for real-time transcription ([1437804](https://github.com/whatiskadudoing/koe/commit/1437804acb38d9f025a4c50f55db88ba2fe71d24))
+* improve Gemini integration with model fallback and Claude Code optimization ([216963a](https://github.com/whatiskadudoing/koe/commit/216963ad448e998e7feda10470cb18cccabcd09f))
+* improve transcription quality with Silero VAD and audio preprocessing ([376b0f7](https://github.com/whatiskadudoing/koe/commit/376b0f72b794772181487159ada6a1ec82ca73ae))
+* optimize eager streaming with audio truncation and VAD ([23c0176](https://github.com/whatiskadudoing/koe/commit/23c017662a71a5bb5bfc65874ae71e5ea2808344))
+* redesign pipeline UI with vertical layout ([4832725](https://github.com/whatiskadudoing/koe/commit/483272558a23a087fa9b53cd4df4ad56b9977003))
+
+
+### Bug Fixes
+
+* improve text input compatibility with terminal applications ([36beec5](https://github.com/whatiskadudoing/koe/commit/36beec57c16d5de6be08a122df70b6e214817baa))
+* improve transcription quality with additional optimizations ([cb648c6](https://github.com/whatiskadudoing/koe/commit/cb648c6c675c765c588716935c5145cbe5541a57))
+* make pipeline cancellation immediate ([bbc66a7](https://github.com/whatiskadudoing/koe/commit/bbc66a75071f819701dfb3b58ffa492579329922))
+
 ## [1.16.0-beta.1](https://github.com/whatiskadudoing/koe/compare/v1.15.0-beta.1...v1.16.0-beta.1) (2026-01-10)
 
 
