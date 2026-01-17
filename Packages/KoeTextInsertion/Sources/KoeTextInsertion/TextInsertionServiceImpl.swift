@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 import CoreGraphics
 import Foundation
 import KoeDomain
@@ -13,13 +14,18 @@ public enum TextInsertionMode: String, Sendable, CaseIterable {
     /// Paste text using clipboard (Cmd+V)
     /// More reliable for terminals and command-line applications
     case paste
+
+    /// Use AppleScript to type text via System Events
+    /// Most compatible method for terminals and CLI apps
+    case appleScript
 }
 
 /// Implementation of TextInsertionService for macOS
-/// Supports both CGEvent typing and clipboard paste methods
+/// Supports CGEvent typing, clipboard paste, and AppleScript methods
 public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Sendable {
     /// Current insertion mode - can be changed at runtime
-    public var insertionMode: TextInsertionMode = .paste
+    /// Default is appleScript for best terminal compatibility
+    public var insertionMode: TextInsertionMode = .appleScript
 
     public init() {}
 
@@ -38,6 +44,15 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
             let success = await insertWithClipboard(text)
             if !success {
                 throw TextInsertionError.clipboardPasteFailed
+            }
+        case .appleScript:
+            let success = await insertWithAppleScript(text)
+            if !success {
+                // Fallback to paste method if AppleScript fails
+                let pasteSuccess = await insertWithClipboard(text)
+                if !pasteSuccess {
+                    throw TextInsertionError.clipboardPasteFailed
+                }
             }
         }
     }
@@ -120,6 +135,39 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
                         }
                         continuation.resume(returning: true)
                     }
+                }
+            }
+        }
+    }
+
+    /// Insert text using AppleScript via System Events
+    /// This is the most compatible method for terminal applications
+    private func insertWithAppleScript(_ text: String) async -> Bool {
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInteractive).async {
+                // Escape special characters for AppleScript string
+                let escapedText =
+                    text
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+
+                let script = """
+                    tell application "System Events"
+                        keystroke "\(escapedText)"
+                    end tell
+                    """
+
+                var error: NSDictionary?
+                if let appleScript = NSAppleScript(source: script) {
+                    appleScript.executeAndReturnError(&error)
+                    if let error = error {
+                        NSLog("[TextInsertion] AppleScript error: %@", error)
+                        continuation.resume(returning: false)
+                    } else {
+                        continuation.resume(returning: true)
+                    }
+                } else {
+                    continuation.resume(returning: false)
                 }
             }
         }
