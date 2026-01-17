@@ -26,6 +26,8 @@ public final class RecordingCoordinator {
     private let appleSpeechTranscriber: AppleSpeechTranscriber
     private let textInserter: TextInsertionServiceImpl
     private let vadProcessor: VADProcessor
+    private let sileroVADProcessor: SileroVADProcessor
+    private let audioPreprocessor: AudioPreprocessor
     private let hotkeyManager: KoeHotkeyManager
     private let toggleHotkeyManager: ToggleHotkeyManager
     private let aiService: AIService
@@ -101,6 +103,8 @@ public final class RecordingCoordinator {
         appleSpeechTranscriber: AppleSpeechTranscriber = AppleSpeechTranscriber(),
         textInserter: TextInsertionServiceImpl = TextInsertionServiceImpl(),
         vadProcessor: VADProcessor = VADProcessor(),
+        sileroVADProcessor: SileroVADProcessor = SileroVADProcessor(),
+        audioPreprocessor: AudioPreprocessor = AudioPreprocessor(),
         hotkeyManager: KoeHotkeyManager = KoeHotkeyManager(),
         toggleHotkeyManager: ToggleHotkeyManager = ToggleHotkeyManager(),
         aiService: AIService = AIService.shared
@@ -110,6 +114,8 @@ public final class RecordingCoordinator {
         self.appleSpeechTranscriber = appleSpeechTranscriber
         self.textInserter = textInserter
         self.vadProcessor = vadProcessor
+        self.sileroVADProcessor = sileroVADProcessor
+        self.audioPreprocessor = audioPreprocessor
         self.hotkeyManager = hotkeyManager
         self.toggleHotkeyManager = toggleHotkeyManager
         self.aiService = aiService
@@ -250,6 +256,16 @@ public final class RecordingCoordinator {
         // Request accessibility permission when ready
         if !textInserter.hasPermission() {
             textInserter.requestPermission()
+        }
+
+        // Initialize Silero VAD in background (don't block startup)
+        Task {
+            do {
+                try await sileroVADProcessor.initialize()
+                logger.info("Silero VAD initialized successfully")
+            } catch {
+                logger.warning("Silero VAD initialization failed, using fallback VAD: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -593,6 +609,11 @@ public final class RecordingCoordinator {
         } else {
             eagerStreamingState?.reset()
         }
+
+        // Reset Silero VAD state for new recording
+        Task {
+            await sileroVADProcessor.reset()
+        }
     }
 
     private func startLevelMonitoring() {
@@ -726,19 +747,28 @@ public final class RecordingCoordinator {
         let newSampleCount = samples.count - lastBufferSize
         let newAudioSeconds = Float(newSampleCount) / 16000.0
 
-        // Phase 3: VAD-triggered streaming
+        // Phase 3: VAD-triggered streaming with Silero VAD
         // Check if there's speech activity in recent audio
         let recentSampleCount = min(samples.count, Int(16000 * 0.3))  // Last 0.3s
         let recentSamples = Array(samples.suffix(recentSampleCount))
-        let isSpeakingNow = vadProcessor.containsSpeech(recentSamples)
 
-        // Debug: calculate VAD score to understand behavior
-        let vadScore = vadProcessor.detectVoiceActivity(in: recentSamples)
+        // Use Silero VAD if available, otherwise fall back to heuristic VAD
+        let isSpeakingNow: Bool
+        let vadScore: Float
+        if await sileroVADProcessor.isReady {
+            isSpeakingNow = await sileroVADProcessor.containsSpeech(recentSamples)
+            vadScore = await sileroVADProcessor.detectVoiceActivity(in: recentSamples)
+        } else {
+            isSpeakingNow = vadProcessor.containsSpeech(recentSamples)
+            vadScore = vadProcessor.detectVoiceActivity(in: recentSamples)
+        }
+
+        // Debug: calculate RMS for logging
         let rms = vadProcessor.calculateRMS(recentSamples)
         if rms > 0.001 {  // Only log if there's any audio
+            let vadType = await sileroVADProcessor.isReady ? "Silero" : "Heuristic"
             NSLog(
-                "[EagerOpt] VAD score=%.3f (threshold=%.2f), RMS=%.4f, speaking=%d", vadScore,
-                vadProcessor.silenceThreshold, rms, isSpeakingNow ? 1 : 0)
+                "[EagerOpt] %@ VAD score=%.3f, RMS=%.4f, speaking=%d", vadType, vadScore, rms, isSpeakingNow ? 1 : 0)
         }
 
         // Determine if we should transcribe based on VAD
@@ -916,12 +946,21 @@ public final class RecordingCoordinator {
     }
 
     private func transcribeFinalAudio(mode: TranscriptionMode, language: Language) async {
-        let samples = audioRecorder.getAudioSamples()
+        var samples = audioRecorder.getAudioSamples()
         let transcriptionStartTime = Date()
+
+        // Trim leading and trailing silence to improve transcription quality
+        // This helps prevent Whisper hallucinations from long silences
+        let originalCount = samples.count
+        samples = audioPreprocessor.trimSilence(samples)
+        if samples.count < originalCount {
+            let trimmedSeconds = Double(originalCount - samples.count) / 16000.0
+            logger.info("Trimmed \(String(format: "%.2f", trimmedSeconds))s of silence from audio")
+        }
 
         // Need at least 0.3 seconds of audio
         guard samples.count > Int(16000 * 0.3) else {
-            logger.info("Audio too short: \(samples.count) samples")
+            logger.info("Audio too short after trimming: \(samples.count) samples")
             EscapeCancelInterceptor.shared.stop()
             return
         }

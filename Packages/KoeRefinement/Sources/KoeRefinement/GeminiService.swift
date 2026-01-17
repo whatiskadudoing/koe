@@ -19,8 +19,8 @@ public final class GeminiService: ObservableObject {
     /// Model fallback chain - try each in order if rate limited
     private let modelFallbackChain = [
         "gemini-3-flash-preview",  // Primary: newest, best quality (preview)
-        "gemini-2.5-flash",        // Fallback 1: fast and reliable (stable)
-        "gemini-2.5-flash-lite",   // Fallback 2: fastest, lower quality
+        "gemini-2.5-flash",  // Fallback 1: fast and reliable (stable)
+        "gemini-2.5-flash-lite",  // Fallback 2: fastest, lower quality
     ]
 
     /// Track which model was last used successfully
@@ -78,7 +78,7 @@ public final class GeminiService: ObservableObject {
                 lastError = error
                 if case .rateLimited = error {
                     logger.warning("Gemini: rate limited on \(model), trying next model...")
-                    continue // Try next model
+                    continue  // Try next model
                 }
                 // For other errors, don't fallback
                 throw error

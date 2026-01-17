@@ -421,12 +421,14 @@ struct GoogleAccountSection: View {
                     Divider()
                         .padding(.horizontal, 16)
 
-                    Text("Enable the Gemini node in the pipeline to improve your transcriptions using Google's Gemini AI.")
-                        .font(.system(size: 11))
-                        .foregroundColor(KoeColors.textLight)
-                        .multilineTextAlignment(.leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                    Text(
+                        "Enable the Gemini node in the pipeline to improve your transcriptions using Google's Gemini AI."
+                    )
+                    .font(.system(size: 11))
+                    .foregroundColor(KoeColors.textLight)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
             }
         }

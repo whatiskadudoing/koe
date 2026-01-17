@@ -153,8 +153,10 @@ public final class GoogleAuthService: NSObject, ObservableObject {
             "client_id": clientId,
             "client_secret": clientSecret,
         ]
-        request.httpBody = body.map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.value)" }
-            .joined(separator: "&").data(using: .utf8)
+        request.httpBody = body.map {
+            "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.value)"
+        }
+        .joined(separator: "&").data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -406,7 +408,9 @@ actor GeminiOAuthServer {
                     // Parse code from query string
                     if let codeRange = request.range(of: "code=") {
                         let afterCode = request[codeRange.upperBound...]
-                        if let endRange = afterCode.range(of: "&") ?? afterCode.range(of: " ") ?? afterCode.range(of: "\r") {
+                        if let endRange = afterCode.range(of: "&") ?? afterCode.range(of: " ")
+                            ?? afterCode.range(of: "\r")
+                        {
                             code = String(afterCode[..<endRange.lowerBound])
                         }
                     }
@@ -414,7 +418,9 @@ actor GeminiOAuthServer {
                     // Parse state from query string
                     if let stateRange = request.range(of: "state=") {
                         let afterState = request[stateRange.upperBound...]
-                        if let endRange = afterState.range(of: "&") ?? afterState.range(of: " ") ?? afterState.range(of: "\r") {
+                        if let endRange = afterState.range(of: "&") ?? afterState.range(of: " ")
+                            ?? afterState.range(of: "\r")
+                        {
                             state = String(afterState[..<endRange.lowerBound])
                         }
                     }

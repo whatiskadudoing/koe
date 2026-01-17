@@ -400,7 +400,10 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
             detectLanguage: isAutoDetect,
             skipSpecialTokens: true,
             withoutTimestamps: true,
-            suppressBlank: true
+            suppressBlank: true,
+            // Lower noSpeechThreshold reduces hallucinations from background noise
+            // Research suggests 0.3-0.4 works well for noisy environments
+            noSpeechThreshold: 0.3
         )
 
         let results = try await whisperKit.transcribe(
@@ -490,6 +493,8 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
             withoutTimestamps: false,  // Need timestamps for word alignment
             wordTimestamps: true,  // Required for eager mode
             firstTokenLogProbThreshold: -1.5,  // Higher threshold to prevent fallbacks
+            // Lower noSpeechThreshold reduces hallucinations from background noise
+            noSpeechThreshold: 0.3,
             chunkingStrategy: .none  // We handle chunking ourselves
         )
 
@@ -582,7 +587,9 @@ public final class WhisperKitTranscriber: TranscriptionService, @unchecked Senda
             withoutTimestamps: false,
             wordTimestamps: true,
             clipTimestamps: [0],  // Start from beginning of truncated audio
-            suppressBlank: true
+            suppressBlank: true,
+            // Lower noSpeechThreshold reduces hallucinations from background noise
+            noSpeechThreshold: 0.3
         )
 
         let results = try await whisperKit.transcribe(

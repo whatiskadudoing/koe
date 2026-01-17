@@ -173,7 +173,9 @@ struct ContentView: View {
                 Spacer()
 
                 // Tab toggle
-                TabToggle(selectedTab: $selectedTab, onManualSwitch: handleManualTabSwitch, meetingFeatureEnabled: meetingFeatureEnabled)
+                TabToggle(
+                    selectedTab: $selectedTab, onManualSwitch: handleManualTabSwitch,
+                    meetingFeatureEnabled: meetingFeatureEnabled)
 
                 Spacer()
             }

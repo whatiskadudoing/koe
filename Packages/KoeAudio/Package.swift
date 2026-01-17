@@ -10,12 +10,13 @@ let package = Package(
         .library(name: "KoeAudio", targets: ["KoeAudio"])
     ],
     dependencies: [
-        .package(path: "../KoeDomain")
+        .package(path: "../KoeDomain"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.7.9"),
     ],
     targets: [
         .target(
             name: "KoeAudio",
-            dependencies: ["KoeDomain"]
+            dependencies: ["KoeDomain", "FluidAudio"]
         )
     ]
 )
