@@ -1,18 +1,44 @@
+import AppKit
 import ApplicationServices
 import CoreGraphics
 import Foundation
 import KoeDomain
 
+/// Text insertion mode
+public enum TextInsertionMode: String, Sendable, CaseIterable {
+    /// Type text character-by-character using CGEvents
+    /// Works well for most GUI applications
+    case type
+
+    /// Paste text using clipboard (Cmd+V)
+    /// More reliable for terminals and command-line applications
+    case paste
+}
+
 /// Implementation of TextInsertionService for macOS
-/// Uses CGEvents for character-by-character typing (requires Accessibility permission)
+/// Supports both CGEvent typing and clipboard paste methods
 public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Sendable {
+    /// Current insertion mode - can be changed at runtime
+    public var insertionMode: TextInsertionMode = .paste
+
     public init() {}
 
     public func insertText(_ text: String) async throws {
-        // Always use CGEvents to type text - only requires accessibility permission
-        let success = await insertWithCGEvents(text)
-        if !success {
+        guard AXIsProcessTrusted() else {
             throw TextInsertionError.accessibilityDenied
+        }
+
+        switch insertionMode {
+        case .type:
+            let success = await insertWithCGEvents(text)
+            if !success {
+                throw TextInsertionError.accessibilityDenied
+            }
+        case .paste:
+            let success = await insertWithClipboard(text)
+            if !success {
+                throw TextInsertionError.clipboardPasteFailed
+            }
         }
     }
 
@@ -56,10 +82,55 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
         }
     }
 
+    /// Insert text using clipboard paste (Cmd+V)
+    /// This method is more reliable for terminal applications
+    private func insertWithClipboard(_ text: String) async -> Bool {
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                let pasteboard = NSPasteboard.general
+
+                // Save current clipboard contents
+                let savedItems = pasteboard.pasteboardItems?.compactMap { item -> (String, Data)? in
+                    guard let type = item.types.first,
+                        let data = item.data(forType: type)
+                    else {
+                        return nil
+                    }
+                    return (type.rawValue, data)
+                }
+
+                // Set new text to clipboard
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
+
+                // Small delay to ensure clipboard is ready
+                DispatchQueue.global(qos: .userInteractive).asyncAfter(deadline: .now() + 0.01) {
+                    // Perform Cmd+V paste
+                    Self.pasteSync()
+
+                    // Small delay before restoring clipboard
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        // Restore original clipboard contents
+                        if let savedItems = savedItems, !savedItems.isEmpty {
+                            pasteboard.clearContents()
+                            for (typeString, data) in savedItems {
+                                let type = NSPasteboard.PasteboardType(typeString)
+                                pasteboard.setData(data, forType: type)
+                            }
+                        }
+                        continuation.resume(returning: true)
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Static Sync Methods (run on background thread)
 
     private static func typeWithCGEventsSync(_ text: String) -> Bool {
-        guard let source = CGEventSource(stateID: .hidSystemState) else {
+        // Use combinedSessionState for better compatibility across all application types
+        // including terminals and command-line applications
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
             return false
         }
 
@@ -72,24 +143,57 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
 
             var unicodeString = [UniChar](str.utf16)
             keyDown.keyboardSetUnicodeString(stringLength: unicodeString.count, unicodeString: &unicodeString)
-            keyDown.post(tap: .cghidEventTap)
+            // Use cgSessionEventTap for better terminal compatibility
+            keyDown.post(tap: .cgSessionEventTap)
+
+            // Small delay between keyDown and keyUp for reliability
+            Thread.sleep(forTimeInterval: 0.001)
 
             guard let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) else {
                 return false
             }
 
             keyUp.keyboardSetUnicodeString(stringLength: unicodeString.count, unicodeString: &unicodeString)
-            keyUp.post(tap: .cghidEventTap)
+            keyUp.post(tap: .cgSessionEventTap)
 
-            // Small delay between characters for reliability
-            Thread.sleep(forTimeInterval: 0.002)
+            // Delay between characters for reliability
+            Thread.sleep(forTimeInterval: 0.003)
         }
 
         return true
     }
 
+    /// Perform Cmd+V paste keystroke
+    private static func pasteSync() {
+        // Use combinedSessionState for better compatibility with terminals
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
+            return
+        }
+
+        // Virtual key code for 'V' is 9
+        let vKeyCode: CGKeyCode = 9
+
+        // Key down with Command modifier
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true) else {
+            return
+        }
+        keyDown.flags = .maskCommand
+        keyDown.post(tap: .cgSessionEventTap)
+
+        // Small delay for reliability
+        Thread.sleep(forTimeInterval: 0.001)
+
+        // Key up with Command modifier
+        guard let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false) else {
+            return
+        }
+        keyUp.flags = .maskCommand
+        keyUp.post(tap: .cgSessionEventTap)
+    }
+
     private static func pressEnterSync() {
-        guard let source = CGEventSource(stateID: .hidSystemState) else {
+        // Use combinedSessionState for better compatibility with terminals
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
             return
         }
 
@@ -99,11 +203,14 @@ public final class TextInsertionServiceImpl: TextInsertionService, @unchecked Se
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: returnKeyCode, keyDown: true) else {
             return
         }
-        keyDown.post(tap: .cghidEventTap)
+        keyDown.post(tap: .cgSessionEventTap)
+
+        // Small delay for reliability
+        Thread.sleep(forTimeInterval: 0.001)
 
         guard let keyUp = CGEvent(keyboardEventSource: source, virtualKey: returnKeyCode, keyDown: false) else {
             return
         }
-        keyUp.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cgSessionEventTap)
     }
 }

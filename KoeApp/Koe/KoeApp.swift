@@ -842,6 +842,9 @@ extension Notification.Name {
 
     // Voice commands
     static let commandListeningChanged = Notification.Name("commandListeningChanged")
+
+    // Text insertion
+    static let textInsertionModeChanged = Notification.Name("textInsertionModeChanged")
     static let voiceProfileTrained = Notification.Name("voiceProfileTrained")
     static let voiceCommandSettingsChanged = Notification.Name("voiceCommandSettingsChanged")
 

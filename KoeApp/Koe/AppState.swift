@@ -136,6 +136,15 @@ public final class AppState {
         }
     }
 
+    /// Text insertion mode: "paste" (clipboard) or "type" (character-by-character)
+    /// "paste" is more reliable for terminals and command-line applications
+    public var textInsertionMode: String = "paste" {
+        didSet {
+            UserDefaults.standard.set(textInsertionMode, forKey: "textInsertionMode")
+            NotificationCenter.default.post(name: .textInsertionModeChanged, object: nil)
+        }
+    }
+
     public var isLivePreviewEnabled: Bool = false {
         didSet {
             UserDefaults.standard.set(isLivePreviewEnabled, forKey: "isLivePreviewEnabled")
