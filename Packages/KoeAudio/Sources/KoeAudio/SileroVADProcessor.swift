@@ -128,10 +128,10 @@ public actor SileroVADProcessor {
                 let endIndex = min(offset + chunkSize, samples.count)
                 let chunk = Array(samples[offset..<endIndex])
 
-                // Pad if needed
+                // Pad with zeros if needed (standard approach for audio processing)
                 let paddedChunk: [Float]
                 if chunk.count < chunkSize {
-                    paddedChunk = chunk + Array(repeating: chunk.last ?? 0, count: chunkSize - chunk.count)
+                    paddedChunk = chunk + Array(repeating: 0, count: chunkSize - chunk.count)
                 } else {
                     paddedChunk = chunk
                 }
@@ -201,8 +201,8 @@ public actor SileroVADProcessor {
         }
 
         guard samples.count >= VadManager.chunkSize else {
-            // For small samples, pad and check
-            let padded = samples + Array(repeating: samples.last ?? 0, count: VadManager.chunkSize - samples.count)
+            // For small samples, pad with zeros and check
+            let padded = samples + Array(repeating: 0, count: VadManager.chunkSize - samples.count)
             do {
                 let result = try await manager.processStreamingChunk(
                     padded,
@@ -241,7 +241,8 @@ public actor SileroVADProcessor {
             let chunkSize = VadManager.chunkSize
             let chunk: [Float]
             if samples.count < chunkSize {
-                chunk = samples + Array(repeating: samples.last ?? 0, count: chunkSize - samples.count)
+                // Pad with zeros (standard approach for audio processing)
+                chunk = samples + Array(repeating: 0, count: chunkSize - samples.count)
             } else {
                 chunk = Array(samples.suffix(chunkSize))
             }

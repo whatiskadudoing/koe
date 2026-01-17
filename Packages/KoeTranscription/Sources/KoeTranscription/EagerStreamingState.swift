@@ -176,21 +176,27 @@ public final class EagerStreamingState: @unchecked Sendable {
         guard let result = result else { return }
 
         // Add all words from the result (they represent the remaining unconfirmed portion)
-        // The result comes from truncated audio, so timestamps need to be considered relative
+        // The result comes from truncated audio, so timestamps need to be adjusted
         for word in result.allWords {
-            // Adjust timestamp by audio offset if provided
-            let adjustedStart = word.start + audioOffsetSeconds
+            // Create adjusted word with corrected timestamps
+            let adjustedWord = WordTiming(
+                word: word.word,
+                tokens: word.tokens,
+                start: word.start + audioOffsetSeconds,
+                end: word.end + audioOffsetSeconds,
+                probability: word.probability
+            )
 
             // Skip if this word overlaps with already confirmed words
             // (check both by timestamp and by word text to handle edge cases)
             let isDuplicate = _confirmedWords.contains { confirmedWord in
                 // Consider duplicate if timestamps are very close AND text matches
-                let timeDiff = abs(confirmedWord.start - adjustedStart)
-                return timeDiff < 0.3 && normalizeWord(confirmedWord.word) == normalizeWord(word.word)
+                let timeDiff = abs(confirmedWord.start - adjustedWord.start)
+                return timeDiff < 0.3 && normalizeWord(confirmedWord.word) == normalizeWord(adjustedWord.word)
             }
 
             if !isDuplicate {
-                _confirmedWords.append(word)
+                _confirmedWords.append(adjustedWord)
             }
         }
     }
